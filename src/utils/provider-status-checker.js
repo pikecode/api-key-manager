@@ -37,25 +37,43 @@ class ProviderStatusChecker {
         return this._result('unknown', '认证模式不受支持', null);
       }
 
-      const start = process.hrtime.bigint();
-      const response = await client.messages.create({
-        model,
-        max_tokens: this.maxTokens,
-        messages: [
-          {
-            role: 'user',
-            content: this.testMessage
-          }
-        ]
-      }, { timeout: this.timeout });
-      const latency = Number(process.hrtime.bigint() - start) / 1e6;
-
-      const text = this._extractText(response);
-      if (!text) {
-        return this._result('online', `可用 ${latency.toFixed(0)}ms (无文本响应)`, latency);
+      // 保存原始环境变量
+      const originalEnv = {};
+      if (provider.authMode === 'auth_token') {
+        originalEnv.ANTHROPIC_AUTH_TOKEN = process.env.ANTHROPIC_AUTH_TOKEN;
+        process.env.ANTHROPIC_AUTH_TOKEN = provider.authToken;
       }
 
-      return this._result('online', `可用 ${latency.toFixed(0)}ms`, latency);
+      try {
+        const start = process.hrtime.bigint();
+        const response = await client.messages.create({
+          model,
+          max_tokens: this.maxTokens,
+          messages: [
+            {
+              role: 'user',
+              content: this.testMessage
+            }
+          ]
+        }, { timeout: this.timeout });
+        const latency = Number(process.hrtime.bigint() - start) / 1e6;
+
+        const text = this._extractText(response);
+        if (!text) {
+          return this._result('online', `可用 ${latency.toFixed(0)}ms (无文本响应)`, latency);
+        }
+
+        return this._result('online', `可用 ${latency.toFixed(0)}ms`, latency);
+      } finally {
+        // 恢复原始环境变量
+        if (provider.authMode === 'auth_token') {
+          if (originalEnv.ANTHROPIC_AUTH_TOKEN !== undefined) {
+            process.env.ANTHROPIC_AUTH_TOKEN = originalEnv.ANTHROPIC_AUTH_TOKEN;
+          } else {
+            delete process.env.ANTHROPIC_AUTH_TOKEN;
+          }
+        }
+      }
     } catch (error) {
       return this._handleError(error);
     }
@@ -102,13 +120,13 @@ class ProviderStatusChecker {
       }
       clientOptions.apiKey = provider.authToken;
     } else if (provider.authMode === 'auth_token') {
-      // auth_token 模式：如果有 baseUrl 说明是第三方服务，否则是官方 API
+      // auth_token 模式：通过环境变量 ANTHROPIC_AUTH_TOKEN 传递
+      // SDK 会自动从环境变量中读取认证信息
+      // 注意：check() 方法已经设置了环境变量
       if (provider.baseUrl) {
         clientOptions.baseURL = provider.baseUrl;
       }
-      // Anthropic SDK 需要通过 apiKey 参数传递 auth token
-      // auth_token 格式通常以 'sk-ant-' 开头
-      clientOptions.apiKey = provider.authToken;
+      // 不设置 apiKey，让 SDK 从环境变量读取
     } else {
       return null;
     }
