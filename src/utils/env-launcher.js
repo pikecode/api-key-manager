@@ -24,29 +24,51 @@ function clearTerminal() {
 function buildEnvVariables(config) {
   const env = { ...process.env };
 
-  if (config.authMode === 'oauth_token') {
-    env.CLAUDE_CODE_OAUTH_TOKEN = config.authToken;
-  } else if (config.authMode === 'api_key') {
-    env.ANTHROPIC_BASE_URL = config.baseUrl;
-    // 根据 tokenType 选择设置哪种 token
-    if (config.tokenType === 'auth_token') {
-      env.ANTHROPIC_AUTH_TOKEN = config.authToken;
+  // Claude Code 配置
+  if (config.ideName === 'claude' || !config.ideName) {
+    if (config.authMode === 'oauth_token') {
+      env.CLAUDE_CODE_OAUTH_TOKEN = config.authToken;
+    } else if (config.authMode === 'api_key') {
+      env.ANTHROPIC_BASE_URL = config.baseUrl;
+      // 根据 tokenType 选择设置哪种 token
+      if (config.tokenType === 'auth_token') {
+        env.ANTHROPIC_AUTH_TOKEN = config.authToken;
+      } else {
+        // 默认使用 ANTHROPIC_API_KEY
+        env.ANTHROPIC_API_KEY = config.authToken;
+      }
     } else {
-      // 默认使用 ANTHROPIC_API_KEY
-      env.ANTHROPIC_API_KEY = config.authToken;
+      // auth_token 模式
+      env.ANTHROPIC_BASE_URL = config.baseUrl;
+      env.ANTHROPIC_AUTH_TOKEN = config.authToken;
     }
-  } else {
-    // auth_token 模式
-    env.ANTHROPIC_BASE_URL = config.baseUrl;
-    env.ANTHROPIC_AUTH_TOKEN = config.authToken;
+
+    if (config.models && config.models.primary) {
+      env.ANTHROPIC_MODEL = config.models.primary;
+    }
+
+    if (config.models && config.models.smallFast) {
+      env.ANTHROPIC_SMALL_FAST_MODEL = config.models.smallFast;
+    }
   }
 
-  if (config.models && config.models.primary) {
-    env.ANTHROPIC_MODEL = config.models.primary;
-  }
+  // Codex 配置
+  if (config.ideName === 'codex') {
+    // Codex 使用环境变量来传递 API 密钥和配置
+    if (config.authMode === 'api_key' || config.authMode === 'auth_token') {
+      // Codex 支持通过环境变量设置 API 密钥
+      env.CODEX_API_KEY = config.authToken;
 
-  if (config.models && config.models.smallFast) {
-    env.ANTHROPIC_SMALL_FAST_MODEL = config.models.smallFast;
+      // 如果指定了基础 URL（用于自定义 API 端点）
+      if (config.baseUrl) {
+        env.CODEX_API_BASE = config.baseUrl;
+      }
+    }
+
+    // Codex 模型配置
+    if (config.models && config.models.primary) {
+      env.CODEX_MODEL = config.models.primary;
+    }
   }
 
   return env;
@@ -58,8 +80,12 @@ async function executeWithEnv(config, launchArgs = []) {
 
   clearTerminal();
 
+  // 确定要启动的命令（claude 或 codex）
+  const command = config.ideName === 'codex' ? 'codex' : 'claude';
+  const description = config.ideName === 'codex' ? 'Codex' : 'Claude Code';
+
   return new Promise((resolve, reject) => {
-    const child = spawn('claude', args, {
+    const child = spawn(command, args, {
       stdio: 'inherit',
       env,
       shell: true
@@ -69,7 +95,7 @@ async function executeWithEnv(config, launchArgs = []) {
       if (code === 0) {
         resolve();
       } else {
-        reject(new Error(`Claude Code 退出，代码: ${code}`));
+        reject(new Error(`${description} 退出，代码: ${code}`));
       }
     });
 

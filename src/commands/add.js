@@ -196,13 +196,38 @@ class ProviderAdder extends BaseCommand {
         },
         {
           type: 'list',
-          name: 'authMode',
-          message: '选择认证模式:',
+          name: 'ideName',
+          message: '选择要使用的 IDE:',
           choices: [
-            { name: '🔑 通用API密钥模式 - 支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN', value: 'api_key' },
-            { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商', value: 'auth_token' },
-            { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' }
+            { name: '🚀 Claude Code - Anthropic 官方代码编辑器', value: 'claude' },
+            { name: '⚙️ Codex - 代码生成和编辑工具', value: 'codex' }
           ],
+          default: 'claude'
+        },
+        {
+          type: 'list',
+          name: 'authMode',
+          message: (answers) => {
+            if (answers.ideName === 'codex') {
+              return '选择 Codex 认证模式:';
+            }
+            return '选择 Claude Code 认证模式:';
+          },
+          choices: (answers) => {
+            if (answers.ideName === 'codex') {
+              // Codex 的认证模式选择
+              return [
+                { name: '🔑 API 密钥模式 - 使用 CODEX_API_KEY', value: 'api_key' },
+                { name: '🔐 认证令牌模式 - 使用认证令牌', value: 'auth_token' }
+              ];
+            }
+            // Claude Code 的认证模式选择
+            return [
+              { name: '🔑 通用API密钥模式 - 支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN', value: 'api_key' },
+              { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商', value: 'auth_token' },
+              { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' }
+            ];
+          },
           default: 'api_key'
         },
         {
@@ -316,6 +341,7 @@ class ProviderAdder extends BaseCommand {
 
       await this.configManager.addProvider(answers.name, {
         displayName: answers.displayName || answers.name,
+        ideName: answers.ideName, // 'claude' 或 'codex'
         baseUrl: answers.baseUrl,
         authToken: answers.authToken,
         authMode: answers.authMode,

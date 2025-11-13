@@ -143,6 +143,7 @@ class ConfigManager {
     this.config.providers[name] = {
       name,
       displayName: providerConfig.displayName || name,
+      ideName: providerConfig.ideName || 'claude', // 'claude' 或 'codex'
       baseUrl: providerConfig.baseUrl,
       authToken: providerConfig.authToken,
       authMode: providerConfig.authMode || 'api_key',

@@ -10,6 +10,7 @@
 - 🎯 **灵活配置** - 支持多种认证模式（API Key、Auth Token、OAuth）
 - 🚀 **开箱即用** - 无需复杂配置
 - 💾 **环境变量管理** - 自动设置和管理环境变量
+- 🛠️ **多 IDE 支持** - 支持 Claude Code 和 Codex
 
 ## 安装
 
@@ -54,29 +55,56 @@ akm list
 示例配置结构：
 ```json
 {
-  "version": "2.0.0",
+  "version": "1.0.0",
   "currentProvider": "provider-name",
   "providers": {
-    "provider-name": {
-      "name": "provider-name",
-      "displayName": "Provider Name",
-      "authMode": "api_key",
-      "authToken": "your-token",
-      "tokenType": "api_key",
+    "claude-provider": {
+      "name": "claude-provider",
+      "displayName": "Claude Code Provider",
+      "ideName": "claude",
+      "authMode": "oauth_token",
+      "authToken": "sk-ant-oat01-...",
+      "baseUrl": null,
+      "tokenType": null,
       "models": {
         "primary": "claude-sonnet-4",
         "smallFast": "claude-haiku-4"
+      }
+    },
+    "codex-provider": {
+      "name": "codex-provider",
+      "displayName": "Codex Provider",
+      "ideName": "codex",
+      "authMode": "api_key",
+      "authToken": "your-codex-api-key",
+      "baseUrl": "https://api.example.com",
+      "tokenType": "api_key",
+      "models": {
+        "primary": "gpt-4-turbo",
+        "smallFast": null
       }
     }
   }
 }
 ```
 
+## 支持的 IDE
+
+- **Claude Code** - Anthropic 官方代码编辑器
+  - 认证模式：oauth_token、api_key、auth_token
+  - 环境变量：CLAUDE_CODE_OAUTH_TOKEN、ANTHROPIC_API_KEY、ANTHROPIC_AUTH_TOKEN
+
+- **Codex** - 代码生成和编辑工具
+  - 认证模式：api_key、auth_token
+  - 环境变量：CODEX_API_KEY、CODEX_API_BASE、CODEX_MODEL
+
 ## 支持的认证模式
 
-- **api_key** - 标准 API 密钥模式
-- **auth_token** - 认证令牌模式
-- **oauth_token** - OAuth 令牌模式
+| 模式 | IDE | 说明 |
+|------|-----|------|
+| **oauth_token** | Claude Code | OAuth 令牌模式 |
+| **api_key** | Claude Code / Codex | 标准 API 密钥模式 |
+| **auth_token** | Claude Code / Codex | 认证令牌模式 |
 
 ## 快捷键
 
