@@ -13,6 +13,21 @@ class ProviderStatusChecker {
       return this._result('unknown', '未找到配置', null);
     }
 
+    // Codex 的特殊处理
+    if (provider.ideName === 'codex') {
+      if (provider.authMode === 'chatgpt_login') {
+        return this._result('online', '使用 ChatGPT 登录', null);
+      }
+      if (provider.authMode === 'api_key' && !provider.authToken) {
+        return this._result('unknown', '未配置 OpenAI API Key', null);
+      }
+      // Codex 的 api_key 模式支持检测（通过 OpenAI API）
+      // 但目前我们暂不实现 OpenAI SDK 的检测，只提示已配置
+      if (provider.authMode === 'api_key') {
+        return this._result('online', '已配置 OpenAI API Key', null);
+      }
+    }
+
     if (provider.authMode === 'oauth_token') {
       return this._result('unknown', '暂不支持 OAuth 令牌检测', null);
     }

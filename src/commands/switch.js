@@ -40,11 +40,13 @@ class EnvSwitcher extends BaseCommand {
       console.log();
       console.log(UIHelper.createCard('供应商', UIHelper.formatProvider(provider), UIHelper.icons.info));
       console.log();
+      // 根据 IDE 类型动态显示启动提示
+      const launchLabel = provider.ideName === 'codex' ? '启动 Codex' : '启动 Claude Code';
       console.log(UIHelper.createHintLine([
         ['空格', '切换选中'],
         ['A', '全选'],
         ['I', '反选'],
-        ['Enter', '启动 Claude Code'],
+        ['Enter', launchLabel],
         ['ESC', '返回供应商选择']
       ]));
       console.log();
