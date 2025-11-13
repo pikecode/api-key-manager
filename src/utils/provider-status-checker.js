@@ -17,7 +17,12 @@ class ProviderStatusChecker {
       return this._result('unknown', '暂不支持 OAuth 令牌检测', null);
     }
 
-    if (!provider.baseUrl) {
+    // auth_token 和 api_key 模式在官方 API 中不需要 baseUrl
+    // 仅当 authMode 为 auth_token 且设置了 baseUrl 时，才表示使用第三方服务
+    if (provider.authMode === 'auth_token' && !provider.baseUrl) {
+      // 对于官方 Anthropic API 的 auth_token 模式，不需要 baseUrl
+      // 直接使用官方 API
+    } else if (!provider.baseUrl && provider.authMode !== 'auth_token') {
       return this._result('unknown', '未配置基础地址', null);
     }
 
@@ -88,12 +93,22 @@ class ProviderStatusChecker {
   }
 
   _createClient(provider) {
-    const clientOptions = { baseURL: provider.baseUrl };
+    const clientOptions = {};
 
     if (provider.authMode === 'api_key') {
+      // api_key 模式：使用 ANTHROPIC_API_KEY
+      if (provider.baseUrl) {
+        clientOptions.baseURL = provider.baseUrl;
+      }
       clientOptions.apiKey = provider.authToken;
     } else if (provider.authMode === 'auth_token') {
-      clientOptions.authToken = provider.authToken;
+      // auth_token 模式：如果有 baseUrl 说明是第三方服务，否则是官方 API
+      if (provider.baseUrl) {
+        clientOptions.baseURL = provider.baseUrl;
+      }
+      // Anthropic SDK 需要通过 apiKey 参数传递 auth token
+      // auth_token 格式通常以 'sk-ant-' 开头
+      clientOptions.apiKey = provider.authToken;
     } else {
       return null;
     }
@@ -191,6 +206,14 @@ class ProviderStatusChecker {
       }
       if (error.status === 404) {
         return this._result('offline', '接口不存在 (404)', null);
+      }
+      if (error.status === 400) {
+        // 400 错误可能是因为认证方式不对
+        const message = error.message || '';
+        if (message.includes('auth') || message.includes('authentication')) {
+          return this._result('offline', `认证配置错误 (${error.status})`, null);
+        }
+        return this._result('offline', `请求参数错误 (${error.status})`, null);
       }
       return this._result('offline', `请求失败 (${error.status})`, null);
     }

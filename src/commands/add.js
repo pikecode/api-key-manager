@@ -219,8 +219,22 @@ class ProviderAdder extends BaseCommand {
         {
           type: 'input',
           name: 'baseUrl',
-          message: '请输入API基础URL:',
-          validate: (input) => {
+          message: (answers) => {
+            // 根据认证模式显示不同的提示
+            if (answers.authMode === 'auth_token') {
+              return '请输入API基础URL (如使用官方API可留空):';
+            }
+            return '请输入API基础URL:';
+          },
+          validate: (input, answers) => {
+            // auth_token 模式允许空值（使用官方 API）
+            if (input === '' && answers.authMode === 'auth_token') {
+              return true;
+            }
+            // 其他模式需要有效的 URL
+            if (!input && answers.authMode === 'api_key') {
+              return 'API基础URL不能为空';
+            }
             const error = validator.validateUrl(input);
             if (error) return error;
             return true;
