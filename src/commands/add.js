@@ -216,9 +216,10 @@ class ProviderAdder extends BaseCommand {
           choices: (answers) => {
             if (answers.ideName === 'codex') {
               // Codex 的认证模式选择
+              // @openai/codex 支持两种方式：ChatGPT 登录 (推荐) 或 OpenAI API Key
               return [
-                { name: '🔑 API 密钥模式 - 使用 CODEX_API_KEY', value: 'api_key' },
-                { name: '🔐 认证令牌模式 - 使用认证令牌', value: 'auth_token' }
+                { name: '🔐 ChatGPT 登录 (推荐) - 使用 ChatGPT 账户登录', value: 'chatgpt_login' },
+                { name: '🔑 OpenAI API Key - 使用 OPENAI_API_KEY', value: 'api_key' }
               ];
             }
             // Claude Code 的认证模式选择
@@ -239,13 +240,18 @@ class ProviderAdder extends BaseCommand {
             { name: '🔐 ANTHROPIC_AUTH_TOKEN - 认证令牌', value: 'auth_token' }
           ],
           default: 'api_key',
-          when: (answers) => answers.authMode === 'api_key'
+          // 只对 Claude Code 的 api_key 模式显示 tokenType 选择
+          // Codex 的 api_key 模式固定使用 OPENAI_API_KEY
+          when: (answers) => answers.ideName === 'claude' && answers.authMode === 'api_key'
         },
         {
           type: 'input',
           name: 'baseUrl',
           message: (answers) => {
             // 根据认证模式显示不同的提示
+            if (answers.ideName === 'codex' && answers.authMode === 'api_key') {
+              return '请输入OpenAI API基础URL (可选，默认为官方API):';
+            }
             if (answers.authMode === 'auth_token') {
               return '请输入API基础URL (如使用官方API可留空):';
             }
@@ -256,20 +262,43 @@ class ProviderAdder extends BaseCommand {
             if (input === '' && answers.authMode === 'auth_token') {
               return true;
             }
-            // 其他模式需要有效的 URL
-            if (!input && answers.authMode === 'api_key') {
+            // Codex 的 api_key 模式也允许空值（使用官方 OpenAI API）
+            if (input === '' && answers.ideName === 'codex' && answers.authMode === 'api_key') {
+              return true;
+            }
+            // Claude Code 的 api_key 模式需要有效的 URL
+            if (!input && answers.ideName === 'claude' && answers.authMode === 'api_key') {
               return 'API基础URL不能为空';
             }
-            const error = validator.validateUrl(input);
-            if (error) return error;
+            // 如果提供了 URL，验证格式
+            if (input) {
+              const error = validator.validateUrl(input);
+              if (error) return error;
+            }
             return true;
           },
-          when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token'
+          // Codex 只在 api_key 模式时询问 baseUrl，Claude Code 在 api_key 和 auth_token 时询问
+          when: (answers) => {
+            if (answers.ideName === 'codex') {
+              return answers.authMode === 'api_key';
+            }
+            return answers.authMode === 'api_key' || answers.authMode === 'auth_token';
+          }
         },
         {
           type: 'input',
           name: 'authToken',
           message: (answers) => {
+            // Codex 的特殊处理
+            if (answers.ideName === 'codex') {
+              if (answers.authMode === 'api_key') {
+                return '请输入OpenAI API Key (OPENAI_API_KEY):';
+              }
+              // chatgpt_login 模式不需要输入 Token
+              return '请输入认证令牌:';
+            }
+
+            // Claude Code 的处理
             switch (answers.authMode) {
               case 'api_key':
                 const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
@@ -286,7 +315,9 @@ class ProviderAdder extends BaseCommand {
             const error = validator.validateToken(input);
             if (error) return error;
             return true;
-          }
+          },
+          // Codex 的 chatgpt_login 模式不需要输入 Token
+          when: (answers) => !(answers.ideName === 'codex' && answers.authMode === 'chatgpt_login')
         },
         {
           type: 'confirm',

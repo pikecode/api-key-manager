@@ -76,11 +76,24 @@ akm list
       "displayName": "Codex Provider",
       "ideName": "codex",
       "authMode": "api_key",
-      "authToken": "your-codex-api-key",
-      "baseUrl": "https://api.example.com",
-      "tokenType": "api_key",
+      "authToken": "sk-...",
+      "baseUrl": null,
+      "tokenType": null,
       "models": {
-        "primary": "gpt-4-turbo",
+        "primary": null,
+        "smallFast": null
+      }
+    },
+    "codex-chatgpt": {
+      "name": "codex-chatgpt",
+      "displayName": "Codex ChatGPT Login",
+      "ideName": "codex",
+      "authMode": "chatgpt_login",
+      "authToken": null,
+      "baseUrl": null,
+      "tokenType": null,
+      "models": {
+        "primary": null,
         "smallFast": null
       }
     }
@@ -90,13 +103,19 @@ akm list
 
 ## 支持的 IDE
 
-- **Claude Code** - Anthropic 官方代码编辑器
-  - 认证模式：oauth_token、api_key、auth_token
-  - 环境变量：CLAUDE_CODE_OAUTH_TOKEN、ANTHROPIC_API_KEY、ANTHROPIC_AUTH_TOKEN
+### Claude Code - Anthropic 官方代码编辑器
+- 认证模式：
+  - `oauth_token` - OAuth 令牌模式（推荐官方用户）
+  - `api_key` - 通用 API 密钥模式（支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN）
+  - `auth_token` - 认证令牌模式（仅 ANTHROPIC_AUTH_TOKEN）
+- 环境变量：CLAUDE_CODE_OAUTH_TOKEN、ANTHROPIC_API_KEY、ANTHROPIC_AUTH_TOKEN、ANTHROPIC_BASE_URL
 
-- **Codex** - 代码生成和编辑工具
-  - 认证模式：api_key、auth_token
-  - 环境变量：CODEX_API_KEY、CODEX_API_BASE、CODEX_MODEL
+### Codex - OpenAI Codex 代码生成工具
+- 认证模式：
+  - `chatgpt_login` - ChatGPT 登录模式（推荐，使用 ChatGPT 账户登录）
+  - `api_key` - OpenAI API 密钥模式
+- 环境变量：OPENAI_API_KEY、OPENAI_API_BASE（可选）
+- 官方包：`npm install -g @openai/codex`
 
 ## 支持的认证模式
 
@@ -104,7 +123,8 @@ akm list
 |------|-----|------|
 | **oauth_token** | Claude Code | OAuth 令牌模式 |
 | **api_key** | Claude Code / Codex | 标准 API 密钥模式 |
-| **auth_token** | Claude Code / Codex | 认证令牌模式 |
+| **auth_token** | Claude Code | 认证令牌模式 |
+| **chatgpt_login** | Codex | ChatGPT 登录模式（推荐） |
 
 ## 快捷键
 

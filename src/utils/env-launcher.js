@@ -53,22 +53,22 @@ function buildEnvVariables(config) {
   }
 
   // Codex 配置
+  // @openai/codex 支持两种认证方式：
+  // 1. ChatGPT 登录（推荐）- 无需环境变量，使用交互式登录
+  // 2. OpenAI API Key - 通过 OPENAI_API_KEY 环境变量
   if (config.ideName === 'codex') {
-    // Codex 使用环境变量来传递 API 密钥和配置
-    if (config.authMode === 'api_key' || config.authMode === 'auth_token') {
-      // Codex 支持通过环境变量设置 API 密钥
-      env.CODEX_API_KEY = config.authToken;
+    if (config.authMode === 'api_key' && config.authToken) {
+      // 使用 OpenAI API Key 方式
+      // Codex 通过 OPENAI_API_KEY 环境变量读取 API 密钥
+      env.OPENAI_API_KEY = config.authToken;
 
-      // 如果指定了基础 URL（用于自定义 API 端点）
+      // 如果指定了基础 URL（用于自定义 OpenAI 兼容的 API 端点）
       if (config.baseUrl) {
-        env.CODEX_API_BASE = config.baseUrl;
+        env.OPENAI_API_BASE = config.baseUrl;
       }
     }
-
-    // Codex 模型配置
-    if (config.models && config.models.primary) {
-      env.CODEX_MODEL = config.models.primary;
-    }
+    // 如果是 chatgpt_login 模式，不需要设置环境变量
+    // Codex 会启动交互式登录流程
   }
 
   return env;
