@@ -34,17 +34,18 @@ class ProviderAdder extends BaseCommand {
     }, '取消添加');
 
     try {
-      // 首先选择是否使用预设配置
+      // 首先选择 IDE 类型或使用官方预设
       const typeAnswer = await this.prompt([
         {
           type: 'list',
           name: 'providerType',
-          message: '选择供应商类型:',
+          message: '选择配置方式:',
           choices: [
-            { name: '🔒 官方 Claude Code (OAuth)', value: 'official_oauth' },
-            { name: '⚙️ 自定义配置', value: 'custom' }
+            { name: '🔒 官方 Claude Code (OAuth) - 推荐使用官方 token', value: 'official_oauth' },
+            { name: '🚀 Claude Code - 自定义配置 (API Key 或 Auth Token)', value: 'custom_claude' },
+            { name: '⚙️ Codex - OpenAI Codex (ChatGPT 登录或 API Key)', value: 'custom_codex' }
           ],
-          default: 'custom'
+          default: 'custom_claude'
         }
       ]);
 
@@ -53,8 +54,12 @@ class ProviderAdder extends BaseCommand {
 
       if (typeAnswer.providerType === 'official_oauth') {
         return await this.addOfficialOAuthProvider();
+      } else if (typeAnswer.providerType === 'custom_codex') {
+        // 直接进入 Codex 配置流程，跳过 IDE 选择
+        return await this.addCustomProvider(true);
       } else {
-        return await this.addCustomProvider();
+        // 进入通用自定义配置流程
+        return await this.addCustomProvider(false);
       }
     } catch (error) {
       // 移除 ESC 键监听
@@ -151,8 +156,9 @@ class ProviderAdder extends BaseCommand {
     }
   }
 
-  async addCustomProvider() {
-    console.log(UIHelper.createTitle('添加自定义供应商', UIHelper.icons.add));
+  async addCustomProvider(forceCodex = false) {
+    const ideLabel = forceCodex ? 'Codex' : '自定义';
+    console.log(UIHelper.createTitle(`添加${ideLabel}供应商`, UIHelper.icons.add));
     console.log();
     console.log(UIHelper.createTooltip('请填写供应商配置信息'));
     console.log();
@@ -163,7 +169,7 @@ class ProviderAdder extends BaseCommand {
       ['ESC', '取消添加']
     ]));
     console.log();
-    
+
     // 设置 ESC 键监听
     const escListener = this.createESCListener(() => {
       Logger.info('取消添加供应商');
@@ -202,7 +208,9 @@ class ProviderAdder extends BaseCommand {
             { name: '🚀 Claude Code - Anthropic 官方代码编辑器', value: 'claude' },
             { name: '⚙️ Codex - 代码生成和编辑工具', value: 'codex' }
           ],
-          default: 'claude'
+          default: forceCodex ? 'codex' : 'claude',
+          // 如果来自 Codex 快捷方式，跳过此选择（IDE 已确定为 Codex）
+          when: () => !forceCodex
         },
         {
           type: 'list',
@@ -370,9 +378,12 @@ class ProviderAdder extends BaseCommand {
         ? await this.promptModelConfiguration()
         : { primaryModel: null, smallFastModel: null };
 
+      // 如果是 Codex 快捷方式，确保 ideName 被设置为 'codex'
+      const finalIdeName = forceCodex ? 'codex' : answers.ideName;
+
       await this.configManager.addProvider(answers.name, {
         displayName: answers.displayName || answers.name,
-        ideName: answers.ideName, // 'claude' 或 'codex'
+        ideName: finalIdeName, // 'claude' 或 'codex'
         baseUrl: answers.baseUrl,
         authToken: answers.authToken,
         authMode: answers.authMode,
