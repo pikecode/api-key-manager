@@ -37,6 +37,10 @@ akm current
 akm list
 ```
 
+## IDE 特定指南
+
+- **[Codex 配置指南](./CODEX_SETUP_GUIDE.md)** - 详细的 Codex 安装和使用指南
+
 ## 命令
 
 | 命令 | 说明 |
