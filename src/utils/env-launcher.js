@@ -24,8 +24,9 @@ function clearTerminal() {
 function buildEnvVariables(config) {
   const env = { ...process.env };
 
-  // Claude Code 配置
-  if (config.ideName === 'claude' || !config.ideName) {
+  // Claude Code 配置（明确检查 ideName === 'claude'）
+  // 注意：不再使用 !config.ideName 作为默认值，避免混淆
+  if (config.ideName === 'claude') {
     if (config.authMode === 'oauth_token') {
       env.CLAUDE_CODE_OAUTH_TOKEN = config.authToken;
     } else if (config.authMode === 'api_key') {
@@ -75,14 +76,24 @@ function buildEnvVariables(config) {
 }
 
 async function executeWithEnv(config, launchArgs = []) {
+  // 安全检查：确保 ideName 被明确设置
+  if (!config.ideName) {
+    throw new Error('供应商配置缺少 ideName 字段，无法启动 IDE');
+  }
+
   const env = buildEnvVariables(config);
   const args = [...launchArgs];
 
   clearTerminal();
 
-  // 确定要启动的命令（claude 或 codex）
-  const command = config.ideName === 'codex' ? 'codex' : 'claude';
-  const description = config.ideName === 'codex' ? 'Codex' : 'Claude Code';
+  // 根据 ideName 确定要启动的命令（claude 或 codex）
+  // 这是关键的 IDE 选择点 - 避免任何混淆
+  const isCodex = config.ideName === 'codex';
+  const command = isCodex ? 'codex' : 'claude';
+  const description = isCodex ? 'Codex' : 'Claude Code';
+  const ideIcon = isCodex ? '⚙️' : '🚀';
+
+  console.log(`\n启动 ${ideIcon} ${description}...\n`);
 
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
