@@ -40,6 +40,7 @@ akm list
 ## IDE 特定指南
 
 - **[Codex 配置指南](./CODEX_SETUP_GUIDE.md)** - 详细的 Codex 安装和使用指南
+- **[IDE 隔离设计](./IDE_ISOLATION_DESIGN.md)** - Codex 和 Claude Code 隔离机制说明
 
 ## 命令
 
