@@ -32,27 +32,48 @@ class ProviderLister {
         const availabilityIcon = this._iconForState(availability.state);
         const availabilityText = this._formatAvailability(availability);
         const nameColor = isCurrent ? chalk.green : chalk.white;
-        
-        console.log(`${status} ${availabilityIcon} ${nameColor(provider.name)} (${provider.displayName}) - ${availabilityText}`);
+
+        // 显示 IDE 类型
+        const ideIcon = provider.ideName === 'codex' ? '⚙️' : '🚀';
+        const ideLabel = provider.ideName === 'codex' ? 'Codex' : 'Claude Code';
+
+        console.log(`${status} ${availabilityIcon} ${nameColor(provider.name)} (${provider.displayName}) [${ideIcon} ${ideLabel}] - ${availabilityText}`);
 
         // 显示认证模式
-        const authModeDisplay = {
-          api_key: '通用API密钥模式',
-          auth_token: '认证令牌模式',
-          oauth_token: 'OAuth令牌模式'
-        };
+        let authModeDisplay;
+        if (provider.ideName === 'codex') {
+          // Codex 认证模式
+          authModeDisplay = {
+            api_key: 'OpenAI API Key',
+            chatgpt_login: 'ChatGPT 登录'
+          };
+        } else {
+          // Claude Code 认证模式
+          authModeDisplay = {
+            api_key: '通用API密钥模式',
+            auth_token: '认证令牌模式',
+            oauth_token: 'OAuth令牌模式'
+          };
+        }
         console.log(chalk.gray(`   认证模式: ${authModeDisplay[provider.authMode] || provider.authMode}`));
 
-        // 如果是 api_key 模式，显示 tokenType
-        if (provider.authMode === 'api_key' && provider.tokenType) {
+        // 如果是 Claude Code api_key 模式，显示 tokenType
+        if (provider.ideName === 'claude' && provider.authMode === 'api_key' && provider.tokenType) {
           const tokenTypeDisplay = provider.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
           console.log(chalk.gray(`   Token类型: ${tokenTypeDisplay}`));
         }
 
         if (provider.baseUrl) {
-          console.log(chalk.gray(`   URL: ${provider.baseUrl}`));
+          console.log(chalk.gray(`   API基础URL: ${provider.baseUrl}`));
         }
-        console.log(chalk.gray(`   Token: ${provider.authToken}`));
+
+        // 仅在有 authToken 时显示（Codex ChatGPT 登录模式没有 Token）
+        if (provider.authToken) {
+          console.log(chalk.gray(`   Token: ${provider.authToken.substring(0, 10)}...`));
+        } else if (provider.ideName === 'codex') {
+          console.log(chalk.gray(`   认证: ChatGPT 交互式登录（无需 Token）`));
+        }
+
         if (provider.launchArgs && provider.launchArgs.length > 0) {
           console.log(chalk.gray(`   启动参数: ${provider.launchArgs.join(' ')}`));
         }
@@ -62,7 +83,7 @@ class ProviderLister {
         }
         console.log(chalk.gray(`   创建时间: ${new Date(provider.createdAt).toLocaleString()}`));
         console.log(chalk.gray(`   最后使用: ${new Date(provider.lastUsed).toLocaleString()}`));
-        
+
         if (index < providers.length - 1) {
           console.log(chalk.gray('─'.repeat(60)));
         }
