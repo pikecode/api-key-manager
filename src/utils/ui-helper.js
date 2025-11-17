@@ -78,12 +78,7 @@ class UIHelper {
     const statusText = this.createStatus(status, provider.name);
     const displayName = this.colors.secondary(`(${provider.displayName})`);
 
-    // 添加 IDE 类型标识
-    const ideIcon = provider.ideName === 'codex' ? '⚙️' : '🚀';
-    const ideLabel = provider.ideName === 'codex' ? 'Codex' : 'Claude Code';
-    const ideText = this.colors.muted(`[${ideIcon} ${ideLabel}]`);
-
-    return `${statusText} ${displayName} ${ideText}`;
+    return `${statusText} ${displayName}`;
   }
 
   // 创建进度条

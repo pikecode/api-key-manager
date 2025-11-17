@@ -40,13 +40,11 @@ class EnvSwitcher extends BaseCommand {
       console.log();
       console.log(UIHelper.createCard('供应商', UIHelper.formatProvider(provider), UIHelper.icons.info));
       console.log();
-      // 根据 IDE 类型动态显示启动提示
-      const launchLabel = provider.ideName === 'codex' ? '启动 Codex' : '启动 Claude Code';
       console.log(UIHelper.createHintLine([
         ['空格', '切换选中'],
         ['A', '全选'],
         ['I', '反选'],
-        ['Enter', launchLabel],
+        ['Enter', '启动 Claude Code'],
         ['ESC', '返回供应商选择']
       ]));
       console.log();
@@ -200,12 +198,10 @@ class EnvSwitcher extends BaseCommand {
 
   async launchProvider(provider, selectedLaunchArgs) {
     try {
-      // 只对 Claude Code 执行设置兼容性检查
-      if (provider.ideName !== 'codex') {
-        const shouldContinue = await this.ensureClaudeSettingsCompatibility(provider);
-        if (!shouldContinue) {
-          return;
-        }
+      // 执行 Claude Code 设置兼容性检查
+      const shouldContinue = await this.ensureClaudeSettingsCompatibility(provider);
+      if (!shouldContinue) {
+        return;
       }
 
       this.clearScreen();
@@ -232,20 +228,17 @@ class EnvSwitcher extends BaseCommand {
 
         UIHelper.clearLoadingAnimation(loadingInterval);
 
-        // 根据 IDE 类型显示不同的启动提示
-        const ideName = provider.ideName === 'codex' ? 'Codex' : 'Claude Code';
-        const ideIcon = provider.ideName === 'codex' ? '⚙️' : '🚀';
-        console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 ${ideIcon} ${ideName}...`, UIHelper.icons.success));
+        console.log(UIHelper.createCard('准备就绪', '环境配置完成，正在启动 🚀 Claude Code...', UIHelper.icons.success));
         console.log();
 
-        // 设置环境变量并启动对应的 IDE
+        // 设置环境变量并启动 Claude Code
         await executeWithEnv(provider, selectedLaunchArgs);
-        
+
       } catch (error) {
         UIHelper.clearLoadingAnimation(loadingInterval);
         throw error;
       }
-      
+
     } catch (error) {
       await this.handleError(error, '启动供应商');
     }

@@ -230,35 +230,7 @@ cat ~/.akm-config.json | jq '.providers.["my-codex"]'
    akm edit my-codex
    ```
 
-### 问题 5：Codex 启动时提示找不到命令
-
-#### 症状
-
-```bash
-$ akm my-codex
-启动 ⚙️ Codex...
-[错误] spawn codex ENOENT
-```
-
-#### 原因
-
-Codex 未安装。
-
-#### 解决
-
-```bash
-# 安装 Codex
-npm install -g @openai/codex
-
-# 验证安装
-which codex
-codex --version
-
-# 重试
-akm my-codex
-```
-
-### 问题 6：Claude Code 启动时的环境变量问题
+### 问题 5：Claude Code 启动时的环境变量问题
 
 #### 症状
 
@@ -297,50 +269,6 @@ akm edit my-claude
 # 4. tokenType 是否正确（如果 authMode 是 api_key）
 ```
 
-### 问题 7：Codex ChatGPT 登录失败
-
-#### 症状
-
-```bash
-$ akm my-codex-chat
-启动 ⚙️ Codex...
-[错误] 无法打开浏览器进行登录
-```
-
-#### 原因
-
-1. 网络连接问题
-2. 浏览器无法打开
-3. Codex 配置不正确
-
-#### 诊断
-
-```bash
-# 1. 测试网络连接
-ping -c 2 www.google.com
-
-# 2. 检查浏览器是否可用
-which open  # macOS
-which xdg-open  # Linux
-
-# 3. 检查配置
-akm list | grep -A 5 my-codex-chat
-```
-
-#### 解决
-
-```bash
-# 1. 确保有网络连接
-
-# 2. 尝试手动使用 Codex
-codex
-
-# 3. 如果还是失败，改用 API Key 模式
-akm add
-# 选择: ⚙️ Codex
-# 认证模式: 🔑 OpenAI API Key
-```
-
 ## 快速诊断脚本
 
 ```bash
@@ -371,10 +299,9 @@ echo "✓ 已保存的配置:"
 akm list || echo "  ✗ 无法读取配置"
 echo
 
-# 检查 IDE
-echo "✓ 检查已安装的 IDE..."
+# 检查 Claude Code
+echo "✓ 检查 Claude Code..."
 which claude && echo "  🚀 Claude Code: $(claude --version 2>/dev/null || echo 'version unknown')" || echo "  ✗ Claude Code 未安装"
-which codex && echo "  ⚙️ Codex: $(codex --version 2>/dev/null || echo 'version unknown')" || echo "  ✗ Codex 未安装"
 echo
 
 echo "=== 诊断完成 ==="
@@ -443,10 +370,9 @@ akm <provider-name>
    akm --version
    ```
 
-4. **已安装的 IDE**：
+4. **已安装的 Claude Code**：
    ```bash
    which claude
-   which codex
    ```
 
 5. **配置信息**（去掉敏感信息）：
@@ -458,6 +384,4 @@ akm <provider-name>
 
 ## 相关文档
 
-- [Codex 配置指南](./CODEX_SETUP_GUIDE.md)
-- [IDE 隔离设计](./IDE_ISOLATION_DESIGN.md)
 - [README.md](./README.md)
