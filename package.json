@@ -1,6 +1,6 @@
 {
   "name": "@pikecode/api-key-manager",
-  "version": "1.0.19",
+  "version": "1.0.20",
   "description": "A CLI tool for managing and switching multiple API provider configurations",
   "main": "src/index.js",
   "bin": {
