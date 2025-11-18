@@ -22,7 +22,7 @@ class CommandRegistry {
       return command;
     }
 
-    throw new Error(`命令 '${name}' 未注册`);
+    throw new Error(`未知命令 '${name}'\n运行 'akm --help' 查看所有可用命令`);
   }
 
   // 执行命令

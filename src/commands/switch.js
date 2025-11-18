@@ -25,7 +25,7 @@ class EnvSwitcher extends BaseCommand {
     await this.configManager.load();
     const provider = this.configManager.getProvider(providerName);
     if (!provider) {
-      throw new Error(`供应商 '${providerName}' 不存在`);
+      throw new Error(`供应商 '${providerName}' 不存在\n使用 'akm list' 查看所有已配置的供应商`);
     }
     return provider;
   }

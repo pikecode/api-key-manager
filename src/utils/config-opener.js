@@ -34,9 +34,14 @@ function openFileWithDefaultApp(filePath) {
 
 async function openAKMConfigFile() {
   if (!(await ensureConfigExists())) {
-    throw new Error('未找到 ~/.akm-config.json，请先运行 akm add 创建配置');
+    throw new Error('未找到配置文件 ~/.akm-config.json\n请先运行 \'akm add\' 创建第一个供应商配置');
   }
-  await openFileWithDefaultApp(AKM_CONFIG_FILE);
+
+  try {
+    await openFileWithDefaultApp(AKM_CONFIG_FILE);
+  } catch (error) {
+    throw new Error(`无法打开配置文件: ${error.message}\n配置文件位置: ${AKM_CONFIG_FILE}`);
+  }
 }
 
 module.exports = {
