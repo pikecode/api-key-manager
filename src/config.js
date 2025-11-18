@@ -85,8 +85,7 @@ class ConfigManager {
   }
 
   _migrateAuthModes() {
-    // 迁移旧的 api_token 模式到新的 auth_token 模式
-    // 同时为旧配置添加 ideName 字段（默认为 'claude'）
+    // 迁移旧配置以保持向后兼容
     if (this.config.providers) {
       Object.keys(this.config.providers).forEach(key => {
         const provider = this.config.providers[key];
@@ -96,7 +95,7 @@ class ConfigManager {
           provider.authMode = 'auth_token';
         }
 
-        // 为缺少 ideName 的旧配置添加默认值
+        // 为旧配置添加 ideName 字段（历史兼容性字段，默认为 'claude'）
         if (!provider.ideName) {
           provider.ideName = 'claude';
         }
@@ -153,11 +152,11 @@ class ConfigManager {
     this.config.providers[name] = {
       name,
       displayName: providerConfig.displayName || name,
-      ideName: providerConfig.ideName || 'claude', // 'claude' 或 'codex'
+      ideName: providerConfig.ideName || 'claude', // 历史兼容性字段
       baseUrl: providerConfig.baseUrl,
       authToken: providerConfig.authToken,
       authMode: providerConfig.authMode || 'api_key',
-      tokenType: providerConfig.tokenType || 'api_key', // 'api_key' 或 'auth_token' - 仅在 authMode 为 'api_key' 时使用
+      tokenType: providerConfig.tokenType || 'api_key', // 仅在 authMode 为 'api_key' 时使用
       launchArgs: providerConfig.launchArgs || [],
       models: {
         primary: providerConfig.primaryModel || null,

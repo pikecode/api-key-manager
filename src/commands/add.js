@@ -313,12 +313,8 @@ class ProviderAdder extends BaseCommand {
         ? await this.promptModelConfiguration()
         : { primaryModel: null, smallFastModel: null };
 
-      // 如果是 Codex 快捷方式，确保 ideName 被设置为 'codex'
-      const finalIdeName = forceCodex ? 'codex' : answers.ideName;
-
       await this.configManager.addProvider(answers.name, {
         displayName: answers.displayName || answers.name,
-        ideName: finalIdeName, // 'claude' 或 'codex'
         baseUrl: answers.baseUrl,
         authToken: answers.authToken,
         authMode: answers.authMode,

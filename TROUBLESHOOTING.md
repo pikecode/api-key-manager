@@ -1,6 +1,6 @@
 # 故障排除指南
 
-如果你遇到问题，比如"akm list 没有列出 Codex 的配置"，本指南可以帮助你诊断和解决。
+如果你在使用 API Key Manager 时遇到问题，本指南可以帮助你诊断和解决。
 
 ## 常见问题
 
@@ -37,13 +37,13 @@ cat ~/.akm-config.json
 应该看到类似的 JSON 结构：
 ```json
 {
-  "version": "1.0.0",
-  "currentProvider": "my-codex",
+  "version": "2.0.0",
+  "currentProvider": "my-claude",
   "providers": {
-    "my-codex": {
-      "name": "my-codex",
-      "displayName": "My Codex",
-      "ideName": "codex",
+    "my-claude": {
+      "name": "my-claude",
+      "displayName": "My Claude Code",
+      "authMode": "oauth_token",
       ...
     }
   }
@@ -59,8 +59,8 @@ cat ~/.akm-config.json | jq '.providers | keys'
 应该输出你添加的供应商名称：
 ```json
 [
-  "my-codex",
-  "my-claude"
+  "my-claude",
+  "my-claude-api"
 ]
 ```
 
@@ -87,7 +87,7 @@ cat ~/.akm-config.json | jq '.providers'
 
 # 应该显示：
 # {
-#   "my-codex": { ... }
+#   "my-claude": { ... }
 # }
 
 # 如果显示 {} 或 null，说明没有保存成功
@@ -108,41 +108,7 @@ ls -la ~/.akm-config.json
 chmod 644 ~/.akm-config.json
 ```
 
-### 问题 2：akm list 显示配置，但不显示 Codex 标识
-
-#### 症状
-
-```bash
-$ akm list
-🔹 my-codex (My Codex) - 已配置 OpenAI API Key
-   认证模式: api_key
-   Token: sk-...
-```
-
-但看不到 `[⚙️ Codex]` 标识
-
-#### 原因
-
-这是 v1.0.13 之前的版本。IDE 类型标识是在 v1.0.13 中添加的。
-
-#### 解决
-
-升级到最新版本：
-```bash
-npm install -g @pikecode/api-key-manager@latest
-```
-
-然后再次运行：
-```bash
-akm list
-```
-
-应该看到：
-```
-🔹 my-codex (My Codex) [⚙️ Codex] - 已配置 OpenAI API Key
-```
-
-### 问题 3：添加配置时出错
+### 问题 2：添加配置时出错
 
 #### 症状
 
@@ -156,7 +122,7 @@ $ akm add
 ##### 错误：供应商名称已存在
 
 ```
-[错误] 供应商 'my-codex' 已存在，是否覆盖? (y/N)
+[错误] 供应商 'my-claude' 已存在，是否覆盖? (y/N)
 ```
 
 **解决**：
@@ -171,7 +137,7 @@ $ akm add
 
 **解决**：
 - 确保复制了完整的 Token
-- Token 应该以 `sk-` 开头（对于 OpenAI API Key）
+- Token 应该以 `sk-ant-` 开头（对于 Anthropic）
 - 不要包含空格或换行符
 
 ##### 错误：配置文件权限问题
@@ -190,13 +156,13 @@ rm ~/.akm-config.json
 akm add
 ```
 
-### 问题 4：启动时找不到供应商
+### 问题 3：启动时找不到供应商
 
 #### 症状
 
 ```bash
-$ akm my-codex
-[错误] 供应商 'my-codex' 不存在
+$ akm my-claude
+[错误] 供应商 'my-claude' 不存在
 ```
 
 但 `akm list` 显示有这个供应商！
@@ -209,7 +175,7 @@ $ akm my-codex
 
 ```bash
 # 立即检查配置文件
-cat ~/.akm-config.json | jq '.providers.["my-codex"]'
+cat ~/.akm-config.json | jq '.providers.["my-claude"]'
 ```
 
 #### 解决
@@ -222,21 +188,17 @@ cat ~/.akm-config.json | jq '.providers.["my-codex"]'
 
 2. **如果返回配置信息**：
    ```bash
-   # 检查 ideName 是否正确
-   cat ~/.akm-config.json | jq '.providers.["my-codex"].ideName'
-   # 应该输出: "codex"
-
-   # 如果是 null，需要编辑配置
-   akm edit my-codex
+   # 重新编辑配置
+   akm edit my-claude
    ```
 
-### 问题 5：Claude Code 启动时的环境变量问题
+### 问题 4：Claude Code 启动时的环境变量问题
 
 #### 症状
 
 ```bash
 $ akm my-claude
-启动 🚀 Claude Code...
+启动 Claude Code...
 [错误] 认证失败: Invalid API Key
 ```
 
@@ -252,8 +214,8 @@ $ akm my-claude
 # 检查配置
 akm current
 
-# 验证 Token 是否有效（对于 OpenAI API Key）
-curl -H "Authorization: Bearer YOUR-TOKEN" https://api.openai.com/v1/models
+# 查看当前供应商详情
+akm list
 ```
 
 #### 解决
