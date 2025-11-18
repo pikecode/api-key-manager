@@ -86,11 +86,19 @@ class ConfigManager {
 
   _migrateAuthModes() {
     // 迁移旧的 api_token 模式到新的 auth_token 模式
+    // 同时为旧配置添加 ideName 字段（默认为 'claude'）
     if (this.config.providers) {
       Object.keys(this.config.providers).forEach(key => {
         const provider = this.config.providers[key];
+
+        // 迁移旧的 api_token 模式到新的 auth_token 模式
         if (provider.authMode === 'api_token') {
           provider.authMode = 'auth_token';
+        }
+
+        // 为缺少 ideName 的旧配置添加默认值
+        if (!provider.ideName) {
+          provider.ideName = 'claude';
         }
       });
     }
@@ -119,6 +127,8 @@ class ConfigManager {
 
   async _performSave() {
     try {
+      // 保存前确保迁移已应用
+      this._migrateAuthModes();
       await fs.writeJSON(this.configPath, this.config, { spaces: 2 });
       // 更新最后修改时间
       const stat = await fs.stat(this.configPath);
