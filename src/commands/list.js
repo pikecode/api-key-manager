@@ -54,7 +54,7 @@ class ProviderLister {
         }
 
         if (provider.authToken) {
-          console.log(chalk.gray(`   Token: ${provider.authToken.substring(0, 10)}...`));
+          console.log(chalk.gray(`   Token: ${provider.authToken}`));
         }
 
         if (provider.launchArgs && provider.launchArgs.length > 0) {
