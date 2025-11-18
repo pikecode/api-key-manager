@@ -173,14 +173,17 @@ describe('validator', () => {
 
   describe('validateToken', () => {
     test('should accept valid tokens', () => {
-      expect(validator.validateToken('sk-ant-123456')).toBeNull();
-      expect(validator.validateToken('test-token-123456')).toBeNull();
+      expect(validator.validateToken('sk-ant-api03-real-valid-token-abcdefgh')).toBeNull();
+      expect(validator.validateToken('valid-production-token-string')).toBeNull();
       expect(validator.validateToken('a'.repeat(5000))).toBeNull();
     });
 
     test('should reject invalid tokens', () => {
       expect(validator.validateToken('')).toBe('Token不能为空');
       expect(validator.validateToken('short')).toBe('Token长度不能少于10个字符');
+      expect(validator.validateToken('your-key-here')).toContain('占位符');
+      expect(validator.validateToken('test-key-123456')).toContain('占位符');
+      expect(validator.validateToken('api-key-here')).toContain('占位符');
     });
   });
 
