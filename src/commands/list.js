@@ -43,18 +43,32 @@ class ProviderLister {
         };
         console.log(chalk.gray(`   认证模式: ${authModeDisplay[provider.authMode] || provider.authMode}`));
 
-        // 如果是 api_key 模式，显示 tokenType
-        if (provider.authMode === 'api_key' && provider.tokenType) {
-          const tokenTypeDisplay = provider.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-          console.log(chalk.gray(`   Token类型: ${tokenTypeDisplay}`));
-        }
-
-        if (provider.baseUrl) {
-          console.log(chalk.gray(`   API基础URL: ${provider.baseUrl}`));
-        }
-
-        if (provider.authToken) {
-          console.log(chalk.gray(`   Token: ${provider.authToken}`));
+        // 根据不同模式显示对应的环境变量名称
+        if (provider.authMode === 'oauth_token') {
+          // OAuth 模式
+          if (provider.authToken) {
+            console.log(chalk.gray(`   CLAUDE_CODE_OAUTH_TOKEN: ${provider.authToken}`));
+          }
+          if (provider.baseUrl) {
+            console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
+          }
+        } else if (provider.authMode === 'api_key') {
+          // API Key 模式
+          if (provider.baseUrl) {
+            console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
+          }
+          if (provider.authToken) {
+            const tokenEnvName = provider.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+            console.log(chalk.gray(`   ${tokenEnvName}: ${provider.authToken}`));
+          }
+        } else {
+          // auth_token 模式
+          if (provider.baseUrl) {
+            console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
+          }
+          if (provider.authToken) {
+            console.log(chalk.gray(`   ANTHROPIC_AUTH_TOKEN: ${provider.authToken}`));
+          }
         }
 
         if (provider.launchArgs && provider.launchArgs.length > 0) {
