@@ -47,7 +47,12 @@ class ProviderLister {
         const availabilityText = this._formatAvailability(availability);
         const nameColor = isCurrent ? chalk.green : chalk.white;
 
-        console.log(`${status} ${availabilityIcon} ${nameColor(provider.name)} (${provider.displayName}) - ${availabilityText}`);
+        // IDE 类型标签
+        const ideTag = provider.ideName === 'codex'
+          ? chalk.cyan('[Codex]')
+          : chalk.magenta('[Claude]');
+
+        console.log(`${status} ${availabilityIcon} ${ideTag} ${nameColor(provider.name)} (${provider.displayName}) - ${availabilityText}`);
 
         if (provider.ideName === 'codex') {
           console.log(chalk.gray('   IDE: Codex CLI'));

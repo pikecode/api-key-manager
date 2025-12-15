@@ -880,7 +880,11 @@ class EnvSwitcher extends BaseCommand {
       const icon = this._iconForState(availability?.state);
       const statusText = this._formatAvailability(availability);
       const statusLabel = chalk.gray('-') + ' ' + statusText;
-      const label = `${icon} ${UIHelper.formatProvider(provider)}${isLastUsed ? UIHelper.colors.muted(' --- 上次使用') : ''} ${statusLabel}`;
+      // IDE 类型标签
+      const ideTag = provider.ideName === 'codex'
+        ? chalk.cyan('[Codex]')
+        : chalk.magenta('[Claude]');
+      const label = `${icon} ${ideTag} ${UIHelper.formatProvider(provider)}${isLastUsed ? UIHelper.colors.muted(' --- 上次使用') : ''} ${statusLabel}`;
 
       return {
         name: label,
