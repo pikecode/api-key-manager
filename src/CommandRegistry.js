@@ -71,4 +71,19 @@ registry.registerLazy('edit', async () => {
   return editCommand;
 });
 
+registry.registerLazy('export', async () => {
+  const { exportCommand } = require('./commands/backup');
+  return exportCommand;
+});
+
+registry.registerLazy('import', async () => {
+  const { importCommand } = require('./commands/backup');
+  return importCommand;
+});
+
+registry.registerLazy('backup', async () => {
+  const { backupCommand } = require('./commands/backup');
+  return backupCommand;
+});
+
 module.exports = { CommandRegistry, registry };

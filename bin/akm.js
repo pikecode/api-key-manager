@@ -120,5 +120,51 @@ program
     }
   });
 
+// Export command
+program
+  .command('export')
+  .argument('[file]', '导出文件路径 (默认: akm-config-{timestamp}.json)')
+  .description('导出配置到文件')
+  .option('--mask', '脱敏 Token (导入后需重新设置)')
+  .action(async (file, options) => {
+    try {
+      await registry.executeCommand('export', file, options);
+    } catch (error) {
+      console.error(chalk.red('❌ 导出失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Import command
+program
+  .command('import')
+  .argument('<file>', '要导入的配置文件路径')
+  .description('从文件导入配置')
+  .option('--overwrite', '覆盖已存在的供应商')
+  .action(async (file, options) => {
+    try {
+      await registry.executeCommand('import', file, options);
+    } catch (error) {
+      console.error(chalk.red('❌ 导入失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Backup command
+program
+  .command('backup')
+  .description('备份和恢复配置')
+  .option('-l, --list', '列出所有备份')
+  .option('-r, --restore <file>', '从备份恢复')
+  .option('-d, --dir <path>', '指定备份目录')
+  .action(async (options) => {
+    try {
+      await registry.executeCommand('backup', options);
+    } catch (error) {
+      console.error(chalk.red('❌ 备份操作失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
 // Parse arguments
 program.parse();

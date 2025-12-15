@@ -93,6 +93,13 @@ class EnvSwitcher extends BaseCommand {
       
       this.removeESCListener(escListener);
 
+      // 检查互斥参数
+      const conflictError = this.checkExclusiveArgs(answers.selectedArgs, availableArgs);
+      if (conflictError) {
+        Logger.warning(conflictError);
+        return await this.showLaunchArgsSelection(providerName);
+      }
+
       // 选择参数后直接启动
       await this.launchProvider(provider, answers.selectedArgs);
       
@@ -272,6 +279,28 @@ class EnvSwitcher extends BaseCommand {
         checked: false
       }
     ];
+  }
+
+  checkExclusiveArgs(selectedArgs, availableArgs) {
+    if (!selectedArgs || selectedArgs.length < 2) {
+      return null;
+    }
+
+    for (const argDef of availableArgs) {
+      if (!argDef.exclusive || !selectedArgs.includes(argDef.name)) {
+        continue;
+      }
+
+      for (const exclusiveArg of argDef.exclusive) {
+        if (selectedArgs.includes(exclusiveArg)) {
+          const arg1 = availableArgs.find(a => a.name === argDef.name);
+          const arg2 = availableArgs.find(a => a.name === exclusiveArg);
+          return `"${arg1?.label || argDef.name}" 和 "${arg2?.label || exclusiveArg}" 不能同时选择`;
+        }
+      }
+    }
+
+    return null;
   }
 
   getCodexLaunchArgs() {
