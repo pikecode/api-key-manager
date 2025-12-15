@@ -21,6 +21,7 @@ class EnvSwitcher extends BaseCommand {
     this.currentPromptContext = null;
     this.activeStatusRefresh = null;
     this.filter = null;
+    this.filteredProviders = null; // 保存过滤后的供应商列表用于状态更新
   }
 
   async validateProvider(providerName) {
@@ -348,7 +349,10 @@ class EnvSwitcher extends BaseCommand {
       } else if (this.filter === 'claude') {
         providers = providers.filter(p => p.ideName !== 'codex');
       }
-      
+
+      // 保存过滤后的供应商列表用于状态更新
+      this.filteredProviders = providers;
+
       const initialStatusMap = this._buildInitialStatusMap(providers);
       // 显示欢迎界面（立即渲染）
       this.showWelcomeScreen(providers, initialStatusMap, null);
@@ -429,6 +433,7 @@ class EnvSwitcher extends BaseCommand {
         this.currentPromptContext = null;
       }
       this._cancelStatusRefresh();
+      this.filteredProviders = null; // 清除保存的供应商列表
     }
   }
 
@@ -1141,7 +1146,8 @@ class EnvSwitcher extends BaseCommand {
     }
 
     const includeActions = this.currentPromptContext === 'manage';
-    const providers = this.configManager.listProviders();
+    // 使用保存的过滤后供应商列表，而不是重新获取全部
+    const providers = this.filteredProviders || this.configManager.listProviders();
     const statusMap = this.latestStatusMap || {};
     const updatedChoicesBase = this.createProviderChoices(providers, includeActions, statusMap);
     const updatedChoices = [...updatedChoicesBase];
