@@ -1325,27 +1325,32 @@ class EnvSwitcher extends BaseCommand {
         this.showManageMenu();
       }, '取消编辑');
 
-      let answers;
-      try {
-        answers = await this.prompt([
-          {
-            type: 'input',
-            name: 'name',
-            message: '请输入供应商名称 (用于命令行):',
-            default: provider.name,
-            validate: (input) => {
-              const error = validator.validateName(input);
-              if (error) return error;
-              return true;
-            }
-          },
-          {
-            type: 'input',
-            name: 'displayName',
-            message: '显示名称:',
-            default: provider.displayName,
-            prefillDefault: true
-          },
+      // 根据 IDE 类型构建不同的问卷
+      const isCodex = provider.ideName === 'codex';
+      const questions = [
+        {
+          type: 'input',
+          name: 'name',
+          message: '请输入供应商名称 (用于命令行):',
+          default: provider.name,
+          validate: (input) => {
+            const error = validator.validateName(input);
+            if (error) return error;
+            return true;
+          }
+        },
+        {
+          type: 'input',
+          name: 'displayName',
+          message: '显示名称:',
+          default: provider.displayName,
+          prefillDefault: true
+        }
+      ];
+
+      // Claude Code 特定的字段
+      if (!isCodex) {
+        questions.push(
           {
             type: 'list',
             name: 'authMode',
@@ -1367,33 +1372,6 @@ class EnvSwitcher extends BaseCommand {
             ],
             default: provider.tokenType || 'api_key',
             when: (answers) => answers.authMode === 'api_key'
-          },
-          {
-            type: 'input',
-            name: 'baseUrl',
-            message: '基础URL:',
-            default: provider.baseUrl,
-            prefillDefault: true,
-            when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token'
-          },
-          {
-            type: 'input',
-            name: 'authToken',
-            message: (answers) => {
-              switch (answers.authMode) {
-                case 'api_key':
-                  const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-                  return `Token (${tokenTypeLabel}):`;
-                case 'auth_token':
-                  return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
-                case 'oauth_token':
-                  return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
-                default:
-                  return '认证令牌:';
-              }
-            },
-            default: provider.authToken,
-            prefillDefault: true
           },
           {
             type: 'input',
@@ -1421,7 +1399,44 @@ class EnvSwitcher extends BaseCommand {
               return true;
             }
           }
-        ]);
+        );
+      }
+
+      // 通用字段（Claude 和 Codex 都需要）
+      questions.push({
+        type: 'input',
+        name: 'baseUrl',
+        message: isCodex ? '基础URL (OPENAI_BASE_URL):' : '基础URL:',
+        default: provider.baseUrl,
+        prefillDefault: true
+      });
+
+      questions.push({
+        type: 'input',
+        name: 'authToken',
+        message: (answers) => {
+          if (isCodex) {
+            return 'API Key (OPENAI_API_KEY):';
+          }
+          switch (answers.authMode) {
+            case 'api_key':
+              const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+              return `Token (${tokenTypeLabel}):`;
+            case 'auth_token':
+              return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
+            case 'oauth_token':
+              return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
+            default:
+              return '认证令牌:';
+          }
+        },
+        default: provider.authToken,
+        prefillDefault: true
+      });
+
+      let answers;
+      try {
+        answers = await this.prompt(questions);
       } catch (error) {
         this.removeESCListener(escListener);
         if (this.isEscCancelled(error)) {
@@ -1462,17 +1477,24 @@ class EnvSwitcher extends BaseCommand {
       provider.displayName = answers.displayName || newName;
       provider.baseUrl = answers.baseUrl;
       provider.authToken = answers.authToken;
-      provider.authMode = answers.authMode;
-      if (answers.tokenType) {
-        provider.tokenType = answers.tokenType; // 仅在 authMode 为 'api_key' 时使用
-      }
       
-      // 更新模型配置
-      if (!provider.models) {
-        provider.models = {};
+      // Claude Code 特定的更新
+      if (!isCodex) {
+        provider.authMode = answers.authMode;
+        if (answers.tokenType) {
+          provider.tokenType = answers.tokenType; // 仅在 authMode 为 'api_key' 时使用
+        }
+        
+        // 更新模型配置
+        if (!provider.models) {
+          provider.models = {};
+        }
+        provider.models.primary = answers.primaryModel || null;
+        provider.models.smallFast = answers.smallFastModel || null;
       }
-      provider.models.primary = answers.primaryModel || null;
-      provider.models.smallFast = answers.smallFastModel || null;
+
+      // 确保 ideName 不被改变
+      provider.ideName = isCodex ? 'codex' : 'claude';
 
       await this.configManager.save();
       Logger.success(`供应商 '${newName}' 已更新`);
