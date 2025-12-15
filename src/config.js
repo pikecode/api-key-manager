@@ -198,23 +198,34 @@ class ConfigManager {
   async addProvider(name, providerConfig) {
     await this.ensureLoaded();
 
+    const isCodex = providerConfig.ideName === 'codex';
+
     this.config.providers[name] = {
       name,
       displayName: providerConfig.displayName || name,
-      ideName: providerConfig.ideName || 'claude', // 历史兼容性字段
+      ideName: providerConfig.ideName || 'claude',
       baseUrl: providerConfig.baseUrl,
       authToken: providerConfig.authToken,
-      authMode: providerConfig.authMode || 'api_key',
-      tokenType: providerConfig.tokenType || 'api_key', // 仅在 authMode 为 'api_key' 时使用
       launchArgs: providerConfig.launchArgs || [],
-      models: {
-        primary: providerConfig.primaryModel || null,
-        smallFast: providerConfig.smallFastModel || null
-      },
       createdAt: new Date().toISOString(),
       lastUsed: new Date().toISOString(),
       current: false
     };
+
+    // Claude Code 特定字段
+    if (!isCodex) {
+      this.config.providers[name].authMode = providerConfig.authMode || 'api_key';
+      this.config.providers[name].tokenType = providerConfig.tokenType || 'api_key';
+      this.config.providers[name].models = {
+        primary: providerConfig.primaryModel || null,
+        smallFast: providerConfig.smallFastModel || null
+      };
+    } else {
+      // Codex 不需要这些字段，设置为 null 以保持向后兼容
+      this.config.providers[name].authMode = null;
+      this.config.providers[name].tokenType = null;
+      this.config.providers[name].models = null;
+    }
 
     // 如果是第一个供应商或设置为默认，则设为当前供应商
     if (Object.keys(this.config.providers).length === 1 || providerConfig.setAsDefault) {

@@ -1491,6 +1491,11 @@ class EnvSwitcher extends BaseCommand {
         }
         provider.models.primary = answers.primaryModel || null;
         provider.models.smallFast = answers.smallFastModel || null;
+      } else {
+        // 确保 Codex 配置不包含 Claude 特定字段
+        provider.authMode = null;
+        provider.tokenType = null;
+        provider.models = null;
       }
 
       // 确保 ideName 不被改变
