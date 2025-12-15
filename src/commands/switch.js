@@ -20,6 +20,7 @@ class EnvSwitcher extends BaseCommand {
     this.latestStatusMap = {};
     this.currentPromptContext = null;
     this.activeStatusRefresh = null;
+    this.filter = null;
   }
 
   async validateProvider(providerName) {
@@ -280,14 +281,26 @@ class EnvSwitcher extends BaseCommand {
   async showProviderSelection() {
     try {
       // 并行加载配置和准备界面
-      const providers = await this.configManager.ensureLoaded().then(() => this.configManager.listProviders());
+      let providers = await this.configManager.ensureLoaded().then(() => this.configManager.listProviders());
+
+      // 应用过滤器
+      if (this.filter === 'codex') {
+        providers = providers.filter(p => p.ideName === 'codex');
+      } else if (this.filter === 'claude') {
+        providers = providers.filter(p => p.ideName !== 'codex');
+      }
       
       const initialStatusMap = this._buildInitialStatusMap(providers);
       // 显示欢迎界面（立即渲染）
       this.showWelcomeScreen(providers, initialStatusMap, null);
       
       if (providers.length === 0) {
-        Logger.warning('暂无配置的供应商');
+        if (this.filter) {
+          const filterName = this.filter === 'codex' ? 'Codex CLI' : 'Claude Code';
+          Logger.warning(`暂无 ${filterName} 供应商配置`);
+        } else {
+          Logger.warning('暂无配置的供应商');
+        }
         Logger.info('请先运行 "akm add" 添加供应商配置');
         return;
       }
@@ -314,6 +327,10 @@ class EnvSwitcher extends BaseCommand {
       const currentProvider = providers.find(p => p.current);
       const defaultChoice = currentProvider ? currentProvider.name : providers[0]?.name;
 
+      // 构建提示信息
+      const filterSuffix = this.filter === 'codex' ? ' (Codex CLI)' : (this.filter === 'claude' ? ' (Claude Code)' : '');
+      const promptMessage = `请选择要切换的供应商${filterSuffix} (总计 ${providers.length} 个):`;
+
       // 设置 ESC 键监听
       const escListener = this.createESCListener(() => {
         Logger.info('退出程序');
@@ -325,7 +342,7 @@ class EnvSwitcher extends BaseCommand {
         {
           type: 'list',
           name: 'provider',
-          message: `请选择要切换的供应商 (总计 ${providers.length} 个):`,
+          message: promptMessage,
           choices,
           default: defaultChoice,
           pageSize: 12
@@ -1465,9 +1482,10 @@ class EnvSwitcher extends BaseCommand {
   }
 }
 
-async function switchCommand(providerName) {
+async function switchCommand(providerName, options = {}) {
   const switcher = new EnvSwitcher();
-  
+  switcher.filter = options.filter || null;
+
   try {
     if (providerName) {
       await switcher.showLaunchArgsSelection(providerName);

@@ -34,11 +34,31 @@ program
 program
   .command('add')
   .description('添加新的API密钥配置')
-  .action(async () => {
+  .option('--codex', '直接添加 Codex CLI 供应商')
+  .option('--claude', '直接添加 Claude Code 供应商')
+  .action(async (options) => {
     try {
-      await registry.executeCommand('add');
+      const ideName = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      await registry.executeCommand('add', { ideName });
     } catch (error) {
       console.error(chalk.red('❌ 添加失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Switch command
+program
+  .command('switch')
+  .description('切换到指定供应商')
+  .argument('[provider]', '直接切换到指定供应商')
+  .option('--codex', '仅显示 Codex CLI 供应商')
+  .option('--claude', '仅显示 Claude Code 供应商')
+  .action(async (provider, options) => {
+    try {
+      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      await registry.executeCommand('switch', provider, { filter });
+    } catch (error) {
+      console.error(chalk.red('❌ 切换失败:'), error.message);
       process.exit(1);
     }
   });

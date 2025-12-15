@@ -7,9 +7,10 @@ const { UIHelper } = require('../utils/ui-helper');
 const { BaseCommand } = require('./BaseCommand');
 
 class ProviderAdder extends BaseCommand {
-  constructor() {
+  constructor(options = {}) {
     super();
     this.configManager = new ConfigManager();
+    this.presetIdeName = options.ideName || null;
   }
 
   async interactive() {
@@ -175,6 +176,28 @@ class ProviderAdder extends BaseCommand {
     try {
       const answers = await this.prompt([
         {
+          type: 'list',
+          name: 'ideName',
+          message: '选择要管理的 IDE:',
+          choices: [
+            { name: 'Claude Code (Anthropic)', value: 'claude' },
+            { name: 'Codex CLI (OpenAI)', value: 'codex' }
+          ],
+          default: this.presetIdeName || 'claude',
+          when: () => !this.presetIdeName
+        },
+        {
+          type: 'list',
+          name: 'importFromExisting',
+          message: '是否从现有 Codex 配置导入?',
+          choices: [
+            { name: '从 ~/.codex 导入现有配置', value: 'import' },
+            { name: '手动输入配置', value: 'manual' }
+          ],
+          default: 'import',
+          when: (answers) => (answers.ideName || this.presetIdeName) === 'codex'
+        },
+        {
           type: 'input',
           name: 'name',
           message: '请输入供应商名称 (用于命令行):',
@@ -196,16 +219,6 @@ class ProviderAdder extends BaseCommand {
         },
         {
           type: 'list',
-          name: 'ideName',
-          message: '选择要管理的 IDE:',
-          choices: [
-            { name: 'Claude Code (Anthropic)', value: 'claude' },
-            { name: 'Codex CLI (OpenAI)', value: 'codex' }
-          ],
-          default: 'claude'
-        },
-        {
-          type: 'list',
           name: 'authMode',
           message: '选择认证模式:',
           choices: [
@@ -214,7 +227,7 @@ class ProviderAdder extends BaseCommand {
             { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' }
           ],
           default: 'api_key',
-          when: (answers) => answers.ideName !== 'codex'
+          when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex'
         },
         {
           type: 'list',
@@ -225,7 +238,7 @@ class ProviderAdder extends BaseCommand {
             { name: '🔐 ANTHROPIC_AUTH_TOKEN - 认证令牌', value: 'auth_token' }
           ],
           default: 'api_key',
-          when: (answers) => answers.ideName !== 'codex' && answers.authMode === 'api_key'
+          when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex' && answers.authMode === 'api_key'
         },
         {
           type: 'input',
@@ -249,7 +262,7 @@ class ProviderAdder extends BaseCommand {
             if (error) return error;
             return true;
           },
-          when: (answers) => answers.ideName !== 'codex' && (answers.authMode === 'api_key' || answers.authMode === 'auth_token')
+          when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex' && (answers.authMode === 'api_key' || answers.authMode === 'auth_token')
         },
         {
           type: 'input',
@@ -271,9 +284,8 @@ class ProviderAdder extends BaseCommand {
             const error = validator.validateToken(input);
             if (error) return error;
             return true;
-          }
-          ,
-          when: (answers) => answers.ideName !== 'codex'
+          },
+          when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex'
         },
         {
           type: 'input',
@@ -286,7 +298,7 @@ class ProviderAdder extends BaseCommand {
             if (error) return error;
             return true;
           },
-          when: (answers) => answers.ideName === 'codex'
+          when: (answers) => (answers.ideName || this.presetIdeName) === 'codex' && answers.importFromExisting === 'manual'
         },
         {
           type: 'input',
@@ -298,7 +310,7 @@ class ProviderAdder extends BaseCommand {
             if (error) return error;
             return true;
           },
-          when: (answers) => answers.ideName === 'codex'
+          when: (answers) => (answers.ideName || this.presetIdeName) === 'codex' && answers.importFromExisting === 'manual'
         },
         {
           type: 'confirm',
@@ -311,24 +323,68 @@ class ProviderAdder extends BaseCommand {
           name: 'configureLaunchArgs',
           message: '是否配置启动参数?',
           default: false,
-          when: (answers) => answers.ideName !== 'codex'
+          when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex'
+        },
+        {
+          type: 'confirm',
+          name: 'configureCodexLaunchArgs',
+          message: '是否配置 Codex 启动参数?',
+          default: false,
+          when: (answers) => (answers.ideName || this.presetIdeName) === 'codex'
         },
         {
           type: 'confirm',
           name: 'configureModels',
           message: '是否配置模型参数?',
           default: false,
-          when: (answers) => answers.ideName !== 'codex'
+          when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex'
         }
       ]);
 
       // 移除 ESC 键监听
       this.removeESCListener(escListener);
-      
+
+      // 如果是预设的 ideName，设置到 answers 中
+      if (!answers.ideName && this.presetIdeName) {
+        answers.ideName = this.presetIdeName;
+      }
+
       if (answers.ideName === 'codex') {
         answers.authMode = 'openai_api_key';
         answers.tokenType = null;
         answers.codexFiles = null;
+
+        // 从现有配置导入
+        if (answers.importFromExisting === 'import') {
+          const importedConfig = await this.importCodexConfig();
+          if (importedConfig) {
+            answers.authToken = importedConfig.apiKey;
+            answers.baseUrl = importedConfig.baseUrl;
+          } else {
+            Logger.warning('未能导入现有配置，请手动输入');
+            const manualAnswers = await this.prompt([
+              {
+                type: 'input',
+                name: 'baseUrl',
+                message: '请输入 OpenAI API 基础URL (如使用官方API可留空):',
+                default: ''
+              },
+              {
+                type: 'input',
+                name: 'authToken',
+                message: '请输入 OpenAI API Key (OPENAI_API_KEY):',
+                validate: (input) => input ? true : 'API Key 不能为空'
+              }
+            ]);
+            answers.authToken = manualAnswers.authToken;
+            answers.baseUrl = manualAnswers.baseUrl;
+          }
+        }
+
+        // Codex 启动参数配置
+        if (answers.configureCodexLaunchArgs) {
+          answers.launchArgs = await this.promptCodexLaunchArgsSelection();
+        }
       }
 
       await this.saveProvider(answers);
@@ -512,6 +568,110 @@ class ProviderAdder extends BaseCommand {
     }
   }
 
+  async importCodexConfig() {
+    try {
+      const { readCodexFiles } = require('../utils/codex-files');
+      const codexFiles = await readCodexFiles();
+
+      if (!codexFiles.authJson) {
+        return null;
+      }
+
+      // 解析 auth.json 获取 API Key
+      const authData = JSON.parse(codexFiles.authJson);
+      const apiKey = authData.api_key || authData.openai_api_key || authData.OPENAI_API_KEY;
+
+      if (!apiKey) {
+        return null;
+      }
+
+      // 尝试从 config.toml 获取 base URL
+      let baseUrl = null;
+      if (codexFiles.configToml) {
+        const baseUrlMatch = codexFiles.configToml.match(/api_base\s*=\s*["']([^"']+)["']/);
+        if (baseUrlMatch) {
+          baseUrl = baseUrlMatch[1];
+        }
+      }
+
+      Logger.success(`成功从 ${codexFiles.codexHome} 导入配置`);
+      return { apiKey, baseUrl };
+    } catch (error) {
+      Logger.warning(`导入配置失败: ${error.message}`);
+      return null;
+    }
+  }
+
+  async promptCodexLaunchArgsSelection() {
+    console.log(UIHelper.createTitle('配置 Codex 启动参数', UIHelper.icons.settings));
+    console.log();
+    console.log(UIHelper.createTooltip('选择要使用的 Codex 启动参数'));
+    console.log();
+    console.log(UIHelper.createHintLine([
+      ['空格', '切换选中'],
+      ['A', '全选'],
+      ['I', '反选'],
+      ['Enter', '确认选择'],
+      ['ESC', '跳过配置']
+    ]));
+    console.log();
+
+    const escListener = this.createESCListener(() => {
+      Logger.info('跳过 Codex 启动参数配置');
+    }, '跳过配置');
+
+    try {
+      const codexArgs = [
+        {
+          name: '--full-auto',
+          label: '全自动模式',
+          description: '自动批准所有操作',
+          checked: false
+        },
+        {
+          name: '--dangerously-bypass-approvals-and-sandbox',
+          label: '跳过审批和沙盒',
+          description: '危险：跳过所有安全检查',
+          checked: false
+        },
+        {
+          name: '--model',
+          label: '指定模型',
+          description: '使用特定模型 (需手动指定)',
+          checked: false
+        },
+        {
+          name: '--quiet',
+          label: '静默模式',
+          description: '减少输出信息',
+          checked: false
+        }
+      ];
+
+      const { launchArgs } = await this.prompt([
+        {
+          type: 'checkbox',
+          name: 'launchArgs',
+          message: '请选择 Codex 启动参数:',
+          choices: codexArgs.map(arg => ({
+            name: `${arg.label} (${arg.name}) - ${arg.description}`,
+            value: arg.name,
+            checked: arg.checked
+          }))
+        }
+      ]);
+
+      this.removeESCListener(escListener);
+      return launchArgs;
+    } catch (error) {
+      this.removeESCListener(escListener);
+      if (this.isEscCancelled(error)) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
   printProviderSummary(answers, launchArgs, modelConfig) {
     const finalDisplayName = answers.displayName || answers.name;
     Logger.success(`供应商 '${finalDisplayName}' 添加成功！`);
@@ -527,6 +687,9 @@ class ProviderAdder extends BaseCommand {
       }
       if (answers.authToken) {
         console.log(chalk.gray(`  OPENAI_API_KEY: ${answers.authToken}`));
+      }
+      if (answers.launchArgs && answers.launchArgs.length > 0) {
+        console.log(chalk.gray(`  启动参数: ${answers.launchArgs.join(' ')}`));
       }
       console.log(chalk.green('\n🎉 供应商添加完成！正在返回主界面...'));
       return;
@@ -571,8 +734,8 @@ class ProviderAdder extends BaseCommand {
   }
 }
 
-async function addCommand() {
-  const adder = new ProviderAdder();
+async function addCommand(options = {}) {
+  const adder = new ProviderAdder(options);
   try {
     await adder.interactive();
   } catch (error) {

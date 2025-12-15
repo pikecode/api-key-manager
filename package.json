@@ -1,6 +1,6 @@
 {
   "name": "@pikecode/api-key-manager",
-  "version": "1.0.21",
+  "version": "1.0.22",
   "description": "A CLI tool for managing and switching multiple API provider configurations",
   "main": "src/index.js",
   "bin": {
@@ -29,6 +29,11 @@
     "anthropic",
     "anthropic-api-key",
     "anthropic-auth-token",
+    "openai",
+    "openai-api-key",
+    "codex",
+    "codex-cli",
+    "claude-code",
     "environment",
     "config",
     "provider",
