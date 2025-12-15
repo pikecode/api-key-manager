@@ -87,7 +87,12 @@ async function executeCodexWithEnv(config, launchArgs = []) {
   }
 
   const env = buildCodexEnvVariables(config);
-  const args = Array.isArray(launchArgs) ? [...launchArgs] : [];
+
+  // 处理参数：子命令放前面，选项放后面
+  const rawArgs = Array.isArray(launchArgs) ? [...launchArgs] : [];
+  const subcommands = rawArgs.filter(arg => !arg.startsWith('-'));
+  const options = rawArgs.filter(arg => arg.startsWith('-'));
+  const args = [...subcommands, ...options];
 
   clearTerminal();
 

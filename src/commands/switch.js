@@ -277,6 +277,13 @@ class EnvSwitcher extends BaseCommand {
   getCodexLaunchArgs() {
     return [
       {
+        name: 'resume',
+        label: '继续上次对话',
+        description: '恢复之前的会话',
+        checked: false,
+        isSubcommand: true
+      },
+      {
         name: '--full-auto',
         label: '全自动模式',
         description: '自动批准 + 工作区写入沙盒',

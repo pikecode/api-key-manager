@@ -623,6 +623,12 @@ class ProviderAdder extends BaseCommand {
     try {
       const codexArgs = [
         {
+          name: 'resume',
+          label: '继续上次对话',
+          description: '恢复之前的会话',
+          checked: false
+        },
+        {
           name: '--full-auto',
           label: '全自动模式',
           description: '自动批准 + 工作区写入沙盒 (与跳过沙盒互斥)',
