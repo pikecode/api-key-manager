@@ -36,11 +36,9 @@ class EnvSwitcher extends BaseCommand {
     try {
       this.clearScreen();
       const provider = await this.validateProvider(providerName);
-      if (provider.ideName === 'codex') {
-        // Codex CLI 使用环境变量注入方式启动，直接跳过参数选择
-        return await this.launchProvider(provider, provider.launchArgs || []);
-      }
-      const availableArgs = this.getAvailableLaunchArgs();
+      const isCodex = provider.ideName === 'codex';
+      const availableArgs = isCodex ? this.getCodexLaunchArgs() : this.getAvailableLaunchArgs();
+      const ideDisplayName = isCodex ? 'Codex CLI' : 'Claude Code';
       
       console.log(UIHelper.createTitle('启动配置', UIHelper.icons.launch));
       console.log();
@@ -50,7 +48,7 @@ class EnvSwitcher extends BaseCommand {
         ['空格', '切换选中'],
         ['A', '全选'],
         ['I', '反选'],
-        ['Enter', '启动 Claude Code'],
+        ['Enter', `启动 ${ideDisplayName}`],
         ['ESC', '返回供应商选择']
       ]));
       console.log();
@@ -271,6 +269,35 @@ class EnvSwitcher extends BaseCommand {
         name: '--dangerously-skip-permissions',
         label: '最高权限',
         description: '仅在沙盒环境中使用',
+        checked: false
+      }
+    ];
+  }
+
+  getCodexLaunchArgs() {
+    return [
+      {
+        name: '--continue',
+        label: '继续上次对话',
+        description: '恢复上次的对话记录',
+        checked: false
+      },
+      {
+        name: '--full-auto',
+        label: '全自动模式',
+        description: '自动批准所有操作',
+        checked: false
+      },
+      {
+        name: '--dangerously-bypass-approvals-and-sandbox',
+        label: '跳过审批和沙盒',
+        description: '危险：跳过所有安全检查',
+        checked: false
+      },
+      {
+        name: '--quiet',
+        label: '静默模式',
+        description: '减少输出信息',
         checked: false
       }
     ];
