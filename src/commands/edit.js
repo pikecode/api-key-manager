@@ -200,14 +200,9 @@ class ProviderEditor extends BaseCommand {
         await this.configManager.addProvider(name, {
           displayName: answers.displayName,
           ideName: 'codex',
-          authMode: 'openai_api_key',
           baseUrl: answers.baseUrl || null,
           authToken: answers.authToken,
-          tokenType: null,
-          codexFiles: null,
           launchArgs: existingProvider.launchArgs || [],
-          primaryModel: existingProvider.models?.primary || null,
-          smallFastModel: existingProvider.models?.smallFast || null,
           setAsDefault: false
         });
       } else {
@@ -221,8 +216,8 @@ class ProviderEditor extends BaseCommand {
           tokenType: answers.tokenType, // 仅在 authMode 为 'api_key' 时使用
           launchArgs: answers.launchArgs,
           // Retain original model settings unless we add editing for them
-          primaryModel: existingProvider.models.primary,
-          smallFastModel: existingProvider.models.smallFast,
+          primaryModel: existingProvider.models?.primary || null,
+          smallFastModel: existingProvider.models?.smallFast || null,
           setAsDefault: false, // Don't change default status on edit
         });
       }
