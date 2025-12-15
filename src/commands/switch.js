@@ -277,27 +277,23 @@ class EnvSwitcher extends BaseCommand {
   getCodexLaunchArgs() {
     return [
       {
-        name: '--continue',
-        label: '继续上次对话',
-        description: '恢复上次的对话记录',
-        checked: false
-      },
-      {
         name: '--full-auto',
         label: '全自动模式',
-        description: '自动批准所有操作',
-        checked: false
+        description: '自动批准 + 工作区写入沙盒',
+        checked: false,
+        exclusive: ['--dangerously-bypass-approvals-and-sandbox']
       },
       {
         name: '--dangerously-bypass-approvals-and-sandbox',
         label: '跳过审批和沙盒',
         description: '危险：跳过所有安全检查',
-        checked: false
+        checked: false,
+        exclusive: ['--full-auto']
       },
       {
-        name: '--quiet',
-        label: '静默模式',
-        description: '减少输出信息',
+        name: '--search',
+        label: '启用网页搜索',
+        description: '允许模型搜索网页',
         checked: false
       }
     ];
