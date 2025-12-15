@@ -196,6 +196,16 @@ class ProviderAdder extends BaseCommand {
         },
         {
           type: 'list',
+          name: 'ideName',
+          message: '选择要管理的 IDE:',
+          choices: [
+            { name: 'Claude Code (Anthropic)', value: 'claude' },
+            { name: 'Codex CLI (OpenAI)', value: 'codex' }
+          ],
+          default: 'claude'
+        },
+        {
+          type: 'list',
           name: 'authMode',
           message: '选择认证模式:',
           choices: [
@@ -203,7 +213,8 @@ class ProviderAdder extends BaseCommand {
             { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商', value: 'auth_token' },
             { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' }
           ],
-          default: 'api_key'
+          default: 'api_key',
+          when: (answers) => answers.ideName !== 'codex'
         },
         {
           type: 'list',
@@ -214,7 +225,7 @@ class ProviderAdder extends BaseCommand {
             { name: '🔐 ANTHROPIC_AUTH_TOKEN - 认证令牌', value: 'auth_token' }
           ],
           default: 'api_key',
-          when: (answers) => answers.authMode === 'api_key'
+          when: (answers) => answers.ideName !== 'codex' && answers.authMode === 'api_key'
         },
         {
           type: 'input',
@@ -238,7 +249,7 @@ class ProviderAdder extends BaseCommand {
             if (error) return error;
             return true;
           },
-          when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token'
+          when: (answers) => answers.ideName !== 'codex' && (answers.authMode === 'api_key' || answers.authMode === 'auth_token')
         },
         {
           type: 'input',
@@ -261,6 +272,33 @@ class ProviderAdder extends BaseCommand {
             if (error) return error;
             return true;
           }
+          ,
+          when: (answers) => answers.ideName !== 'codex'
+        },
+        {
+          type: 'input',
+          name: 'baseUrl',
+          message: '请输入 OpenAI API 基础URL (如使用官方API可留空):',
+          default: '',
+          validate: (input) => {
+            if (!input) return true;
+            const error = validator.validateUrl(input);
+            if (error) return error;
+            return true;
+          },
+          when: (answers) => answers.ideName === 'codex'
+        },
+        {
+          type: 'input',
+          name: 'authToken',
+          message: '请输入 OpenAI API Key (OPENAI_API_KEY):',
+          validate: (input) => {
+            if (!input) return 'API Key 不能为空';
+            const error = validator.validateToken(input);
+            if (error) return error;
+            return true;
+          },
+          when: (answers) => answers.ideName === 'codex'
         },
         {
           type: 'confirm',
@@ -272,19 +310,27 @@ class ProviderAdder extends BaseCommand {
           type: 'confirm',
           name: 'configureLaunchArgs',
           message: '是否配置启动参数?',
-          default: false
+          default: false,
+          when: (answers) => answers.ideName !== 'codex'
         },
         {
           type: 'confirm',
           name: 'configureModels',
           message: '是否配置模型参数?',
-          default: false
+          default: false,
+          when: (answers) => answers.ideName !== 'codex'
         }
       ]);
 
       // 移除 ESC 键监听
       this.removeESCListener(escListener);
       
+      if (answers.ideName === 'codex') {
+        answers.authMode = 'openai_api_key';
+        answers.tokenType = null;
+        answers.codexFiles = null;
+      }
+
       await this.saveProvider(answers);
     } catch (error) {
       // 移除 ESC 键监听
@@ -315,10 +361,12 @@ class ProviderAdder extends BaseCommand {
 
       await this.configManager.addProvider(answers.name, {
         displayName: answers.displayName || answers.name,
+        ideName: answers.ideName || 'claude',
         baseUrl: answers.baseUrl,
         authToken: answers.authToken,
         authMode: answers.authMode,
         tokenType: answers.tokenType, // 仅在 authMode 为 'api_key' 时使用
+        codexFiles: answers.codexFiles || null,
         launchArgs,
         primaryModel: modelConfig.primaryModel,
         smallFastModel: modelConfig.smallFastModel,
@@ -471,6 +519,18 @@ class ProviderAdder extends BaseCommand {
     console.log(chalk.blue('\n配置详情:'));
     console.log(chalk.gray(`  名称: ${answers.name}`));
     console.log(chalk.gray(`  显示名称: ${finalDisplayName}`));
+
+    if (answers.ideName === 'codex') {
+      console.log(chalk.gray('  IDE: Codex CLI'));
+      if (answers.baseUrl) {
+        console.log(chalk.gray(`  OPENAI_BASE_URL: ${answers.baseUrl}`));
+      }
+      if (answers.authToken) {
+        console.log(chalk.gray(`  OPENAI_API_KEY: ${answers.authToken}`));
+      }
+      console.log(chalk.green('\n🎉 供应商添加完成！正在返回主界面...'));
+      return;
+    }
 
     const authModeDisplay = {
       api_key: '通用API密钥模式',

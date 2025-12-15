@@ -14,7 +14,7 @@ class CurrentConfig {
       
       if (!currentProvider) {
         Logger.warning('未设置当前供应商');
-        Logger.info('请使用 "cc <供应商名>" 切换供应商');
+        Logger.info('请使用 "akm <供应商名>" 切换供应商');
         return;
       }
 
@@ -23,6 +23,29 @@ class CurrentConfig {
       
       console.log(chalk.green(`供应商: ${currentProvider.displayName}`));
       console.log(chalk.gray(`内部名称: ${currentProvider.name}`));
+
+      if (currentProvider.ideName === 'codex') {
+        console.log(chalk.gray('IDE: Codex CLI'));
+        if (currentProvider.baseUrl) {
+          console.log(chalk.gray(`OPENAI_BASE_URL: ${currentProvider.baseUrl}`));
+        }
+        if (currentProvider.authToken) {
+          console.log(chalk.gray(`OPENAI_API_KEY: ${currentProvider.authToken}`));
+        }
+        console.log(chalk.gray(`创建时间: ${new Date(currentProvider.createdAt).toLocaleString()}`));
+        console.log(chalk.gray(`最后使用: ${new Date(currentProvider.lastUsed).toLocaleString()}`));
+        console.log(chalk.gray('═'.repeat(60)));
+
+        console.log(chalk.blue('\n🔧 环境变量设置:'));
+        if (currentProvider.baseUrl) {
+          console.log(chalk.gray(`set OPENAI_BASE_URL=${currentProvider.baseUrl}`));
+        }
+        if (currentProvider.authToken) {
+          console.log(chalk.gray(`set OPENAI_API_KEY=${currentProvider.authToken}`));
+        }
+        console.log(chalk.gray('codex'));
+        return;
+      }
 
       // 显示认证模式
       const authModeDisplay = {

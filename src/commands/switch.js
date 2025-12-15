@@ -4,6 +4,7 @@ const chalk = require('chalk');
 const Choices = require('inquirer/lib/objects/choices');
 const { ConfigManager } = require('../config');
 const { executeWithEnv } = require('../utils/env-launcher');
+const { executeCodexWithEnv } = require('../utils/codex-launcher');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
 const { findSettingsConflict, backupSettingsFile, clearConflictKeys, saveSettingsFile } = require('../utils/claude-settings');
@@ -34,6 +35,10 @@ class EnvSwitcher extends BaseCommand {
     try {
       this.clearScreen();
       const provider = await this.validateProvider(providerName);
+      if (provider.ideName === 'codex') {
+        // Codex CLI 使用环境变量注入方式启动，直接跳过参数选择
+        return await this.launchProvider(provider, provider.launchArgs || []);
+      }
       const availableArgs = this.getAvailableLaunchArgs();
       
       console.log(UIHelper.createTitle('启动配置', UIHelper.icons.launch));
@@ -198,15 +203,20 @@ class EnvSwitcher extends BaseCommand {
 
   async launchProvider(provider, selectedLaunchArgs) {
     try {
-      // 执行 Claude Code 设置兼容性检查
-      const shouldContinue = await this.ensureClaudeSettingsCompatibility(provider);
-      if (!shouldContinue) {
-        return;
+      const isCodex = provider.ideName === 'codex';
+
+      // Claude Code 才需要检测设置冲突
+      if (!isCodex) {
+        const shouldContinue = await this.ensureClaudeSettingsCompatibility(provider);
+        if (!shouldContinue) {
+          return;
+        }
       }
 
       this.clearScreen();
       console.log(UIHelper.createTitle('正在启动', UIHelper.icons.loading));
       console.log();
+      const ideDisplayName = isCodex ? 'Codex CLI' : 'Claude Code';
       console.log(UIHelper.createCard('目标供应商', UIHelper.formatProvider(provider), UIHelper.icons.launch));
 
       if (selectedLaunchArgs.length > 0) {
@@ -228,11 +238,15 @@ class EnvSwitcher extends BaseCommand {
 
         UIHelper.clearLoadingAnimation(loadingInterval);
 
-        console.log(UIHelper.createCard('准备就绪', '环境配置完成，正在启动 🚀 Claude Code...', UIHelper.icons.success));
+        console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}...`, UIHelper.icons.success));
         console.log();
 
-        // 设置环境变量并启动 Claude Code
-        await executeWithEnv(provider, selectedLaunchArgs);
+        if (isCodex) {
+          await executeCodexWithEnv(provider, selectedLaunchArgs);
+        } else {
+          // 设置环境变量并启动 Claude Code
+          await executeWithEnv(provider, selectedLaunchArgs);
+        }
 
       } catch (error) {
         UIHelper.clearLoadingAnimation(loadingInterval);

@@ -9,20 +9,34 @@ class ProviderLister {
     this.statusChecker = new ProviderStatusChecker();
   }
 
-  async list() {
+  async list(filter = null) {
     try {
       await this.configManager.ensureLoaded();
-      const providers = this.configManager.listProviders();
+      let providers = this.configManager.listProviders();
       const currentProvider = this.configManager.getCurrentProvider();
+
+      // 应用过滤器
+      if (filter === 'codex') {
+        providers = providers.filter(p => p.ideName === 'codex');
+      } else if (filter === 'claude') {
+        providers = providers.filter(p => p.ideName !== 'codex');
+      }
+
       const statusMap = await this.statusChecker.checkAll(providers);
 
       if (providers.length === 0) {
-        Logger.warning('暂无配置的供应商');
+        if (filter) {
+          const filterName = filter === 'codex' ? 'Codex CLI' : 'Claude Code';
+          Logger.warning(`暂无 ${filterName} 供应商配置`);
+        } else {
+          Logger.warning('暂无配置的供应商');
+        }
         Logger.info('请使用 "akm add" 添加供应商配置');
         return;
       }
 
-      console.log(chalk.blue('\n📋 供应商列表:'));
+      const titleSuffix = filter === 'codex' ? ' (Codex CLI)' : (filter === 'claude' ? ' (Claude Code)' : '');
+      console.log(chalk.blue(`\n📋 供应商列表${titleSuffix}:`));
       console.log(chalk.gray('═'.repeat(60)));
 
       providers.forEach((provider, index) => {
@@ -35,39 +49,49 @@ class ProviderLister {
 
         console.log(`${status} ${availabilityIcon} ${nameColor(provider.name)} (${provider.displayName}) - ${availabilityText}`);
 
-        // 显示认证模式
-        const authModeDisplay = {
-          api_key: '通用API密钥模式',
-          auth_token: '认证令牌模式',
-          oauth_token: 'OAuth令牌模式'
-        };
-        console.log(chalk.gray(`   认证模式: ${authModeDisplay[provider.authMode] || provider.authMode}`));
-
-        // 根据不同模式显示对应的环境变量名称
-        if (provider.authMode === 'oauth_token') {
-          // OAuth 模式
-          if (provider.authToken) {
-            console.log(chalk.gray(`   CLAUDE_CODE_OAUTH_TOKEN: ${provider.authToken}`));
-          }
+        if (provider.ideName === 'codex') {
+          console.log(chalk.gray('   IDE: Codex CLI'));
           if (provider.baseUrl) {
-            console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
-          }
-        } else if (provider.authMode === 'api_key') {
-          // API Key 模式
-          if (provider.baseUrl) {
-            console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
+            console.log(chalk.gray(`   OPENAI_BASE_URL: ${provider.baseUrl}`));
           }
           if (provider.authToken) {
-            const tokenEnvName = provider.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-            console.log(chalk.gray(`   ${tokenEnvName}: ${provider.authToken}`));
+            console.log(chalk.gray(`   OPENAI_API_KEY: ${provider.authToken}`));
           }
         } else {
-          // auth_token 模式
-          if (provider.baseUrl) {
-            console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
-          }
-          if (provider.authToken) {
-            console.log(chalk.gray(`   ANTHROPIC_AUTH_TOKEN: ${provider.authToken}`));
+          // 显示认证模式
+          const authModeDisplay = {
+            api_key: '通用API密钥模式',
+            auth_token: '认证令牌模式',
+            oauth_token: 'OAuth令牌模式'
+          };
+          console.log(chalk.gray(`   认证模式: ${authModeDisplay[provider.authMode] || provider.authMode}`));
+
+          // 根据不同模式显示对应的环境变量名称
+          if (provider.authMode === 'oauth_token') {
+            // OAuth 模式
+            if (provider.authToken) {
+              console.log(chalk.gray(`   CLAUDE_CODE_OAUTH_TOKEN: ${provider.authToken}`));
+            }
+            if (provider.baseUrl) {
+              console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
+            }
+          } else if (provider.authMode === 'api_key') {
+            // API Key 模式
+            if (provider.baseUrl) {
+              console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
+            }
+            if (provider.authToken) {
+              const tokenEnvName = provider.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+              console.log(chalk.gray(`   ${tokenEnvName}: ${provider.authToken}`));
+            }
+          } else {
+            // auth_token 模式
+            if (provider.baseUrl) {
+              console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
+            }
+            if (provider.authToken) {
+              console.log(chalk.gray(`   ANTHROPIC_AUTH_TOKEN: ${provider.authToken}`));
+            }
           }
         }
 
@@ -132,9 +156,9 @@ class ProviderLister {
   }
 }
 
-async function listCommand() {
+async function listCommand(filter = null) {
   const lister = new ProviderLister();
-  await lister.list();
+  await lister.list(filter);
 }
 
 module.exports = { listCommand, ProviderLister };

@@ -61,9 +61,12 @@ program
 program
   .command('list')
   .description('列出所有API密钥配置')
-  .action(async () => {
+  .option('--codex', '仅显示 Codex CLI 供应商')
+  .option('--claude', '仅显示 Claude Code 供应商')
+  .action(async (options) => {
     try {
-      await registry.executeCommand('list');
+      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      await registry.executeCommand('list', filter);
     } catch (error) {
       console.error(chalk.red('❌ 列表失败:'), error.message);
       process.exit(1);

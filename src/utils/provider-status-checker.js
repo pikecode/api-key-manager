@@ -13,6 +13,10 @@ class ProviderStatusChecker {
       return this._result('unknown', '未找到配置', null);
     }
 
+    if (provider.ideName === 'codex') {
+      return this._checkCodex(provider);
+    }
+
     if (provider.authMode === 'oauth_token') {
       return this._result('unknown', '暂不支持 OAuth 令牌检测', null);
     }
@@ -245,6 +249,52 @@ class ProviderStatusChecker {
 
   _result(state, label, latency) {
     return { state, label, latency };
+  }
+
+  async _checkCodex(provider) {
+    if (!provider.authToken) {
+      return this._result('unknown', '未配置 API Key', null);
+    }
+
+    const baseUrl = provider.baseUrl || 'https://api.openai.com/v1';
+    const modelsUrl = `${baseUrl.replace(/\/$/, '')}/models`;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+      const start = process.hrtime.bigint();
+      const response = await fetch(modelsUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${provider.authToken}`,
+          'Content-Type': 'application/json'
+        },
+        signal: controller.signal
+      });
+      const latency = Number(process.hrtime.bigint() - start) / 1e6;
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        return this._result('online', `可用 ${latency.toFixed(0)}ms`, latency);
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        return this._result('offline', `认证失败 (${response.status})`, null);
+      }
+
+      if (response.status >= 500) {
+        return this._result('degraded', `服务异常 (${response.status})`, null);
+      }
+
+      return this._result('offline', `请求失败 (${response.status})`, null);
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return this._result('offline', '请求超时', null);
+      }
+      return this._result('offline', `检测失败: ${error.message}`, null);
+    }
   }
 }
 

@@ -64,6 +64,8 @@ class ProviderEditor extends BaseCommand {
     console.log(UIHelper.createTooltip('请更新供应商配置信息。按 Enter 键接受默认值。'));
     console.log();
 
+    const isCodex = providerToEdit.ideName === 'codex';
+
     const escListener = this.createESCListener(() => {
       Logger.info('取消编辑供应商。');
       const { registry } = require('../CommandRegistry');
@@ -73,61 +75,88 @@ class ProviderEditor extends BaseCommand {
     try {
       let answers;
       try {
-        answers = await this.prompt([
+        const questions = [
           {
             type: 'input',
             name: 'displayName',
             message: '供应商显示名称:',
             default: providerToEdit.displayName,
             validate: (input) => validator.validateDisplayName(input) || true,
-          },
-          {
-            type: 'list',
-            name: 'authMode',
-            message: '认证模式:',
-            choices: [
-              { name: '🔑 通用API密钥模式 - 支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN', value: 'api_key' },
-              { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商', value: 'auth_token' },
-              { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' },
-            ],
-            default: providerToEdit.authMode,
-          },
-          {
-            type: 'list',
-            name: 'tokenType',
-            message: 'Token类型:',
-            choices: [
-              { name: '🔑 ANTHROPIC_API_KEY - 通用API密钥', value: 'api_key' },
-              { name: '🔐 ANTHROPIC_AUTH_TOKEN - 认证令牌', value: 'auth_token' }
-            ],
-            default: providerToEdit.tokenType || 'api_key',
-            when: (answers) => answers.authMode === 'api_key'
-          },
-          {
-            type: 'input',
-            name: 'baseUrl',
-            message: 'API基础URL:',
-            default: providerToEdit.baseUrl,
-            validate: (input) => validator.validateUrl(input) || true,
-            when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token',
-          },
-          {
-            type: 'input',
-            name: 'authToken',
-            message: (answers) => {
-              switch (answers.authMode) {
-                case 'api_key':
-                  const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-                  return `Token (${tokenTypeLabel}):`;
-                case 'auth_token': return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
-                case 'oauth_token': return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
-                default: return '认证令牌:';
+          }
+        ];
+
+        if (isCodex) {
+          questions.push(
+            {
+              type: 'input',
+              name: 'baseUrl',
+              message: 'OpenAI API 基础URL (留空使用官方API):',
+              default: providerToEdit.baseUrl || '',
+              validate: (input) => {
+                if (!input) return true;
+                return validator.validateUrl(input) || true;
               }
             },
-            default: providerToEdit.authToken,
-            validate: (input) => validator.validateToken(input) || true,
-          },
-          {
+            {
+              type: 'input',
+              name: 'authToken',
+              message: 'OpenAI API Key (OPENAI_API_KEY):',
+              default: providerToEdit.authToken,
+              validate: (input) => {
+                if (!input) return 'API Key 不能为空';
+                return validator.validateToken(input) || true;
+              }
+            }
+          );
+        } else {
+          questions.push(
+            {
+              type: 'list',
+              name: 'authMode',
+              message: '认证模式:',
+              choices: [
+                { name: '🔑 通用API密钥模式 - 支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN', value: 'api_key' },
+                { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商', value: 'auth_token' },
+                { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' },
+              ],
+              default: providerToEdit.authMode,
+            },
+            {
+              type: 'list',
+              name: 'tokenType',
+              message: 'Token类型:',
+              choices: [
+                { name: '🔑 ANTHROPIC_API_KEY - 通用API密钥', value: 'api_key' },
+                { name: '🔐 ANTHROPIC_AUTH_TOKEN - 认证令牌', value: 'auth_token' }
+              ],
+              default: providerToEdit.tokenType || 'api_key',
+              when: (answers) => answers.authMode === 'api_key'
+            },
+            {
+              type: 'input',
+              name: 'baseUrl',
+              message: 'API基础URL:',
+              default: providerToEdit.baseUrl,
+              validate: (input) => validator.validateUrl(input) || true,
+              when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token',
+            },
+            {
+              type: 'input',
+              name: 'authToken',
+              message: (answers) => {
+                switch (answers.authMode) {
+                  case 'api_key':
+                    const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+                    return `Token (${tokenTypeLabel}):`;
+                  case 'auth_token': return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
+                  case 'oauth_token': return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
+                  default: return '认证令牌:';
+                }
+              },
+              default: providerToEdit.authToken,
+              validate: (input) => validator.validateToken(input) || true,
+            },
+            {
               type: 'checkbox',
               name: 'launchArgs',
               message: '启动参数:',
@@ -136,8 +165,11 @@ class ProviderEditor extends BaseCommand {
                 value: arg.name,
                 checked: providerToEdit.launchArgs && providerToEdit.launchArgs.includes(arg.name),
               })),
-          },
-        ]);
+            }
+          );
+        }
+
+        answers = await this.prompt(questions);
       } catch (error) {
         this.removeESCListener(escListener);
         if (this.isEscCancelled(error)) {
@@ -147,6 +179,7 @@ class ProviderEditor extends BaseCommand {
       }
 
       this.removeESCListener(escListener);
+
       await this.saveProvider(providerToEdit.name, answers);
 
     } catch (error) {
@@ -160,19 +193,39 @@ class ProviderEditor extends BaseCommand {
 
   async saveProvider(name, answers) {
     try {
-      // Re-use addProvider which can overwrite existing providers
-      await this.configManager.addProvider(name, {
-        displayName: answers.displayName,
-        baseUrl: answers.baseUrl,
-        authToken: answers.authToken,
-        authMode: answers.authMode,
-        tokenType: answers.tokenType, // 仅在 authMode 为 'api_key' 时使用
-        launchArgs: answers.launchArgs,
-        // Retain original model settings unless we add editing for them
-        primaryModel: this.configManager.getProvider(name).models.primary,
-        smallFastModel: this.configManager.getProvider(name).models.smallFast,
-        setAsDefault: false, // Don't change default status on edit
-      });
+      const existingProvider = this.configManager.getProvider(name);
+      const ideName = existingProvider?.ideName || 'claude';
+
+      if (ideName === 'codex') {
+        await this.configManager.addProvider(name, {
+          displayName: answers.displayName,
+          ideName: 'codex',
+          authMode: 'openai_api_key',
+          baseUrl: answers.baseUrl || null,
+          authToken: answers.authToken,
+          tokenType: null,
+          codexFiles: null,
+          launchArgs: existingProvider.launchArgs || [],
+          primaryModel: existingProvider.models?.primary || null,
+          smallFastModel: existingProvider.models?.smallFast || null,
+          setAsDefault: false
+        });
+      } else {
+        // Re-use addProvider which can overwrite existing providers
+        await this.configManager.addProvider(name, {
+          displayName: answers.displayName,
+          ideName,
+          baseUrl: answers.baseUrl,
+          authToken: answers.authToken,
+          authMode: answers.authMode,
+          tokenType: answers.tokenType, // 仅在 authMode 为 'api_key' 时使用
+          launchArgs: answers.launchArgs,
+          // Retain original model settings unless we add editing for them
+          primaryModel: existingProvider.models.primary,
+          smallFastModel: existingProvider.models.smallFast,
+          setAsDefault: false, // Don't change default status on edit
+        });
+      }
 
       Logger.success(`供应商 '${answers.displayName}' 更新成功！`);
 
