@@ -110,11 +110,88 @@ async function applyCodexProfile(profile, options = {}) {
   return { codexHome, backupDir };
 }
 
+/**
+ * 确保 config.toml 中设置了 preferred_auth_method = "apikey"
+ * @param {string} configToml - 现有的 config.toml 内容
+ * @returns {string} 更新后的 config.toml 内容
+ */
+function ensureApiKeyAuthMethod(configToml) {
+  if (!configToml) {
+    // 如果没有 config.toml，创建一个最小配置
+    return 'preferred_auth_method = "apikey"\n';
+  }
+
+  // 检查是否已经设置了 preferred_auth_method
+  const authMethodRegex = /^preferred_auth_method\s*=\s*["']?([^"'\n]+)["']?\s*$/m;
+  const match = configToml.match(authMethodRegex);
+
+  if (match) {
+    if (match[1].trim() === 'apikey') {
+      // 已经是 apikey，无需修改
+      return configToml;
+    }
+    // 替换为 apikey
+    return configToml.replace(authMethodRegex, 'preferred_auth_method = "apikey"');
+  }
+
+  // 没有找到 preferred_auth_method，在文件开头添加
+  return 'preferred_auth_method = "apikey"\n' + configToml;
+}
+
+/**
+ * 构建 auth.json 内容
+ * @param {string} apiKey - API Key
+ * @returns {string} auth.json 内容
+ */
+function buildAuthJson(apiKey) {
+  return JSON.stringify({ api_key: apiKey }, null, 2);
+}
+
+/**
+ * 应用 Codex 配置（写入 config.toml 和 auth.json）
+ * 用于切换供应商时确保配置文件正确
+ * @param {object} config - 供应商配置
+ * @param {object} options - 选项
+ * @returns {Promise<{codexHome: string, backupDir: string|null}>}
+ */
+async function applyCodexConfig(config, options = {}) {
+  if (!config || !config.authToken) {
+    throw new Error('Codex 配置缺少 API Key');
+  }
+
+  const codexHome = await ensureCodexHome(options.codexHome);
+  const { configTomlPath, authJsonPath } = buildCodexPaths(codexHome);
+
+  // 备份现有配置
+  const backupDir = await backupCodexFiles(codexHome);
+
+  // 读取现有 config.toml
+  let existingConfigToml = null;
+  if (await fs.pathExists(configTomlPath)) {
+    existingConfigToml = await fs.readFile(configTomlPath, 'utf8');
+  }
+
+  // 确保设置了 preferred_auth_method = "apikey"
+  const updatedConfigToml = ensureApiKeyAuthMethod(existingConfigToml);
+  await fs.writeFile(configTomlPath, updatedConfigToml, 'utf8');
+  await setSecurePermissions(configTomlPath);
+
+  // 写入 auth.json
+  const authJsonContent = buildAuthJson(config.authToken);
+  await fs.writeFile(authJsonPath, authJsonContent, 'utf8');
+  await setSecurePermissions(authJsonPath);
+
+  return { codexHome, backupDir };
+}
+
 module.exports = {
   resolveCodexHome,
   buildCodexPaths,
   readCodexFiles,
   applyCodexProfile,
-  backupCodexFiles
+  applyCodexConfig,
+  backupCodexFiles,
+  ensureApiKeyAuthMethod,
+  buildAuthJson
 };
 

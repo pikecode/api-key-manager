@@ -1,5 +1,6 @@
 const spawn = require('cross-spawn');
 const { sanitizeEnvValue, clearTerminal } = require('./env-utils');
+const { applyCodexConfig } = require('./codex-files');
 
 /**
  * 构建 Codex CLI 环境变量
@@ -44,6 +45,10 @@ async function executeCodexWithEnv(config, launchArgs = []) {
   if (!config.authToken) {
     throw new Error(`供应商 '${config.name}' 未配置 API Key，请使用 'akm edit ${config.name}' 添加`);
   }
+
+  // 写入 ~/.codex/config.toml 和 ~/.codex/auth.json
+  // 确保 Codex CLI 使用 API Key 认证方式
+  await applyCodexConfig(config);
 
   const env = buildCodexEnvVariables(config);
 
