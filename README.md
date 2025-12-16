@@ -233,11 +233,34 @@ akm backup --restore backup.json --dir /path/to/backups
 - **api_key** - 通用 API 密钥模式
 - **auth_token** - 认证令牌模式
 
+**切换原理：**
+
+切换 Claude Code 供应商时，akm 通过**环境变量注入**方式工作：
+
+1. **检测设置冲突** → 检查 `~/.claude/settings.json` 中是否有冲突的环境变量
+2. **构建环境变量** → 根据认证模式构建相应的环境变量
+3. **启动子进程** → 使用 `spawn('claude', args, { env })` 启动 Claude Code
+
+```
+认证模式 → 环境变量映射：
+┌─────────────┬────────────────────────────┐
+│ oauth_token │ CLAUDE_CODE_OAUTH_TOKEN    │
+│ api_key     │ ANTHROPIC_API_KEY          │
+│             │ ANTHROPIC_BASE_URL         │
+│ auth_token  │ ANTHROPIC_AUTH_TOKEN       │
+│             │ ANTHROPIC_BASE_URL (可选)  │
+└─────────────┴────────────────────────────┘
+```
+
+> 💡 Claude Code 使用环境变量注入，不修改配置文件，切换只在当前会话生效。
+
 **环境变量：**
 - `CLAUDE_CODE_OAUTH_TOKEN` - OAuth 模式
 - `ANTHROPIC_API_KEY` - API Key 模式
 - `ANTHROPIC_AUTH_TOKEN` - Auth Token 模式
 - `ANTHROPIC_BASE_URL` - 自定义 API 端点
+- `ANTHROPIC_MODEL` - 主模型
+- `ANTHROPIC_SMALL_FAST_MODEL` - 快速模型
 
 **启动参数：**
 - `--continue` - 继续上次对话
@@ -253,6 +276,27 @@ akm add --claude
 
 **认证模式：**
 - 使用 `OPENAI_API_KEY` 和 `OPENAI_BASE_URL` 环境变量
+
+**切换原理：**
+
+切换 Codex 供应商时，akm 会自动：
+
+1. **备份现有配置** → `~/.codex/akm-backups/backup-{timestamp}/`
+2. **更新 config.toml** → 设置 `preferred_auth_method = "apikey"`
+3. **写入 auth.json** → 包含选中供应商的 API Key
+4. **注入环境变量** → 启动时传递 `OPENAI_API_KEY` 和 `OPENAI_BASE_URL`
+
+```
+~/.codex/
+├── config.toml          # preferred_auth_method = "apikey"
+├── auth.json            # { "OPENAI_API_KEY": "your-key" }
+└── akm-backups/         # 自动备份目录
+    └── backup-20251217_120000/
+        ├── config.toml
+        └── auth.json
+```
+
+> 💡 切换后直接运行 `codex` 命令也能使用新配置，无需通过 akm 启动。
 
 **启动参数：**
 - `resume` - 继续上次对话（子命令）
@@ -321,6 +365,40 @@ akm add --codex
   }
 }
 ```
+
+## 🏗️ 架构设计
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        akm (CLI 入口)                           │
+├─────────────────────────────────────────────────────────────────┤
+│  CommandRegistry          命令注册中心，懒加载命令模块            │
+│  ├── add                  添加供应商                            │
+│  ├── switch               切换供应商（默认命令）                 │
+│  ├── list                 列出供应商                            │
+│  ├── edit                 编辑供应商                            │
+│  ├── remove               删除供应商                            │
+│  ├── export/import        导入导出                              │
+│  └── backup               备份恢复                              │
+├─────────────────────────────────────────────────────────────────┤
+│  ConfigManager            配置管理（~/.akm-config.json）         │
+│  ├── 懒加载 & 缓存                                              │
+│  ├── 版本迁移                                                   │
+│  └── 文件权限管理 (0600)                                        │
+├─────────────────────────────────────────────────────────────────┤
+│  IDE 启动器                                                     │
+│  ├── env-launcher.js      Claude Code（环境变量注入）            │
+│  └── codex-launcher.js    Codex CLI（配置文件 + 环境变量）       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**核心设计原则：**
+
+1. **命令懒加载** - 通过 `CommandRegistry` 按需加载命令模块，减少启动时间
+2. **配置缓存** - `ConfigManager` 单例模式，避免重复读取配置文件
+3. **IDE 差异化处理** - Claude Code 用环境变量，Codex CLI 写配置文件
+4. **安全优先** - 配置文件权限 0600，Token 默认脱敏显示
+5. **自动备份** - 切换配置前自动备份，支持回滚
 
 ## 🎯 使用场景
 
@@ -420,7 +498,13 @@ akm backup --restore akm-backup-2025-12-15T05-30-00.json
 
 ## 📝 更新日志
 
-### v1.0.27 (最新)
+### v1.0.37 (最新)
+- 🐛 修复 Codex 切换时无法更新 `~/.codex/auth.json` 的问题
+- ✨ 切换 Codex 供应商时自动写入配置文件
+- ✨ 自动设置 `preferred_auth_method = "apikey"`
+- 💾 切换前自动备份现有 Codex 配置
+
+### v1.0.27
 - ✨ 新增参数互斥校验
 - ✨ 新增 `export` / `import` / `backup` 命令
 - 🧪 测试覆盖率提升 46%
