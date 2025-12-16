@@ -39,6 +39,447 @@ akm list
 akm current
 ```
 
+## 📚 详细使用指南
+
+### 首次使用完整流程
+
+#### 步骤 1: 安装 akm
+
+```bash
+# 全局安装
+npm install -g @pikecode/api-key-manager
+
+# 验证安装
+akm --version
+```
+
+#### 步骤 2: 添加第一个供应商
+
+**添加 Claude Code 供应商：**
+
+```bash
+akm add --claude
+```
+
+交互式问答流程：
+
+```
+? 选择要管理的 IDE: Claude Code (Anthropic)
+? 请输入供应商名称 (用于命令行): my-claude
+? 请输入显示名称: My Claude Account
+? 选择认证模式:
+  ❯ 🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code
+    🔑 通用API密钥模式 - 支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN
+    🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商
+? 请输入 OAuth Token: sk-ant-oat01-xxxxx
+? 选择默认启动参数:
+  ◉ --continue 继续上次对话
+  ◯ --dangerously-skip-permissions 跳过权限检查
+? 设置主模型 (ANTHROPIC_MODEL): claude-sonnet-4
+? 设置快速模型 (ANTHROPIC_SMALL_FAST_MODEL): claude-haiku-4
+
+✅ 供应商 'my-claude' 已添加
+```
+
+**添加 Codex CLI 供应商：**
+
+```bash
+akm add --codex
+```
+
+交互式问答流程：
+
+```
+? 选择要管理的 IDE: Codex CLI (OpenAI)
+? 选择配置方式:
+  ❯ 从 ~/.codex 导入现有配置
+    手动输入配置
+? 请输入供应商名称 (用于命令行): my-codex
+? 请输入显示名称: My Codex Account
+? 请输入 API Key (OPENAI_API_KEY): sk-xxxxx
+? 请输入基础 URL (OPENAI_BASE_URL): https://api.openai.com
+? 选择默认启动参数:
+  ◉ resume 继续上次对话
+  ◯ --full-auto 全自动模式
+  ◯ --search 启用网页搜索
+
+✅ 供应商 'my-codex' 已添加
+```
+
+#### 步骤 3: 切换并启动
+
+```bash
+# 运行 akm 进入交互式选择界面
+akm
+```
+
+选择供应商后，akm 会自动：
+1. 设置为当前活跃供应商
+2. 配置相应的环境变量/配置文件
+3. 启动对应的 IDE（Claude Code 或 Codex CLI）
+
+#### 步骤 4: 日常使用
+
+```bash
+# 快速切换到指定供应商
+akm my-claude
+
+# 查看当前配置
+akm current
+
+# 查看所有供应商
+akm list
+```
+
+---
+
+### 交互式界面操作说明
+
+#### 主界面（供应商选择）
+
+```
+总共 3 个供应商配置
+
+  ↑ / ↓ 选择供应商 | Enter 确认 | Tab 切换选项 | ESC 退出程序 | Ctrl+C 强制退出
+
+? 请选择要切换的供应商 (总计 3 个):
+  🟢 [Claude] My Claude Account --- 上次使用 - 可用
+  🟢 [Claude] Work Account - 可用
+❯ 🟢 [Codex] My Codex Account - 可用
+  ──────────────
+  ➕ 添加新供应商
+  📋 供应商管理 (编辑/删除)
+  📁 打开配置文件
+  ❌ 退出
+```
+
+**状态图标说明：**
+| 图标 | 含义 |
+|-----|------|
+| 🟢 | API 可用 |
+| 🟡 | 有限可用/响应慢 |
+| 🔴 | API 不可用 |
+| ⏳ | 正在检测 |
+| ⚪ | 未知状态 |
+
+**IDE 标签：**
+| 标签 | 含义 |
+|------|------|
+| [Claude] | Claude Code 供应商 |
+| [Codex] | Codex CLI 供应商 |
+
+#### 启动参数选择界面
+
+选择供应商后进入启动参数选择：
+
+```
+┌─ 启动配置 ─────────────────────────────────┐
+
+  📋 供应商: My Claude Account
+
+  空格 切换选中 | A 全选 | I 反选 | Enter 启动 Claude Code | ESC 返回
+
+? 选择启动参数:
+  ◉ --continue (继续上次对话)
+  ◯ --dangerously-skip-permissions (跳过权限检查)
+```
+
+**快捷键：**
+| 按键 | 功能 |
+|------|------|
+| `Space` | 切换选中状态 |
+| `A` | 全选所有参数 |
+| `I` | 反选（选中变未选，未选变选中）|
+| `Enter` | 确认并启动 |
+| `ESC` | 返回上一级 |
+
+#### 供应商管理界面
+
+从主界面选择"供应商管理"进入：
+
+```
+  ↑ / ↓ 选择供应商或操作 | Enter 确认 | ESC 返回主菜单
+
+┌─ 供应商管理 ─────────────────────────────────┐
+
+? 选择供应商或操作 (总计 3 个):
+❯ 🟢 [Claude] My Claude Account - 可用
+  🟢 [Claude] Work Account - 可用
+  🟢 [Codex] My Codex Account - 可用
+  ──────────────
+  ◀ 返回供应商选择
+  ❌ 退出
+```
+
+选择供应商后显示详情和操作选项：
+
+```
+┌─ 供应商详情 ─────────────────────────────────┐
+
+┌──────────────┬─────────────────────────────────┐
+│ 供应商名称   │ my-claude                       │
+│ 显示名称     │ My Claude Account               │
+│ 认证模式     │ OAuth令牌模式                   │
+│ 基础URL      │ ✨ 官方默认服务器               │
+│ 认证令牌     │ sk-ant-***...***ddd             │
+│ 主模型       │ claude-sonnet-4                 │
+│ 快速模型     │ claude-haiku-4                  │
+│ 创建时间     │ 2025-12-15 13:00                │
+│ 最后使用     │ 2025-12-17 10:30                │
+│ 当前状态     │ ✅ 使用中                       │
+│ 使用次数     │ 42                              │
+└──────────────┴─────────────────────────────────┘
+
+? 选择操作:
+❯ 🚀 立即启动
+  ✏️ 编辑供应商
+  🗑️ 删除供应商
+  ◀ 返回管理列表
+```
+
+---
+
+### 配置示例
+
+#### Claude Code 官方 OAuth（推荐）
+
+适用于：使用官方 Claude Code 登录获取的 OAuth Token
+
+```bash
+akm add --claude
+```
+
+```yaml
+供应商名称: claude-official
+显示名称: Claude Official
+认证模式: oauth_token
+Token: sk-ant-oat01-xxxxxxxx  # 从 claude 登录后获取
+基础URL: (留空，使用官方服务器)
+```
+
+#### Claude Code 第三方 API（API Key 模式）
+
+适用于：使用 Anthropic API Key 或第三方兼容服务
+
+```bash
+akm add --claude
+```
+
+```yaml
+供应商名称: anthropic-api
+显示名称: Anthropic API
+认证模式: api_key
+Token类型: ANTHROPIC_API_KEY
+Token: sk-ant-api03-xxxxxxxx
+基础URL: https://api.anthropic.com  # 或第三方服务地址
+```
+
+#### Claude Code 第三方 API（Auth Token 模式）
+
+适用于：某些第三方服务商要求使用 ANTHROPIC_AUTH_TOKEN
+
+```bash
+akm add --claude
+```
+
+```yaml
+供应商名称: third-party
+显示名称: Third Party Service
+认证模式: auth_token
+Token: your-auth-token
+基础URL: https://your-provider.com/v1
+```
+
+#### Codex CLI 官方 OpenAI
+
+适用于：使用 OpenAI 官方 API
+
+```bash
+akm add --codex
+```
+
+```yaml
+供应商名称: openai-official
+显示名称: OpenAI Official
+API Key: sk-xxxxxxxx
+基础URL: https://api.openai.com  # 可留空
+```
+
+#### Codex CLI 第三方兼容服务
+
+适用于：使用兼容 OpenAI API 的第三方服务
+
+```bash
+akm add --codex
+```
+
+```yaml
+供应商名称: azure-openai
+显示名称: Azure OpenAI
+API Key: your-azure-key
+基础URL: https://your-resource.openai.azure.com/openai/deployments/your-deployment
+```
+
+#### 多账号配置示例
+
+```bash
+# 工作账号
+akm add --claude
+# 名称: work, Token: sk-ant-work-xxx
+
+# 个人账号
+akm add --claude
+# 名称: personal, Token: sk-ant-personal-xxx
+
+# 测试账号
+akm add --codex
+# 名称: test-codex, Token: sk-test-xxx
+
+# 快速切换
+akm work      # 切换到工作账号
+akm personal  # 切换到个人账号
+akm test-codex # 切换到测试账号
+```
+
+---
+
+### 常见问题 FAQ
+
+#### Q1: 切换 Codex 后提示 "Token data is not available"
+
+**原因：** `~/.codex/auth.json` 格式不正确或 `config.toml` 未设置 API Key 认证模式。
+
+**解决方案：**
+```bash
+# 确保使用最新版本 akm
+npm update -g @pikecode/api-key-manager
+
+# 重新切换供应商
+akm my-codex
+```
+
+akm 会自动：
+- 设置 `~/.codex/config.toml` 中的 `preferred_auth_method = "apikey"`
+- 写入正确格式的 `~/.codex/auth.json`
+
+#### Q2: Claude Code 切换后环境变量不生效
+
+**原因：** `~/.claude/settings.json` 中存在冲突的环境变量配置。
+
+**解决方案：** 切换时 akm 会自动检测并提示处理冲突，选择"备份并清空这些变量"即可。
+
+手动检查：
+```bash
+cat ~/.claude/settings.json | grep -A 10 '"env"'
+```
+
+#### Q3: 如何查看完整的 API Key/Token？
+
+**解决方案：** 默认脱敏显示，使用 `--show-token` 参数：
+
+```bash
+akm list --show-token
+akm current --show-token
+```
+
+#### Q4: 配置文件在哪里？如何手动编辑？
+
+**位置：** `~/.akm-config.json`
+
+```bash
+# 通过 akm 打开
+akm
+# 选择 "📁 打开配置文件"
+
+# 或直接编辑
+code ~/.akm-config.json
+vim ~/.akm-config.json
+```
+
+#### Q5: 如何备份和恢复配置？
+
+```bash
+# 创建备份
+akm backup
+
+# 查看备份列表
+akm backup --list
+
+# 恢复备份
+akm backup --restore akm-backup-2025-12-17T10-30-00.json
+
+# 导出到指定文件（可分享）
+akm export my-config.json
+
+# 导出脱敏版本（分享配置模板）
+akm export template.json --mask
+
+# 从文件导入
+akm import my-config.json
+```
+
+#### Q6: 切换时报错 "找不到 claude/codex 命令"
+
+**原因：** 未安装对应的 CLI 工具。
+
+**解决方案：**
+
+```bash
+# 安装 Claude Code
+npm install -g @anthropic-ai/claude-code
+
+# 安装 Codex CLI
+npm install -g @openai/codex
+# 或
+brew install codex
+```
+
+#### Q7: 如何删除某个供应商配置？
+
+```bash
+# 交互式选择删除
+akm remove
+
+# 直接删除指定供应商
+akm remove my-provider
+```
+
+#### Q8: 支持哪些第三方服务？
+
+理论上支持所有兼容以下 API 的服务：
+- **Claude Code**: 兼容 Anthropic API 的服务
+- **Codex CLI**: 兼容 OpenAI API 的服务
+
+常见第三方服务配置：
+| 服务 | IDE | 基础 URL |
+|------|-----|----------|
+| Azure OpenAI | Codex | `https://{resource}.openai.azure.com/...` |
+| OpenRouter | Claude/Codex | `https://openrouter.ai/api/v1` |
+| Together AI | Codex | `https://api.together.xyz/v1` |
+
+#### Q9: 如何只显示某一类 IDE 的供应商？
+
+```bash
+# 只显示 Claude Code 供应商
+akm switch --claude
+akm list --claude
+
+# 只显示 Codex CLI 供应商
+akm switch --codex
+akm list --codex
+```
+
+#### Q10: 配置文件权限问题
+
+akm 会自动设置配置文件权限为 `0600`（仅所有者可读写）。
+
+如果遇到权限问题：
+```bash
+chmod 600 ~/.akm-config.json
+```
+
+---
+
 ## 📖 完整命令参考
 
 ### 基础命令
