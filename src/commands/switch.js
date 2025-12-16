@@ -2,7 +2,7 @@ const path = require('path');
 const inquirer = require('inquirer');
 const chalk = require('chalk');
 const Choices = require('inquirer/lib/objects/choices');
-const { ConfigManager } = require('../config');
+const { configManager } = require('../config');
 const { executeWithEnv } = require('../utils/env-launcher');
 const { executeCodexWithEnv } = require('../utils/codex-launcher');
 const { Logger } = require('../utils/logger');
@@ -11,11 +11,12 @@ const { findSettingsConflict, backupSettingsFile, clearConflictKeys, saveSetting
 const { BaseCommand } = require('./BaseCommand');
 const { validator } = require('../utils/validator');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
+const { maskToken } = require('../utils/secrets');
 
 class EnvSwitcher extends BaseCommand {
   constructor() {
     super();
-    this.configManager = new ConfigManager();
+    this.configManager = configManager;
     this.statusChecker = new ProviderStatusChecker();
     this.latestStatusMap = {};
     this.currentPromptContext = null;
@@ -38,6 +39,22 @@ class EnvSwitcher extends BaseCommand {
       const provider = await this.validateProvider(providerName);
       const isCodex = provider.ideName === 'codex';
       const availableArgs = isCodex ? this.getCodexLaunchArgs() : this.getAvailableLaunchArgs();
+      const defaultLaunchArgs = Array.isArray(provider.launchArgs) ? provider.launchArgs : [];
+      const knownArgNames = new Set(availableArgs.map(arg => arg.name));
+      const customLaunchArgs = defaultLaunchArgs
+        .filter(arg => typeof arg === 'string' && !knownArgNames.has(arg));
+      const mergedArgs = [
+        ...availableArgs.map(arg => ({
+          ...arg,
+          checked: defaultLaunchArgs.includes(arg.name) || Boolean(arg.checked)
+        })),
+        ...customLaunchArgs.map(name => ({
+          name,
+          label: name,
+          description: '自定义启动参数',
+          checked: true
+        }))
+      ];
       const ideDisplayName = isCodex ? 'Codex CLI' : 'Claude Code';
       
       console.log(UIHelper.createTitle('启动配置', UIHelper.icons.launch));
@@ -65,7 +82,7 @@ class EnvSwitcher extends BaseCommand {
           type: 'checkbox',
           name: 'selectedArgs',
           message: '选择启动参数:',
-          choices: availableArgs.map(arg => {
+          choices: mergedArgs.map(arg => {
             const commandText = UIHelper.colors.muted(`(${arg.name})`);
             const descriptionText = arg.description
               ? ` ${UIHelper.colors.muted(arg.description)}`
@@ -74,7 +91,7 @@ class EnvSwitcher extends BaseCommand {
             return {
               name: `${UIHelper.colors.accent(arg.label || arg.name)} ${commandText}${descriptionText}`,
               value: arg.name,
-              checked: arg.checked || false
+              checked: Boolean(arg.checked)
             };
           })
         }
@@ -265,77 +282,19 @@ class EnvSwitcher extends BaseCommand {
   }
 
   getAvailableLaunchArgs() {
-    return [
-      {
-        name: '--continue',
-        label: '继续上次对话',
-        description: '恢复上次的对话记录',
-        checked: false
-      },
-      {
-        name: '--dangerously-skip-permissions',
-        label: '最高权限',
-        description: '仅在沙盒环境中使用',
-        checked: false
-      }
-    ];
+    const { getClaudeLaunchArgs } = require('../utils/launch-args');
+    return getClaudeLaunchArgs();
   }
 
   checkExclusiveArgs(selectedArgs, availableArgs) {
-    if (!selectedArgs || selectedArgs.length < 2) {
-      return null;
-    }
-
-    for (const argDef of availableArgs) {
-      if (!argDef.exclusive || !selectedArgs.includes(argDef.name)) {
-        continue;
-      }
-
-      for (const exclusiveArg of argDef.exclusive) {
-        if (selectedArgs.includes(exclusiveArg)) {
-          const arg1 = availableArgs.find(a => a.name === argDef.name);
-          const arg2 = availableArgs.find(a => a.name === exclusiveArg);
-          return `"${arg1?.label || argDef.name}" 和 "${arg2?.label || exclusiveArg}" 不能同时选择`;
-        }
-      }
-    }
-
-    return null;
+    const { checkExclusiveArgs } = require('../utils/launch-args');
+    return checkExclusiveArgs(selectedArgs, availableArgs);
   }
 
   getCodexLaunchArgs() {
-    return [
-      {
-        name: 'resume',
-        label: '继续上次对话',
-        description: '恢复之前的会话',
-        checked: false,
-        isSubcommand: true
-      },
-      {
-        name: '--full-auto',
-        label: '全自动模式',
-        description: '自动批准 + 工作区写入沙盒',
-        checked: false,
-        exclusive: ['--dangerously-bypass-approvals-and-sandbox']
-      },
-      {
-        name: '--dangerously-bypass-approvals-and-sandbox',
-        label: '跳过审批和沙盒',
-        description: '危险：跳过所有安全检查',
-        checked: false,
-        exclusive: ['--full-auto']
-      },
-      {
-        name: '--search',
-        label: '启用网页搜索',
-        description: '允许模型搜索网页',
-        checked: false
-      }
-    ];
+    const { getCodexLaunchArgs } = require('../utils/launch-args');
+    return getCodexLaunchArgs();
   }
-
-  // getArgDescription 方法已被移除，直接使用 arg.description
 
   async showProviderSelection() {
     try {
@@ -394,6 +353,7 @@ class EnvSwitcher extends BaseCommand {
       const escListener = this.createESCListener(() => {
         Logger.info('退出程序');
         this.showExitScreen();
+        this.destroy();
         process.exit(0);
       }, '退出程序');
 
@@ -474,6 +434,7 @@ class EnvSwitcher extends BaseCommand {
         return await this.showManageMenu();
       case '__EXIT__':
         this.showExitScreen();
+        this.destroy();
         process.exit(0);
       default:
         return await this.showLaunchArgsSelection(selection);
@@ -1192,6 +1153,7 @@ class EnvSwitcher extends BaseCommand {
         return await this.showProviderSelection();
       case 'exit':
         Logger.info('👋 再见！');
+        this.destroy();
         process.exit(0);
       default:
         // 如果选择的是供应商名称，显示该供应商的详细信息
@@ -1233,9 +1195,13 @@ class EnvSwitcher extends BaseCommand {
       }
 
       // 继续添加其他信息
+      const baseUrlDisplay = provider.baseUrl
+        || ((provider.authMode === 'oauth_token' || provider.authMode === 'auth_token')
+          ? '✨ 官方默认服务器'
+          : '⚠️ 未设置');
       details.push(
-        ['基础URL', provider.baseUrl || (provider.authMode === 'oauth_token' ? '✨ 官方默认服务器' : '⚠️ 未设置')],
-        ['认证令牌', provider.authToken || '未设置'],
+        ['基础URL', baseUrlDisplay],
+        ['认证令牌', provider.authToken ? maskToken(provider.authToken) : '未设置'],
         ['主模型', provider.models?.primary || '未设置'],
         ['快速模型', provider.models?.smallFast || '未设置'],
         ['创建时间', UIHelper.formatTime(provider.createdAt)],
@@ -1438,7 +1404,8 @@ class EnvSwitcher extends BaseCommand {
         await this.configManager.ensureLoaded();
         const providersMap = this.configManager.config.providers;
 
-        if (providersMap[newName] && providersMap[newName] !== provider) {
+        // 如果新名称已存在且不是当前供应商，则报错
+        if (providersMap[newName]) {
           Logger.error(`供应商名称 '${newName}' 已存在，请使用其他名称`);
           return await this.showManageMenu();
         }

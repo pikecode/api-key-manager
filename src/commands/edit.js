@@ -1,6 +1,6 @@
 const inquirer = require('inquirer');
 const chalk = require('chalk');
-const { ConfigManager } = require('../config');
+const { configManager } = require('../config');
 const { validator } = require('../utils/validator');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
@@ -9,7 +9,7 @@ const { BaseCommand } = require('./BaseCommand');
 class ProviderEditor extends BaseCommand {
   constructor() {
     super();
-    this.configManager = new ConfigManager();
+    this.configManager = configManager;
   }
 
   async interactive(providerName) {
@@ -86,6 +86,34 @@ class ProviderEditor extends BaseCommand {
         ];
 
         if (isCodex) {
+          const existingLaunchArgs = Array.isArray(providerToEdit.launchArgs) ? providerToEdit.launchArgs : [];
+          const codexArgs = [
+            {
+              name: 'resume',
+              label: '继续上次对话',
+              description: '恢复之前的会话'
+            },
+            {
+              name: '--full-auto',
+              label: '全自动模式',
+              description: '自动批准 + 工作区写入沙盒 (与跳过沙盒互斥)'
+            },
+            {
+              name: '--dangerously-bypass-approvals-and-sandbox',
+              label: '跳过审批和沙盒',
+              description: '危险：跳过所有安全检查 (与全自动互斥)'
+            },
+            {
+              name: '--search',
+              label: '启用网页搜索',
+              description: '允许模型搜索网页'
+            }
+          ];
+
+          const knownCodexArgNames = new Set(codexArgs.map(arg => arg.name));
+          const customCodexArgs = existingLaunchArgs
+            .filter(arg => typeof arg === 'string' && !knownCodexArgNames.has(arg));
+
           questions.push(
             {
               type: 'input',
@@ -105,6 +133,33 @@ class ProviderEditor extends BaseCommand {
               validate: (input) => {
                 if (!input) return 'API Key 不能为空';
                 return validator.validateToken(input) || true;
+              }
+            },
+            {
+              type: 'checkbox',
+              name: 'launchArgs',
+              message: 'Codex 启动参数:',
+              choices: [
+                ...codexArgs.map(arg => ({
+                  name: `${arg.label} (${arg.name})${arg.description ? ' - ' + arg.description : ''}`,
+                  value: arg.name,
+                  checked: existingLaunchArgs.includes(arg.name),
+                })),
+                ...customCodexArgs.map(arg => ({
+                  name: `${arg} ${chalk.gray('(自定义参数)')}`,
+                  value: arg,
+                  checked: true,
+                })),
+              ],
+              validate: (selected) => {
+                if (
+                  Array.isArray(selected)
+                  && selected.includes('--full-auto')
+                  && selected.includes('--dangerously-bypass-approvals-and-sandbox')
+                ) {
+                  return '"全自动模式" 和 "跳过审批和沙盒" 不能同时选择';
+                }
+                return true;
               }
             }
           );
@@ -135,9 +190,19 @@ class ProviderEditor extends BaseCommand {
             {
               type: 'input',
               name: 'baseUrl',
-              message: 'API基础URL:',
-              default: providerToEdit.baseUrl,
-              validate: (input) => validator.validateUrl(input) || true,
+              message: (answers) => {
+                if (answers.authMode === 'auth_token') {
+                  return 'API基础URL (留空使用官方API):';
+                }
+                return 'API基础URL:';
+              },
+              default: providerToEdit.baseUrl || '',
+              validate: (input, answers) => {
+                if (answers.authMode === 'auth_token' && !input) {
+                  return true;
+                }
+                return validator.validateUrl(input) || true;
+              },
               when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token',
             },
             {
@@ -205,7 +270,7 @@ class ProviderEditor extends BaseCommand {
           authToken: answers.authToken,
           tokenType: null,
           codexFiles: null,
-          launchArgs: existingProvider.launchArgs || [],
+          launchArgs: answers.launchArgs,
           primaryModel: existingProvider.models?.primary || null,
           smallFastModel: existingProvider.models?.smallFast || null,
           setAsDefault: false

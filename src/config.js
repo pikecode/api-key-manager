@@ -12,6 +12,17 @@ class ConfigManager {
     this.loadPromise = null; // 防止并发加载
   }
 
+  _normalizeOptionalString(value) {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value !== 'string') {
+      return value;
+    }
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? null : trimmed;
+  }
+
   getDefaultConfig() {
     return {
       version: '1.0.0',
@@ -78,6 +89,8 @@ class ConfigManager {
 
         // 迁移旧的认证模式
         this._migrateAuthModes();
+        // 修复 current 标记与 currentProvider 不一致的问题（兼容旧版本写入的脏数据）
+        this._syncCurrentFlags();
 
         const stat = await fs.stat(this.configPath);
         this.lastModified = stat.mtime;
@@ -195,39 +208,85 @@ class ConfigManager {
     }
   }
 
+  _syncCurrentFlags() {
+    if (!this.config || !this.config.providers) {
+      return;
+    }
+
+    const current = this.config.currentProvider;
+    const providers = this.config.providers;
+    const keys = Object.keys(providers);
+
+    if (current && providers[current]) {
+      keys.forEach((key) => {
+        providers[key].current = key === current;
+      });
+      return;
+    }
+
+    keys.forEach((key) => {
+      providers[key].current = false;
+    });
+  }
+
   async addProvider(name, providerConfig) {
     await this.ensureLoaded();
 
+    const existing = this.config.providers[name];
+    const now = new Date().toISOString();
+
+    const ideName = providerConfig.ideName || existing?.ideName || 'claude';
+    const authMode = providerConfig.authMode || existing?.authMode || 'api_key';
+
+    const baseUrl = this._normalizeOptionalString(
+      providerConfig.baseUrl !== undefined ? providerConfig.baseUrl : existing?.baseUrl
+    );
+
+    const authToken = providerConfig.authToken !== undefined ? providerConfig.authToken : existing?.authToken;
+
+    const tokenType = authMode === 'api_key'
+      ? (providerConfig.tokenType ?? existing?.tokenType ?? 'api_key')
+      : null;
+
+    const launchArgs = Array.isArray(providerConfig.launchArgs)
+      ? providerConfig.launchArgs
+      : (existing?.launchArgs || []);
+
+    const primaryModel = providerConfig.primaryModel !== undefined
+      ? providerConfig.primaryModel
+      : (existing?.models?.primary ?? null);
+    const smallFastModel = providerConfig.smallFastModel !== undefined
+      ? providerConfig.smallFastModel
+      : (existing?.models?.smallFast ?? null);
+
     this.config.providers[name] = {
       name,
-      displayName: providerConfig.displayName || name,
-      ideName: providerConfig.ideName || 'claude', // 历史兼容性字段
-      baseUrl: providerConfig.baseUrl,
-      authToken: providerConfig.authToken,
-      authMode: providerConfig.authMode || 'api_key',
-      tokenType: providerConfig.tokenType || 'api_key', // 仅在 authMode 为 'api_key' 时使用
-      launchArgs: providerConfig.launchArgs || [],
+      displayName: providerConfig.displayName || existing?.displayName || name,
+      ideName,
+      baseUrl,
+      authToken,
+      authMode,
+      tokenType, // 仅在 authMode 为 'api_key' 时使用
+      launchArgs,
       models: {
-        primary: providerConfig.primaryModel || null,
-        smallFast: providerConfig.smallFastModel || null
+        primary: primaryModel,
+        smallFast: smallFastModel
       },
-      createdAt: new Date().toISOString(),
-      lastUsed: new Date().toISOString(),
-      current: false
+      createdAt: existing?.createdAt || now,
+      lastUsed: existing?.lastUsed || now,
+      usageCount: existing?.usageCount || 0,
+      current: Boolean(existing?.current || this.config.currentProvider === name)
     };
 
     // 如果是第一个供应商或设置为默认，则设为当前供应商
-    if (Object.keys(this.config.providers).length === 1 || providerConfig.setAsDefault) {
-      // 重置所有供应商的current状态
-      Object.keys(this.config.providers).forEach(key => {
-        this.config.providers[key].current = false;
-      });
-      
-      // 设置新的当前供应商
-      this.config.providers[name].current = true;
-      this.config.providers[name].lastUsed = new Date().toISOString();
+    const shouldSetCurrent = (!existing && Object.keys(this.config.providers).length === 1) || providerConfig.setAsDefault;
+    if (shouldSetCurrent) {
       this.config.currentProvider = name;
+      this.config.providers[name].lastUsed = now;
     }
+
+    // 保证 current 标记与 currentProvider 一致，避免出现多个 current 或丢失 current 的情况
+    this._syncCurrentFlags();
 
     return await this.save();
   }
@@ -306,4 +365,7 @@ class ConfigManager {
   }
 }
 
-module.exports = { ConfigManager };
+// 单例实例
+const configManager = new ConfigManager();
+
+module.exports = { ConfigManager, configManager };

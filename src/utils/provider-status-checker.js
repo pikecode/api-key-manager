@@ -1,28 +1,94 @@
 const { Anthropic, APIConnectionTimeoutError, APIConnectionError, APIError } = require('@anthropic-ai/sdk');
 
+let authTokenEnvLock = Promise.resolve();
+
+// 状态缓存
+const statusCache = new Map();
+const DEFAULT_CACHE_TTL = 30000; // 30秒缓存
+
 class ProviderStatusChecker {
   constructor(options = {}) {
     this.timeout = options.timeout ?? 5000;
     this.testMessage = options.testMessage ?? '你好';
     this.maxTokens = options.maxTokens ?? 32;
     this.defaultModel = 'claude-haiku-4-5-20251001';
+    this.cacheTTL = options.cacheTTL ?? DEFAULT_CACHE_TTL;
   }
 
-  async check(provider) {
+  _getCacheKey(provider) {
+    // 基于关键配置生成缓存键
+    return `${provider.name}:${provider.authToken}:${provider.baseUrl}:${provider.authMode}`;
+  }
+
+  _getCachedStatus(provider) {
+    const key = this._getCacheKey(provider);
+    const cached = statusCache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.cacheTTL) {
+      return cached.status;
+    }
+    return null;
+  }
+
+  _setCachedStatus(provider, status) {
+    const key = this._getCacheKey(provider);
+    statusCache.set(key, {
+      status,
+      timestamp: Date.now()
+    });
+  }
+
+  clearCache() {
+    statusCache.clear();
+  }
+
+  async _withAuthTokenEnv(authToken, operation) {
+    const previous = authTokenEnvLock;
+    let release;
+    authTokenEnvLock = new Promise((resolve) => {
+      release = resolve;
+    });
+
+    await previous;
+
+    const original = process.env.ANTHROPIC_AUTH_TOKEN;
+    try {
+      process.env.ANTHROPIC_AUTH_TOKEN = authToken;
+      return await operation();
+    } finally {
+      if (original !== undefined) {
+        process.env.ANTHROPIC_AUTH_TOKEN = original;
+      } else {
+        delete process.env.ANTHROPIC_AUTH_TOKEN;
+      }
+      release();
+    }
+  }
+
+  async check(provider, options = {}) {
     if (!provider) {
       return this._result('unknown', '未找到配置', null);
     }
 
+    // 检查缓存（除非明确跳过）
+    if (!options.skipCache) {
+      const cached = this._getCachedStatus(provider);
+      if (cached) {
+        return cached;
+      }
+    }
+
     if (provider.ideName === 'codex') {
-      return this._checkCodex(provider);
+      const result = await this._checkCodex(provider);
+      this._setCachedStatus(provider, result);
+      return result;
     }
 
     if (provider.authMode === 'oauth_token') {
       return this._result('unknown', '暂不支持 OAuth 令牌检测', null);
     }
 
-    // auth_token 和 api_key 模式在官方 API 中不需要 baseUrl
-    // 仅当 authMode 为 auth_token 且设置了 baseUrl 时，才表示使用第三方服务
+    // auth_token 模式可留空 baseUrl（使用官方默认 API）
+    // api_key 模式需要 baseUrl（用于自定义端点/代理）
     if (provider.authMode === 'auth_token' && !provider.baseUrl) {
       // 对于官方 Anthropic API 的 auth_token 模式，不需要 baseUrl
       // 直接使用官方 API
@@ -36,19 +102,12 @@ class ProviderStatusChecker {
 
     const model = this._resolveModel(provider);
     try {
-      const client = this._createClient(provider);
-      if (!client) {
-        return this._result('unknown', '认证模式不受支持', null);
-      }
+      const performCheck = async () => {
+        const client = this._createClient(provider);
+        if (!client) {
+          return this._result('unknown', '认证模式不受支持', null);
+        }
 
-      // 保存原始环境变量
-      const originalEnv = {};
-      if (provider.authMode === 'auth_token') {
-        originalEnv.ANTHROPIC_AUTH_TOKEN = process.env.ANTHROPIC_AUTH_TOKEN;
-        process.env.ANTHROPIC_AUTH_TOKEN = provider.authToken;
-      }
-
-      try {
         const start = process.hrtime.bigint();
         const response = await client.messages.create({
           model,
@@ -68,18 +127,20 @@ class ProviderStatusChecker {
         }
 
         return this._result('online', `可用 ${latency.toFixed(0)}ms`, latency);
-      } finally {
-        // 恢复原始环境变量
-        if (provider.authMode === 'auth_token') {
-          if (originalEnv.ANTHROPIC_AUTH_TOKEN !== undefined) {
-            process.env.ANTHROPIC_AUTH_TOKEN = originalEnv.ANTHROPIC_AUTH_TOKEN;
-          } else {
-            delete process.env.ANTHROPIC_AUTH_TOKEN;
-          }
-        }
+      };
+
+      let result;
+      if (provider.authMode === 'auth_token') {
+        result = await this._withAuthTokenEnv(provider.authToken, performCheck);
+      } else {
+        result = await performCheck();
       }
+      this._setCachedStatus(provider, result);
+      return result;
     } catch (error) {
-      return this._handleError(error);
+      const result = this._handleError(error);
+      this._setCachedStatus(provider, result);
+      return result;
     }
   }
 

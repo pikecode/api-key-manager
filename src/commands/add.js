@@ -1,15 +1,16 @@
 const inquirer = require('inquirer');
 const chalk = require('chalk');
-const { ConfigManager } = require('../config');
+const { configManager } = require('../config');
 const { validator } = require('../utils/validator');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
+const { maskToken } = require('../utils/secrets');
 const { BaseCommand } = require('./BaseCommand');
 
 class ProviderAdder extends BaseCommand {
   constructor(options = {}) {
     super();
-    this.configManager = new ConfigManager();
+    this.configManager = configManager;
     this.presetIdeName = options.ideName || null;
   }
 
@@ -391,6 +392,9 @@ class ProviderAdder extends BaseCommand {
     } catch (error) {
       // 移除 ESC 键监听
       this.removeESCListener(escListener);
+      if (this.isEscCancelled(error)) {
+        return;
+      }
       throw error;
     }
   }
@@ -407,9 +411,9 @@ class ProviderAdder extends BaseCommand {
         }
       }
 
-      const launchArgs = answers.configureLaunchArgs
-        ? await this.promptLaunchArgsSelection()
-        : [];
+      const launchArgs = answers.ideName === 'codex'
+        ? (Array.isArray(answers.launchArgs) ? answers.launchArgs : [])
+        : (answers.configureLaunchArgs ? await this.promptLaunchArgsSelection() : []);
 
       const modelConfig = answers.configureModels
         ? await this.promptModelConfiguration()
@@ -621,32 +625,8 @@ class ProviderAdder extends BaseCommand {
     }, '跳过配置');
 
     try {
-      const codexArgs = [
-        {
-          name: 'resume',
-          label: '继续上次对话',
-          description: '恢复之前的会话',
-          checked: false
-        },
-        {
-          name: '--full-auto',
-          label: '全自动模式',
-          description: '自动批准 + 工作区写入沙盒 (与跳过沙盒互斥)',
-          checked: false
-        },
-        {
-          name: '--dangerously-bypass-approvals-and-sandbox',
-          label: '跳过审批和沙盒',
-          description: '危险：跳过所有安全检查 (与全自动互斥)',
-          checked: false
-        },
-        {
-          name: '--search',
-          label: '启用网页搜索',
-          description: '允许模型搜索网页',
-          checked: false
-        }
-      ];
+      const { getCodexLaunchArgs, checkExclusiveArgs } = require('../utils/launch-args');
+      const codexArgs = getCodexLaunchArgs();
 
       const { launchArgs } = await this.prompt([
         {
@@ -662,6 +642,12 @@ class ProviderAdder extends BaseCommand {
       ]);
 
       this.removeESCListener(escListener);
+
+      const conflictError = checkExclusiveArgs(launchArgs, codexArgs);
+      if (conflictError) {
+        Logger.warning(conflictError);
+        return await this.promptCodexLaunchArgsSelection();
+      }
       return launchArgs;
     } catch (error) {
       this.removeESCListener(escListener);
@@ -686,7 +672,7 @@ class ProviderAdder extends BaseCommand {
         console.log(chalk.gray(`  OPENAI_BASE_URL: ${answers.baseUrl}`));
       }
       if (answers.authToken) {
-        console.log(chalk.gray(`  OPENAI_API_KEY: ${answers.authToken}`));
+        console.log(chalk.gray(`  OPENAI_API_KEY: ${maskToken(answers.authToken)}`));
       }
       if (answers.launchArgs && answers.launchArgs.length > 0) {
         console.log(chalk.gray(`  启动参数: ${answers.launchArgs.join(' ')}`));
@@ -712,7 +698,7 @@ class ProviderAdder extends BaseCommand {
     if (answers.baseUrl) {
       console.log(chalk.gray(`  基础URL: ${answers.baseUrl}`));
     }
-    console.log(chalk.gray(`  Token: ${answers.authToken}`));
+    console.log(chalk.gray(`  Token: ${maskToken(answers.authToken)}`));
 
     if (launchArgs.length > 0) {
       console.log(chalk.gray(`  启动参数: ${launchArgs.join(' ')}`));

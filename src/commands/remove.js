@@ -1,5 +1,5 @@
 const inquirer = require('inquirer');
-const { ConfigManager } = require('../config');
+const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
 const { BaseCommand } = require('./BaseCommand');
@@ -7,7 +7,7 @@ const { BaseCommand } = require('./BaseCommand');
 class ProviderRemover extends BaseCommand {
   constructor() {
     super();
-    this.configManager = new ConfigManager();
+    this.configManager = configManager;
   }
 
   async remove(providerName) {

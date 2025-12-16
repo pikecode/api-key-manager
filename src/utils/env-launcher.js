@@ -13,8 +13,9 @@ function sanitizeEnvValue(value) {
   // 移除控制字符
   let cleaned = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
-  // 检测可能的 shell 命令注入
-  if (/[;&|`$()]/.test(cleaned)) {
+  // 检测可能的 shell 命令注入（允许 $ 因为 token 可能包含）
+  // 只禁止明确的命令分隔符和反引号执行
+  if (/[;&|`]/.test(cleaned)) {
     throw new Error('环境变量值包含潜在不安全的字符');
   }
 
@@ -50,6 +51,9 @@ function buildEnvVariables(config) {
     if (config.authMode === 'oauth_token') {
       env.CLAUDE_CODE_OAUTH_TOKEN = sanitizeEnvValue(config.authToken);
     } else if (config.authMode === 'api_key') {
+      if (!config.baseUrl) {
+        throw new Error('未配置基础地址');
+      }
       env.ANTHROPIC_BASE_URL = sanitizeEnvValue(config.baseUrl);
       // 根据 tokenType 选择设置哪种 token
       if (config.tokenType === 'auth_token') {
@@ -60,7 +64,9 @@ function buildEnvVariables(config) {
       }
     } else {
       // auth_token 模式
-      env.ANTHROPIC_BASE_URL = sanitizeEnvValue(config.baseUrl);
+      if (config.baseUrl) {
+        env.ANTHROPIC_BASE_URL = sanitizeEnvValue(config.baseUrl);
+      }
       env.ANTHROPIC_AUTH_TOKEN = sanitizeEnvValue(config.authToken);
     }
 

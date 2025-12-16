@@ -1,14 +1,16 @@
 const chalk = require('chalk');
-const { ConfigManager } = require('../config');
+const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
+const { maybeMaskToken } = require('../utils/secrets');
 
 class CurrentConfig {
   constructor() {
-    this.configManager = new ConfigManager();
+    this.configManager = configManager;
   }
 
-  async show() {
+  async show(options = {}) {
     try {
+      const showToken = Boolean(options.showToken);
       await this.configManager.ensureLoaded();
       const currentProvider = this.configManager.getCurrentProvider();
       
@@ -30,7 +32,7 @@ class CurrentConfig {
           console.log(chalk.gray(`OPENAI_BASE_URL: ${currentProvider.baseUrl}`));
         }
         if (currentProvider.authToken) {
-          console.log(chalk.gray(`OPENAI_API_KEY: ${currentProvider.authToken}`));
+          console.log(chalk.gray(`OPENAI_API_KEY: ${maybeMaskToken(currentProvider.authToken, showToken)}`));
         }
         console.log(chalk.gray(`创建时间: ${new Date(currentProvider.createdAt).toLocaleString()}`));
         console.log(chalk.gray(`最后使用: ${new Date(currentProvider.lastUsed).toLocaleString()}`));
@@ -41,7 +43,7 @@ class CurrentConfig {
           console.log(chalk.gray(`set OPENAI_BASE_URL=${currentProvider.baseUrl}`));
         }
         if (currentProvider.authToken) {
-          console.log(chalk.gray(`set OPENAI_API_KEY=${currentProvider.authToken}`));
+          console.log(chalk.gray(`set OPENAI_API_KEY=${maybeMaskToken(currentProvider.authToken, showToken)}`));
         }
         console.log(chalk.gray('codex'));
         return;
@@ -64,7 +66,7 @@ class CurrentConfig {
       if (currentProvider.baseUrl) {
         console.log(chalk.gray(`基础URL: ${currentProvider.baseUrl}`));
       }
-      console.log(chalk.gray(`认证Token: ${currentProvider.authToken}`));
+      console.log(chalk.gray(`认证Token: ${maybeMaskToken(currentProvider.authToken, showToken)}`));
       console.log(chalk.gray(`创建时间: ${new Date(currentProvider.createdAt).toLocaleString()}`));
       console.log(chalk.gray(`最后使用: ${new Date(currentProvider.lastUsed).toLocaleString()}`));
       
@@ -82,17 +84,17 @@ class CurrentConfig {
         console.log(chalk.gray(`set ANTHROPIC_BASE_URL=${currentProvider.baseUrl}`));
       }
       if (currentProvider.authMode === 'oauth_token') {
-        console.log(chalk.gray(`set CLAUDE_CODE_OAUTH_TOKEN=${currentProvider.authToken}`));
+        console.log(chalk.gray(`set CLAUDE_CODE_OAUTH_TOKEN=${maybeMaskToken(currentProvider.authToken, showToken)}`));
       } else if (currentProvider.authMode === 'api_key') {
         // 根据 tokenType 显示对应的环境变量
         if (currentProvider.tokenType === 'auth_token') {
-          console.log(chalk.gray(`set ANTHROPIC_AUTH_TOKEN=${currentProvider.authToken}`));
+          console.log(chalk.gray(`set ANTHROPIC_AUTH_TOKEN=${maybeMaskToken(currentProvider.authToken, showToken)}`));
         } else {
-          console.log(chalk.gray(`set ANTHROPIC_API_KEY=${currentProvider.authToken}`));
+          console.log(chalk.gray(`set ANTHROPIC_API_KEY=${maybeMaskToken(currentProvider.authToken, showToken)}`));
         }
       } else {
         // auth_token 模式
-        console.log(chalk.gray(`set ANTHROPIC_AUTH_TOKEN=${currentProvider.authToken}`));
+        console.log(chalk.gray(`set ANTHROPIC_AUTH_TOKEN=${maybeMaskToken(currentProvider.authToken, showToken)}`));
       }
       if (currentProvider.models?.primary) {
         console.log(chalk.gray(`set ANTHROPIC_MODEL=${currentProvider.models.primary}`));
@@ -109,9 +111,9 @@ class CurrentConfig {
   }
 }
 
-async function currentCommand() {
+async function currentCommand(options = {}) {
   const current = new CurrentConfig();
-  await current.show();
+  await current.show(options);
 }
 
 module.exports = { currentCommand, CurrentConfig };
