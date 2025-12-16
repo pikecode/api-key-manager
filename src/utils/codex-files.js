@@ -144,7 +144,7 @@ function ensureApiKeyAuthMethod(configToml) {
  * @returns {string} auth.json 内容
  */
 function buildAuthJson(apiKey) {
-  return JSON.stringify({ api_key: apiKey }, null, 2);
+  return JSON.stringify({ OPENAI_API_KEY: apiKey }, null, 2);
 }
 
 /**
