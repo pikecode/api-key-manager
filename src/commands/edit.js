@@ -87,28 +87,8 @@ class ProviderEditor extends BaseCommand {
 
         if (isCodex) {
           const existingLaunchArgs = Array.isArray(providerToEdit.launchArgs) ? providerToEdit.launchArgs : [];
-          const codexArgs = [
-            {
-              name: 'resume',
-              label: '继续上次对话',
-              description: '恢复之前的会话'
-            },
-            {
-              name: '--full-auto',
-              label: '全自动模式',
-              description: '自动批准 + 工作区写入沙盒 (与跳过沙盒互斥)'
-            },
-            {
-              name: '--dangerously-bypass-approvals-and-sandbox',
-              label: '跳过审批和沙盒',
-              description: '危险：跳过所有安全检查 (与全自动互斥)'
-            },
-            {
-              name: '--search',
-              label: '启用网页搜索',
-              description: '允许模型搜索网页'
-            }
-          ];
+          const { getCodexLaunchArgs, checkExclusiveArgs } = require('../utils/launch-args');
+          const codexArgs = getCodexLaunchArgs();
 
           const knownCodexArgNames = new Set(codexArgs.map(arg => arg.name));
           const customCodexArgs = existingLaunchArgs
@@ -152,12 +132,9 @@ class ProviderEditor extends BaseCommand {
                 })),
               ],
               validate: (selected) => {
-                if (
-                  Array.isArray(selected)
-                  && selected.includes('--full-auto')
-                  && selected.includes('--dangerously-bypass-approvals-and-sandbox')
-                ) {
-                  return '"全自动模式" 和 "跳过审批和沙盒" 不能同时选择';
+                const conflictError = checkExclusiveArgs(selected, codexArgs);
+                if (conflictError) {
+                  return conflictError;
                 }
                 return true;
               }
@@ -286,8 +263,8 @@ class ProviderEditor extends BaseCommand {
           tokenType: answers.tokenType, // 仅在 authMode 为 'api_key' 时使用
           launchArgs: answers.launchArgs,
           // Retain original model settings unless we add editing for them
-          primaryModel: existingProvider.models.primary,
-          smallFastModel: existingProvider.models.smallFast,
+          primaryModel: existingProvider.models?.primary || null,
+          smallFastModel: existingProvider.models?.smallFast || null,
           setAsDefault: false, // Don't change default status on edit
         });
       }
