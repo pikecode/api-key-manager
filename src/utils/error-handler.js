@@ -1,5 +1,5 @@
 const chalk = require('chalk');
-const { Logger } = require('./utils/logger');
+const { Logger } = require('./logger');
 
 class ErrorHandler {
   static handle(error, context = '') {
