@@ -9,7 +9,7 @@
 
 - 🎯 **双 IDE 支持** - 同时管理 Claude Code 和 Codex CLI 配置
 - 🔄 **快速切换** - 一键切换不同的 API 提供商
-- 🔐 **安全存储** - 本地加密存储 API 密钥
+- 🔐 **安全存储** - 本地文件存储（Unix 自动设置为 0600 权限）
 - 🎨 **多认证模式** - 支持 OAuth、API Key、Auth Token
 - 🚀 **启动参数** - 为每个供应商配置专属启动参数
 - 💾 **备份恢复** - 配置导出、导入、备份功能
@@ -95,13 +95,16 @@ akm list --codex
 
 # 仅列出 Claude Code 供应商
 akm list --claude
+
+# 显示完整 Token（默认脱敏，慎用）
+akm list --show-token
 ```
 
 **显示内容：**
 - ✅ 当前激活的供应商
 - 🟢/🟡/🔴 API 可用性状态
 - [Codex]/[Claude] IDE 类型标签
-- 认证模式、环境变量、启动参数
+- 认证模式、环境变量、启动参数（Token 默认脱敏，可用 `--show-token` 显示完整）
 - 创建时间、最后使用时间
 
 #### `akm current`
@@ -109,6 +112,9 @@ akm list --claude
 
 ```bash
 akm current
+
+# 显示完整 Token（默认脱敏，慎用）
+akm current --show-token
 ```
 
 **显示内容：**

@@ -1,16 +1,18 @@
 const chalk = require('chalk');
-const { ConfigManager } = require('../config');
+const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
+const { maybeMaskToken } = require('../utils/secrets');
 
 class ProviderLister {
   constructor() {
-    this.configManager = new ConfigManager();
+    this.configManager = configManager;
     this.statusChecker = new ProviderStatusChecker();
   }
 
-  async list(filter = null) {
+  async list(filter = null, options = {}) {
     try {
+      const showToken = Boolean(options.showToken);
       await this.configManager.ensureLoaded();
       let providers = this.configManager.listProviders();
       const currentProvider = this.configManager.getCurrentProvider();
@@ -60,7 +62,7 @@ class ProviderLister {
             console.log(chalk.gray(`   OPENAI_BASE_URL: ${provider.baseUrl}`));
           }
           if (provider.authToken) {
-            console.log(chalk.gray(`   OPENAI_API_KEY: ${provider.authToken}`));
+            console.log(chalk.gray(`   OPENAI_API_KEY: ${maybeMaskToken(provider.authToken, showToken)}`));
           }
         } else {
           // 显示认证模式
@@ -75,7 +77,7 @@ class ProviderLister {
           if (provider.authMode === 'oauth_token') {
             // OAuth 模式
             if (provider.authToken) {
-              console.log(chalk.gray(`   CLAUDE_CODE_OAUTH_TOKEN: ${provider.authToken}`));
+              console.log(chalk.gray(`   CLAUDE_CODE_OAUTH_TOKEN: ${maybeMaskToken(provider.authToken, showToken)}`));
             }
             if (provider.baseUrl) {
               console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
@@ -87,7 +89,7 @@ class ProviderLister {
             }
             if (provider.authToken) {
               const tokenEnvName = provider.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-              console.log(chalk.gray(`   ${tokenEnvName}: ${provider.authToken}`));
+              console.log(chalk.gray(`   ${tokenEnvName}: ${maybeMaskToken(provider.authToken, showToken)}`));
             }
           } else {
             // auth_token 模式
@@ -95,7 +97,7 @@ class ProviderLister {
               console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
             }
             if (provider.authToken) {
-              console.log(chalk.gray(`   ANTHROPIC_AUTH_TOKEN: ${provider.authToken}`));
+              console.log(chalk.gray(`   ANTHROPIC_AUTH_TOKEN: ${maybeMaskToken(provider.authToken, showToken)}`));
             }
           }
         }
@@ -161,9 +163,9 @@ class ProviderLister {
   }
 }
 
-async function listCommand(filter = null) {
+async function listCommand(filter = null, options = {}) {
   const lister = new ProviderLister();
-  await lister.list(filter);
+  await lister.list(filter, options);
 }
 
 module.exports = { listCommand, ProviderLister };

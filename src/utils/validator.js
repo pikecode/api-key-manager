@@ -117,74 +117,9 @@ const validator = {
     return null;
   },
 
-  validateLaunchArgs(args) {
-    if (!Array.isArray(args)) {
-      return '启动参数必须是数组';
-    }
-    
-    const validArgs = [
-      '--dangerously-skip-permissions',
-      '--no-confirm', 
-      '--allow-all',
-      '--auto-approve',
-      '--yes',
-      '--force'
-    ];
-    
-    for (const arg of args) {
-      if (!validArgs.includes(arg)) {
-        return `无效的启动参数: ${arg}`;
-      }
-    }
-    
-    return null;
-  },
-
   getAvailableLaunchArgs() {
-    return [
-      {
-        name: '--continue',
-        label: '继续上次对话',
-        description: '恢复上次的对话记录',
-        checked: false
-      },
-      {
-        name: '--dangerously-skip-permissions',
-        label: '最高权限',
-        description: '仅限沙盒环境使用',
-        checked: false
-      },
-      {
-        name: '--no-confirm',
-        label: '直接执行操作',
-        description: '跳过确认提示',
-        checked: false
-      },
-      {
-        name: '--allow-all',
-        label: '允许全部操作',
-        description: '移除安全限制',
-        checked: false
-      },
-      {
-        name: '--auto-approve',
-        label: '自动批准请求',
-        description: '无需人工同意',
-        checked: false
-      },
-      {
-        name: '--yes',
-        label: '默认回答 yes',
-        description: '自动同意所有询问',
-        checked: false
-      },
-      {
-        name: '--force',
-        label: '强制执行',
-        description: '忽略可能的警告',
-        checked: false
-      }
-    ];
+    const { getClaudeLaunchArgs } = require('./launch-args');
+    return getClaudeLaunchArgs();
   }
 };
 

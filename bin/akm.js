@@ -83,10 +83,11 @@ program
   .description('列出所有API密钥配置')
   .option('--codex', '仅显示 Codex CLI 供应商')
   .option('--claude', '仅显示 Claude Code 供应商')
+  .option('--show-token', '显示完整 Token（默认脱敏）')
   .action(async (options) => {
     try {
       const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
-      await registry.executeCommand('list', filter);
+      await registry.executeCommand('list', filter, { showToken: options.showToken });
     } catch (error) {
       console.error(chalk.red('❌ 列表失败:'), error.message);
       process.exit(1);
@@ -97,9 +98,10 @@ program
 program
   .command('current')
   .description('显示当前活跃的配置')
-  .action(async () => {
+  .option('--show-token', '显示完整 Token（默认脱敏）')
+  .action(async (options) => {
     try {
-      await registry.executeCommand('current');
+      await registry.executeCommand('current', { showToken: options.showToken });
     } catch (error) {
       console.error(chalk.red('❌ 获取当前配置失败:'), error.message);
       process.exit(1);

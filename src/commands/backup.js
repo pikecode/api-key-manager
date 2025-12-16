@@ -1,12 +1,12 @@
 const fs = require('fs-extra');
 const path = require('path');
 const chalk = require('chalk');
-const { ConfigManager } = require('../config');
+const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 
 class BackupManager {
   constructor() {
-    this.configManager = new ConfigManager();
+    this.configManager = configManager;
   }
 
   /**

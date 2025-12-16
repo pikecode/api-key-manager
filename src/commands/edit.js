@@ -1,6 +1,6 @@
 const inquirer = require('inquirer');
 const chalk = require('chalk');
-const { ConfigManager } = require('../config');
+const { configManager } = require('../config');
 const { validator } = require('../utils/validator');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
@@ -9,7 +9,7 @@ const { BaseCommand } = require('./BaseCommand');
 class ProviderEditor extends BaseCommand {
   constructor() {
     super();
-    this.configManager = new ConfigManager();
+    this.configManager = configManager;
   }
 
   async interactive(providerName) {
@@ -86,6 +86,14 @@ class ProviderEditor extends BaseCommand {
         ];
 
         if (isCodex) {
+          const existingLaunchArgs = Array.isArray(providerToEdit.launchArgs) ? providerToEdit.launchArgs : [];
+          const { getCodexLaunchArgs, checkExclusiveArgs } = require('../utils/launch-args');
+          const codexArgs = getCodexLaunchArgs();
+
+          const knownCodexArgNames = new Set(codexArgs.map(arg => arg.name));
+          const customCodexArgs = existingLaunchArgs
+            .filter(arg => typeof arg === 'string' && !knownCodexArgNames.has(arg));
+
           questions.push(
             {
               type: 'input',
@@ -105,6 +113,30 @@ class ProviderEditor extends BaseCommand {
               validate: (input) => {
                 if (!input) return 'API Key 不能为空';
                 return validator.validateToken(input) || true;
+              }
+            },
+            {
+              type: 'checkbox',
+              name: 'launchArgs',
+              message: 'Codex 启动参数:',
+              choices: [
+                ...codexArgs.map(arg => ({
+                  name: `${arg.label} (${arg.name})${arg.description ? ' - ' + arg.description : ''}`,
+                  value: arg.name,
+                  checked: existingLaunchArgs.includes(arg.name),
+                })),
+                ...customCodexArgs.map(arg => ({
+                  name: `${arg} ${chalk.gray('(自定义参数)')}`,
+                  value: arg,
+                  checked: true,
+                })),
+              ],
+              validate: (selected) => {
+                const conflictError = checkExclusiveArgs(selected, codexArgs);
+                if (conflictError) {
+                  return conflictError;
+                }
+                return true;
               }
             }
           );
@@ -135,9 +167,19 @@ class ProviderEditor extends BaseCommand {
             {
               type: 'input',
               name: 'baseUrl',
-              message: 'API基础URL:',
-              default: providerToEdit.baseUrl,
-              validate: (input) => validator.validateUrl(input) || true,
+              message: (answers) => {
+                if (answers.authMode === 'auth_token') {
+                  return 'API基础URL (留空使用官方API):';
+                }
+                return 'API基础URL:';
+              },
+              default: providerToEdit.baseUrl || '',
+              validate: (input, answers) => {
+                if (answers.authMode === 'auth_token' && !input) {
+                  return true;
+                }
+                return validator.validateUrl(input) || true;
+              },
               when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token',
             },
             {
@@ -202,15 +244,17 @@ class ProviderEditor extends BaseCommand {
           ideName: 'codex',
           baseUrl: answers.baseUrl || null,
           authToken: answers.authToken,
-          launchArgs: existingProvider.launchArgs || [],
+          launchArgs: answers.launchArgs,
           setAsDefault: false
         });
       } else {
         // Re-use addProvider which can overwrite existing providers
+        // oauth_token 模式不需要 baseUrl，显式设为 null
+        const baseUrl = answers.authMode === 'oauth_token' ? null : answers.baseUrl;
         await this.configManager.addProvider(name, {
           displayName: answers.displayName,
           ideName,
-          baseUrl: answers.baseUrl,
+          baseUrl,
           authToken: answers.authToken,
           authMode: answers.authMode,
           tokenType: answers.tokenType, // 仅在 authMode 为 'api_key' 时使用
