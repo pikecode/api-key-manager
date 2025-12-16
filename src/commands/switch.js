@@ -840,6 +840,8 @@ class EnvSwitcher extends BaseCommand {
       const choices = this.createProviderChoices(providers, true, statusMap);
 
       this.currentPromptContext = 'manage';
+      // 管理界面显示所有供应商，更新 filteredProviders 以保持一致
+      this.filteredProviders = providers;
 
       if (providers.length > 0) {
         this._startStatusRefresh(providers);
