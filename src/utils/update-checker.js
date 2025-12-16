@@ -105,8 +105,14 @@ async function checkForUpdates({ packageName, currentVersion }) {
           return;
         }
         console.log(chalk.green('更新成功，正在重启...'));
-        const child = spawn('cc', process.argv.slice(2), {
-          shell: true,
+        const scriptPath = process.argv[1];
+        const restartCommand = scriptPath ? process.execPath : packageName;
+        const restartArgs = scriptPath
+          ? [scriptPath, ...process.argv.slice(2)]
+          : process.argv.slice(2);
+
+        const child = spawn(restartCommand, restartArgs, {
+          shell: process.platform === 'win32',
           stdio: 'inherit',
         });
         child.on('close', (code) => {

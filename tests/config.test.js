@@ -86,6 +86,46 @@ describe('ConfigManager', () => {
       expect(config.providers.test.current).toBe(true);
       expect(config.currentProvider).toBe('test');
     });
+
+    test('should preserve createdAt and current when overwriting provider', async () => {
+      await configManager.addProvider('test', {
+        displayName: 'Test Provider',
+        baseUrl: 'https://test.com',
+        authToken: 'test-token-123456'
+      });
+
+      const before = await configManager.load(true);
+      const createdAt = before.providers.test.createdAt;
+      const lastUsed = before.providers.test.lastUsed;
+
+      await configManager.addProvider('test', {
+        displayName: 'Updated Provider',
+        baseUrl: 'https://test.com',
+        authToken: 'new-token-123456',
+        authMode: 'api_key',
+        tokenType: 'api_key'
+      });
+
+      const after = await configManager.load(true);
+      expect(after.providers.test.createdAt).toBe(createdAt);
+      expect(after.providers.test.lastUsed).toBe(lastUsed);
+      expect(after.currentProvider).toBe('test');
+      expect(after.providers.test.current).toBe(true);
+    });
+
+    test('should keep tokenType null for codex provider', async () => {
+      await configManager.addProvider('codex', {
+        displayName: 'Codex CLI',
+        ideName: 'codex',
+        authMode: 'openai_api_key',
+        authToken: 'sk-test-token-123456',
+        baseUrl: null,
+        tokenType: null
+      });
+
+      const config = await configManager.load(true);
+      expect(config.providers.codex.tokenType).toBeNull();
+    });
   });
 
   describe('removeProvider', () => {
