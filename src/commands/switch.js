@@ -1450,7 +1450,8 @@ class EnvSwitcher extends BaseCommand {
 
       // 更新供应商配置
       provider.displayName = answers.displayName || newName;
-      provider.baseUrl = answers.baseUrl;
+      // oauth_token 模式不需要 baseUrl，显式设为 null
+      provider.baseUrl = answers.authMode === 'oauth_token' ? null : answers.baseUrl;
       provider.authToken = answers.authToken;
       
       // Claude Code 特定的更新

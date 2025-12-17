@@ -160,7 +160,12 @@ function updateApiBaseUrl(configToml, baseUrl) {
       // 替换现有的
       return configToml.replace(baseUrlRegex, newLine);
     }
-    // 在文件末尾添加（确保前面有换行）
+    // 在文件末尾添加
+    if (configToml.length === 0) {
+      // 空配置，直接返回新行
+      return newLine;
+    }
+    // 确保前面有换行
     const separator = configToml.endsWith('\n') ? '' : '\n';
     return configToml + separator + newLine;
   } else {

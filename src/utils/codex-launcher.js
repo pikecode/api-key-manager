@@ -48,8 +48,11 @@ async function executeCodexWithEnv(config, launchArgs = []) {
 
   // 写入 ~/.codex/config.toml 和 ~/.codex/auth.json
   // 确保 Codex CLI 使用 API Key 认证方式
+  // 这样用户也可以直接运行 `codex` 命令而无需通过 akm
   await applyCodexConfig(config);
 
+  // 同时设置环境变量，确保兼容性
+  // 环境变量优先级更高，作为双重保障
   const env = buildCodexEnvVariables(config);
 
   // 处理参数：子命令放前面，选项放后面

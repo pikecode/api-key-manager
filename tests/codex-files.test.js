@@ -82,7 +82,7 @@ describe('ensureApiKeyAuthMethod', () => {
 describe('updateApiBaseUrl', () => {
   test('adds base_url to empty config', () => {
     const result = updateApiBaseUrl('', 'https://example.com/api');
-    expect(result).toContain('api_base_url = "https://example.com/api"');
+    expect(result).toBe('api_base_url = "https://example.com/api"\n');
   });
 
   test('adds base_url to existing config', () => {
@@ -109,7 +109,7 @@ describe('updateApiBaseUrl', () => {
 
   test('handles null input config', () => {
     const result = updateApiBaseUrl(null, 'https://example.com/api');
-    expect(result).toContain('api_base_url = "https://example.com/api"');
+    expect(result).toBe('api_base_url = "https://example.com/api"\n');
   });
 });
 
