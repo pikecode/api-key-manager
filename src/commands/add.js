@@ -590,11 +590,18 @@ class ProviderAdder extends BaseCommand {
       }
 
       // 尝试从 config.toml 获取 base URL
+      // 支持 api_base_url（akm 写入的格式）和 api_base（某些旧配置可能使用）
       let baseUrl = null;
       if (codexFiles.configToml) {
-        const baseUrlMatch = codexFiles.configToml.match(/api_base\s*=\s*["']([^"']+)["']/);
+        const baseUrlMatch = codexFiles.configToml.match(/api_base_url\s*=\s*["']([^"']+)["']/);
         if (baseUrlMatch) {
           baseUrl = baseUrlMatch[1];
+        } else {
+          // 兼容旧格式
+          const legacyMatch = codexFiles.configToml.match(/api_base\s*=\s*["']([^"']+)["']/);
+          if (legacyMatch) {
+            baseUrl = legacyMatch[1];
+          }
         }
       }
 
