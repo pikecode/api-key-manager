@@ -121,21 +121,23 @@ function ensureApiKeyAuthMethod(configToml) {
     return 'preferred_auth_method = "apikey"\n';
   }
 
-  // 检查是否已经设置了 preferred_auth_method
-  const authMethodRegex = /^preferred_auth_method\s*=\s*["']?([^"'\n]+)["']?\s*$/m;
-  const match = configToml.match(authMethodRegex);
+  // 移除所有已存在的 preferred_auth_method 行（防止重复）
+  const authMethodRegex = /^preferred_auth_method\s*=\s*["']?[^"'\n]*["']?\s*\n?/gm;
+  let cleanedConfig = configToml.replace(authMethodRegex, '');
 
-  if (match) {
-    if (match[1].trim() === 'apikey') {
-      // 已经是 apikey，无需修改
-      return configToml;
-    }
-    // 替换为 apikey
-    return configToml.replace(authMethodRegex, 'preferred_auth_method = "apikey"');
+  // 清理可能存在的损坏字符（如孤立的 { 或空行堆积）
+  cleanedConfig = cleanedConfig.replace(/^[{}]+\s*\n?/gm, '');
+  cleanedConfig = cleanedConfig.replace(/^\n{3,}/gm, '\n\n');
+
+  // 在文件开头添加 preferred_auth_method
+  const newLine = 'preferred_auth_method = "apikey"\n';
+
+  // 如果清理后为空，直接返回新配置
+  if (!cleanedConfig.trim()) {
+    return newLine;
   }
 
-  // 没有找到 preferred_auth_method，在文件开头添加
-  return 'preferred_auth_method = "apikey"\n' + configToml;
+  return newLine + cleanedConfig;
 }
 
 /**
@@ -154,20 +156,29 @@ function updateApiBaseUrl(configToml, baseUrl) {
 
   if (baseUrl) {
     // 需要设置 api_base_url
-    const newLine = `api_base_url = "${baseUrl}"\n`;
+    const newLine = `api_base_url = "${baseUrl}"`;
 
     if (configToml.match(baseUrlRegex)) {
       // 替换现有的
-      return configToml.replace(baseUrlRegex, newLine);
+      return configToml.replace(baseUrlRegex, newLine + '\n');
     }
-    // 在文件末尾添加
+    // 空配置，直接返回新行
     if (configToml.length === 0) {
-      // 空配置，直接返回新行
-      return newLine;
+      return newLine + '\n';
     }
-    // 确保前面有换行
+    // 找到第一个 section [xxx]，在它之前插入
+    const sectionMatch = configToml.match(/^\[/m);
+    if (sectionMatch) {
+      const insertPos = configToml.indexOf(sectionMatch[0]);
+      const before = configToml.slice(0, insertPos);
+      const after = configToml.slice(insertPos);
+      // 确保前面有换行分隔
+      const separator = before.endsWith('\n') ? '' : '\n';
+      return before + separator + newLine + '\n\n' + after;
+    }
+    // 没有 section，在文件末尾添加
     const separator = configToml.endsWith('\n') ? '' : '\n';
-    return configToml + separator + newLine;
+    return configToml + separator + newLine + '\n';
   } else {
     // 移除 api_base_url（使用官方 API）
     return configToml.replace(baseUrlRegex, '');
