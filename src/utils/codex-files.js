@@ -153,7 +153,7 @@ function updateApiBaseUrl(configToml, baseUrl) {
   const baseUrlRegex = /^api_base_url\s*=\s*["']?[^"'\n]*["']?\s*\n?/m;
 
   if (baseUrl) {
-    // 需要设置 base_url
+    // 需要设置 api_base_url
     const newLine = `api_base_url = "${baseUrl}"\n`;
 
     if (configToml.match(baseUrlRegex)) {
@@ -169,7 +169,7 @@ function updateApiBaseUrl(configToml, baseUrl) {
     const separator = configToml.endsWith('\n') ? '' : '\n';
     return configToml + separator + newLine;
   } else {
-    // 移除 base_url（使用官方 API）
+    // 移除 api_base_url（使用官方 API）
     return configToml.replace(baseUrlRegex, '');
   }
 }
