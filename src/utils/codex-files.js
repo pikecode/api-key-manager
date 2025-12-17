@@ -139,6 +139,37 @@ function ensureApiKeyAuthMethod(configToml) {
 }
 
 /**
+ * 更新 config.toml 中的 api_base_url
+ * @param {string} configToml - 现有的 config.toml 内容
+ * @param {string|null} baseUrl - API base URL，null 时移除该配置
+ * @returns {string} 更新后的 config.toml 内容
+ */
+function updateApiBaseUrl(configToml, baseUrl) {
+  if (!configToml) {
+    configToml = '';
+  }
+
+  // 匹配 api_base_url 配置行
+  const baseUrlRegex = /^api_base_url\s*=\s*["']?[^"'\n]*["']?\s*\n?/m;
+
+  if (baseUrl) {
+    // 需要设置 base_url
+    const newLine = `api_base_url = "${baseUrl}"\n`;
+
+    if (configToml.match(baseUrlRegex)) {
+      // 替换现有的
+      return configToml.replace(baseUrlRegex, newLine);
+    }
+    // 在文件末尾添加（确保前面有换行）
+    const separator = configToml.endsWith('\n') ? '' : '\n';
+    return configToml + separator + newLine;
+  } else {
+    // 移除 base_url（使用官方 API）
+    return configToml.replace(baseUrlRegex, '');
+  }
+}
+
+/**
  * 构建 auth.json 内容
  * @param {string} apiKey - API Key
  * @returns {string} auth.json 内容
@@ -172,7 +203,11 @@ async function applyCodexConfig(config, options = {}) {
   }
 
   // 确保设置了 preferred_auth_method = "apikey"
-  const updatedConfigToml = ensureApiKeyAuthMethod(existingConfigToml);
+  let updatedConfigToml = ensureApiKeyAuthMethod(existingConfigToml);
+
+  // 更新 api_base_url（如果有则设置，没有则移除）
+  updatedConfigToml = updateApiBaseUrl(updatedConfigToml, config.baseUrl || null);
+
   await fs.writeFile(configTomlPath, updatedConfigToml, 'utf8');
   await setSecurePermissions(configTomlPath);
 
@@ -192,6 +227,7 @@ module.exports = {
   applyCodexConfig,
   backupCodexFiles,
   ensureApiKeyAuthMethod,
+  updateApiBaseUrl,
   buildAuthJson
 };
 
