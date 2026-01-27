@@ -416,6 +416,145 @@ class ConfigManager {
     return await this.save();
   }
 
+  /**
+   * 记录供应商使用会话
+   * @param {string} name - 供应商名称
+   * @param {number} durationMs - 使用时长（毫秒）
+   */
+  async recordUsageSession(name, durationMs = 0) {
+    await this.ensureLoaded();
+
+    if (!this.config.providers[name]) {
+      throw new Error(`供应商 '${name}' 不存在`);
+    }
+
+    const provider = this.config.providers[name];
+
+    // 初始化统计数据
+    if (!provider.stats) {
+      provider.stats = {
+        totalSessions: 0,
+        totalDurationMs: 0,
+        averageDurationMs: 0,
+        lastSessionDuration: 0,
+        firstUsed: new Date().toISOString()
+      };
+    }
+
+    // 更新统计
+    provider.stats.totalSessions = (provider.stats.totalSessions || 0) + 1;
+    provider.stats.totalDurationMs = (provider.stats.totalDurationMs || 0) + durationMs;
+    provider.stats.lastSessionDuration = durationMs;
+    provider.stats.averageDurationMs = Math.round(
+      provider.stats.totalDurationMs / provider.stats.totalSessions
+    );
+
+    // 更新最后使用时间
+    provider.lastUsed = new Date().toISOString();
+
+    return await this.save();
+  }
+
+  /**
+   * 获取使用统计信息
+   * @param {string|null} name - 供应商名称，null 表示获取所有
+   * @returns {Object} 统计信息
+   */
+  getUsageStats(name = null) {
+    if (!this.isLoaded) {
+      throw new Error('配置未加载，请先调用 load() 方法');
+    }
+
+    if (name) {
+      const provider = this.getProvider(name);
+      if (!provider) {
+        return null;
+      }
+      return {
+        name: provider.name,
+        displayName: provider.displayName,
+        usageCount: provider.usageCount || 0,
+        lastUsed: provider.lastUsed || null,
+        stats: provider.stats || null
+      };
+    }
+
+    // 返回所有供应商的统计
+    const allStats = Object.entries(this.config.providers).map(([name, provider]) => ({
+      name,
+      displayName: provider.displayName,
+      usageCount: provider.usageCount || 0,
+      lastUsed: provider.lastUsed || null,
+      stats: provider.stats || null
+    }));
+
+    // 按使用次数降序排序
+    return allStats.sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0));
+  }
+
+  /**
+   * 获取智能推荐的供应商列表
+   * @param {Object} options - 选项
+   * @param {number} options.limit - 返回数量限制
+   * @param {string|null} options.filter - 过滤器 ('codex', 'claude', 或 null)
+   * @returns {Array} 推荐的供应商列表
+   */
+  getRecommendedProviders(options = {}) {
+    if (!this.isLoaded) {
+      throw new Error('配置未加载，请先调用 load() 方法');
+    }
+
+    const { limit = 5, filter = null } = options;
+    let providers = this.listProviders();
+
+    // 应用过滤器
+    if (filter === 'codex') {
+      providers = providers.filter(p => p.ideName === 'codex');
+    } else if (filter === 'claude') {
+      providers = providers.filter(p => p.ideName !== 'codex');
+    }
+
+    // 计算推荐分数
+    const scoredProviders = providers.map(provider => {
+      let score = 0;
+
+      // 使用次数权重 (40%)
+      const usageCount = provider.usageCount || 0;
+      score += usageCount * 0.4;
+
+      // 最近使用时间权重 (30%)
+      if (provider.lastUsed) {
+        const daysSinceLastUse = (Date.now() - new Date(provider.lastUsed).getTime()) / (1000 * 60 * 60 * 24);
+        // 越近使用分数越高，超过30天分数衰减
+        const recencyScore = Math.max(0, 30 - daysSinceLastUse) / 30;
+        score += recencyScore * 30;
+      }
+
+      // 会话平均时长权重 (20%)
+      if (provider.stats?.averageDurationMs) {
+        // 平均使用时长越长，说明使用越频繁，最高20分
+        const avgMinutes = provider.stats.averageDurationMs / (1000 * 60);
+        const durationScore = Math.min(avgMinutes / 60, 1) * 20; // 最多1小时算满分
+        score += durationScore;
+      }
+
+      // 总会话数权重 (10%)
+      if (provider.stats?.totalSessions) {
+        score += Math.min(provider.stats.totalSessions / 10, 1) * 10;
+      }
+
+      return {
+        ...provider,
+        recommendScore: Math.round(score * 100) / 100
+      };
+    });
+
+    // 按推荐分数降序排序并限制数量
+    return scoredProviders
+      .sort((a, b) => b.recommendScore - a.recommendScore)
+      .slice(0, limit);
+  }
+
   getProvider(name) {
     // 同步方法，但需要先确保配置已加载
     if (!this.isLoaded) {

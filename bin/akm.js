@@ -193,5 +193,97 @@ program
     }
   });
 
+// Stats command
+program
+  .command('stats')
+  .description('显示供应商使用统计')
+  .argument('[provider]', '要查看统计的供应商名称（不指定则显示全部）')
+  .option('--codex', '仅显示 Codex CLI 供应商')
+  .option('--claude', '仅显示 Claude Code 供应商')
+  .option('-r, --recommend', '显示智能推荐')
+  .option('-s, --sort <type>', '排序方式: usage(使用次数), time(最近使用), name(名称)', 'usage')
+  .option('-l, --limit <number>', '推荐列表数量限制', '5')
+  .action(async (provider, options) => {
+    try {
+      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      const limit = parseInt(options.limit, 10);
+      await registry.executeCommand('stats', provider, {
+        filter,
+        recommend: options.recommend,
+        sort: options.sort,
+        limit
+      });
+    } catch (error) {
+      console.error(chalk.red('❌ 统计失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Health command
+program
+  .command('health')
+  .description('检查供应商配置健康状态')
+  .argument('[provider]', '要检查的供应商名称（不指定则检查全部）')
+  .option('--codex', '仅检查 Codex CLI 供应商')
+  .option('--claude', '仅检查 Claude Code 供应商')
+  .option('--no-connectivity', '跳过 API 连接性检查（加快速度）')
+  .action(async (provider, options) => {
+    try {
+      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      await registry.executeCommand('health', provider, {
+        filter,
+        connectivity: options.connectivity
+      });
+    } catch (error) {
+      console.error(chalk.red('❌ 健康检查失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Batch command
+program
+  .command('batch <operation>')
+  .description('批量操作供应商 (operations: update, delete)')
+  .option('--codex', '仅操作 Codex CLI 供应商')
+  .option('--claude', '仅操作 Claude Code 供应商')
+  .option('--unused', '仅操作长期未使用的供应商 (90天以上)')
+  .action(async (operation, options) => {
+    try {
+      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      await registry.executeCommand('batch', operation, {
+        filter,
+        unused: options.unused
+      });
+    } catch (error) {
+      console.error(chalk.red('❌ 批量操作失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Benchmark command
+program
+  .command('benchmark')
+  .description('供应商性能测试和对比')
+  .option('--codex', '仅测试 Codex CLI 供应商')
+  .option('--claude', '仅测试 Claude Code 供应商')
+  .option('-r, --rounds <number>', '每个供应商测试轮数', '3')
+  .option('-p, --parallel', '并行测试（更快但可能不准确）')
+  .option('--report [file]', '生成 Markdown 测试报告')
+  .action(async (options) => {
+    try {
+      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      const rounds = parseInt(options.rounds, 10);
+      await registry.executeCommand('benchmark', {
+        filter,
+        rounds,
+        parallel: options.parallel,
+        report: options.report
+      });
+    } catch (error) {
+      console.error(chalk.red('❌ 性能测试失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
 // Parse arguments
 program.parse();

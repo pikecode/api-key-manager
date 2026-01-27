@@ -91,4 +91,24 @@ registry.registerLazy('validate', async () => {
   return validateCommand;
 });
 
+registry.registerLazy('stats', async () => {
+  const { statsCommand } = require('./commands/stats');
+  return statsCommand;
+});
+
+registry.registerLazy('health', async () => {
+  const { healthCommand } = require('./commands/health');
+  return healthCommand;
+});
+
+registry.registerLazy('batch', async () => {
+  const { batchCommand } = require('./commands/batch');
+  return batchCommand;
+});
+
+registry.registerLazy('benchmark', async () => {
+  const { benchmarkCommand } = require('./commands/benchmark');
+  return benchmarkCommand;
+});
+
 module.exports = { CommandRegistry, registry };
