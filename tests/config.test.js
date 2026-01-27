@@ -10,7 +10,7 @@ describe('ConfigManager', () => {
     testConfigPath = './test-config.json';
     configManager = new ConfigManager();
     configManager.configPath = testConfigPath;
-    
+
     // 初始化配置
     await configManager.load();
   });
@@ -66,7 +66,7 @@ describe('ConfigManager', () => {
       });
 
       expect(result).toBe(true);
-      
+
       const config = await configManager.load();
       expect(config.providers.test).toBeDefined();
       expect(config.providers.test.name).toBe('test');
@@ -139,9 +139,9 @@ describe('ConfigManager', () => {
 
     test('should remove provider successfully', async () => {
       const result = await configManager.removeProvider('test');
-      
+
       expect(result).toBe(true);
-      
+
       const config = await configManager.load();
       expect(config.providers.test).toBeUndefined();
     });
@@ -159,7 +159,7 @@ describe('ConfigManager', () => {
         baseUrl: 'https://test1.com',
         authToken: 'test-token-1'
       });
-      
+
       await configManager.addProvider('test2', {
         displayName: 'Test Provider 2',
         baseUrl: 'https://test2.com',
@@ -169,7 +169,7 @@ describe('ConfigManager', () => {
 
     test('should return all providers', () => {
       const providers = configManager.listProviders();
-      
+
       expect(providers).toHaveLength(2);
       expect(providers[0].name).toBe('test1');
       expect(providers[1].name).toBe('test2');

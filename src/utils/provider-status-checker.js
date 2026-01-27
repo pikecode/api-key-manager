@@ -1,18 +1,37 @@
 const { Anthropic, APIConnectionTimeoutError, APIConnectionError, APIError } = require('@anthropic-ai/sdk');
+const { API_CONFIG, ENV_VARS } = require('../constants');
 
 let authTokenEnvLock = Promise.resolve();
 
 // 状态缓存
 const statusCache = new Map();
-const DEFAULT_CACHE_TTL = 30000; // 30秒缓存
 
+/**
+ * @typedef {Object} StatusResult
+ * @property {string} status - 状态 ('online', 'offline', 'degraded', 'pending', 'unknown')
+ * @property {string} message - 状态消息
+ * @property {number|null} responseTime - 响应时间（毫秒）
+ */
+
+/**
+ * 供应商状态检查器
+ * 检查 API 供应商的可用性和响应时间
+ */
 class ProviderStatusChecker {
+  /**
+   * 创建状态检查器实例
+   * @param {Object} [options={}] - 配置选项
+   * @param {number} [options.timeout] - 请求超时时间
+   * @param {string} [options.testMessage] - 测试消息
+   * @param {number} [options.maxTokens] - 最大 Token 数
+   * @param {number} [options.cacheTTL] - 缓存过期时间
+   */
   constructor(options = {}) {
-    this.timeout = options.timeout ?? 5000;
-    this.testMessage = options.testMessage ?? '你好';
-    this.maxTokens = options.maxTokens ?? 32;
-    this.defaultModel = 'claude-haiku-4-5-20251001';
-    this.cacheTTL = options.cacheTTL ?? DEFAULT_CACHE_TTL;
+    this.timeout = options.timeout ?? API_CONFIG.DEFAULT_TIMEOUT;
+    this.testMessage = options.testMessage ?? API_CONFIG.TEST_MESSAGE;
+    this.maxTokens = options.maxTokens ?? API_CONFIG.MAX_TOKENS;
+    this.defaultModel = API_CONFIG.DEFAULT_MODEL;
+    this.cacheTTL = options.cacheTTL ?? API_CONFIG.CACHE_TTL;
   }
 
   _getCacheKey(provider) {
@@ -50,15 +69,15 @@ class ProviderStatusChecker {
 
     await previous;
 
-    const original = process.env.ANTHROPIC_AUTH_TOKEN;
+    const original = process.env[ENV_VARS.ANTHROPIC_AUTH_TOKEN];
     try {
-      process.env.ANTHROPIC_AUTH_TOKEN = authToken;
+      process.env[ENV_VARS.ANTHROPIC_AUTH_TOKEN] = authToken;
       return await operation();
     } finally {
       if (original !== undefined) {
-        process.env.ANTHROPIC_AUTH_TOKEN = original;
+        process.env[ENV_VARS.ANTHROPIC_AUTH_TOKEN] = original;
       } else {
-        delete process.env.ANTHROPIC_AUTH_TOKEN;
+        delete process.env[ENV_VARS.ANTHROPIC_AUTH_TOKEN];
       }
       release();
     }

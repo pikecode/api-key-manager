@@ -1,10 +1,23 @@
+/**
+ * Backup Manager Command
+ * 配置备份和恢复管理
+ * @module commands/backup
+ */
+
 const fs = require('fs-extra');
 const path = require('path');
 const chalk = require('chalk');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 
+/**
+ * 备份管理器类
+ * 用于导出、导入和管理供应商配置备份
+ */
 class BackupManager {
+  /**
+   * 创建备份管理器实例
+   */
   constructor() {
     this.configManager = configManager;
   }
@@ -116,7 +129,7 @@ class BackupManager {
 
       await this.configManager.save();
 
-      Logger.success(`配置导入完成`);
+      Logger.success('配置导入完成');
       console.log(chalk.gray(`  导入文件: ${absolutePath}`));
       console.log(chalk.gray(`  成功导入: ${addedCount} 个供应商`));
       if (skippedCount > 0) {

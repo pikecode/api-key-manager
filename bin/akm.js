@@ -21,9 +21,11 @@ program.hook('preAction', async () => {
 // Default command - show provider selection
 program
   .argument('[provider]', '直接切换到指定供应商')
-  .action(async (provider) => {
+  .option('-q, --quick', '快速启动（使用默认或上次的启动参数）')
+  .option('--no-args', '以空参数启动（不使用任何启动参数）')
+  .action(async (provider, options) => {
     try {
-      await main(provider);
+      await main(provider, options);
     } catch (error) {
       console.error(chalk.red('❌ 执行失败:'), error.message);
       process.exit(1);
@@ -53,10 +55,16 @@ program
   .argument('[provider]', '直接切换到指定供应商')
   .option('--codex', '仅显示 Codex CLI 供应商')
   .option('--claude', '仅显示 Claude Code 供应商')
+  .option('-q, --quick', '快速启动（使用默认或上次的启动参数）')
+  .option('--no-args', '以空参数启动（不使用任何启动参数）')
   .action(async (provider, options) => {
     try {
       const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
-      await registry.executeCommand('switch', provider, { filter });
+      await registry.executeCommand('switch', provider, {
+        filter,
+        quick: options.quick,
+        noArgs: options.noArgs
+      });
     } catch (error) {
       console.error(chalk.red('❌ 切换失败:'), error.message);
       process.exit(1);
@@ -164,6 +172,23 @@ program
       await registry.executeCommand('backup', options);
     } catch (error) {
       console.error(chalk.red('❌ 备份操作失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
+// Validate command
+program
+  .command('validate')
+  .description('验证供应商配置的有效性')
+  .argument('[provider]', '要验证的供应商名称（不指定则验证全部）')
+  .option('--codex', '仅验证 Codex CLI 供应商')
+  .option('--claude', '仅验证 Claude Code 供应商')
+  .action(async (provider, options) => {
+    try {
+      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      await registry.executeCommand('validate', provider, { filter });
+    } catch (error) {
+      console.error(chalk.red('❌ 验证失败:'), error.message);
       process.exit(1);
     }
   });

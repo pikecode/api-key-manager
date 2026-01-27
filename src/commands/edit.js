@@ -1,3 +1,9 @@
+/**
+ * Provider Editor Command
+ * 编辑现有供应商配置
+ * @module commands/edit
+ */
+
 const inquirer = require('inquirer');
 const chalk = require('chalk');
 const { configManager } = require('../config');
@@ -5,13 +11,27 @@ const { validator } = require('../utils/validator');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
 const { BaseCommand } = require('./BaseCommand');
+const { AUTH_MODE_DISPLAY, TOKEN_TYPE_DISPLAY, IDE_NAMES } = require('../constants');
 
+/**
+ * 供应商编辑器类
+ * 用于交互式编辑现有的 API 供应商配置
+ * @extends BaseCommand
+ */
 class ProviderEditor extends BaseCommand {
+  /**
+   * 创建供应商编辑器实例
+   */
   constructor() {
     super();
     this.configManager = configManager;
   }
 
+  /**
+   * 执行交互式编辑供应商流程
+   * @param {string} [providerName] - 要编辑的供应商名称，如果不提供则让用户选择
+   * @returns {Promise<void>}
+   */
   async interactive(providerName) {
     await this.configManager.load();
     const providers = this.configManager.listProviders();
@@ -23,40 +43,40 @@ class ProviderEditor extends BaseCommand {
 
     let providerToEdit;
     if (providerName) {
-        providerToEdit = this.configManager.getProvider(providerName);
-        if (!providerToEdit) {
-            Logger.error(`供应商 '${providerName}' 不存在。`);
-            return;
-        }
+      providerToEdit = this.configManager.getProvider(providerName);
+      if (!providerToEdit) {
+        Logger.error(`供应商 '${providerName}' 不存在。`);
+        return;
+      }
     } else {
-        let selection;
-        try {
-          selection = await this.prompt([
-              {
-                  type: 'list',
-                  name: 'selectedProviderName',
-                  message: '请选择要编辑的供应商:',
-                  choices: [
-                      ...providers.map(p => ({ name: p.displayName || p.name, value: p.name })),
-                      new inquirer.Separator(),
-                      { name: '取消', value: null },
-                  ],
-              },
-          ]);
-        } catch (error) {
-          if (this.isEscCancelled(error)) {
-            return;
+      let selection;
+      try {
+        selection = await this.prompt([
+          {
+            type: 'list',
+            name: 'selectedProviderName',
+            message: '请选择要编辑的供应商:',
+            choices: [
+              ...providers.map(p => ({ name: p.displayName || p.name, value: p.name })),
+              new inquirer.Separator(),
+              { name: '取消', value: null }
+            ]
           }
-          throw error;
+        ]);
+      } catch (error) {
+        if (this.isEscCancelled(error)) {
+          return;
         }
+        throw error;
+      }
 
-        const { selectedProviderName } = selection;
+      const { selectedProviderName } = selection;
 
-        if (!selectedProviderName) {
-            Logger.info('操作已取消。');
-            return;
-        }
-        providerToEdit = this.configManager.getProvider(selectedProviderName);
+      if (!selectedProviderName) {
+        Logger.info('操作已取消。');
+        return;
+      }
+      providerToEdit = this.configManager.getProvider(selectedProviderName);
     }
 
     console.log(UIHelper.createTitle(`编辑供应商: ${providerToEdit.displayName}`, UIHelper.icons.edit));
@@ -81,7 +101,7 @@ class ProviderEditor extends BaseCommand {
             name: 'displayName',
             message: '供应商显示名称:',
             default: providerToEdit.displayName,
-            validate: (input) => validator.validateDisplayName(input) || true,
+            validate: (input) => validator.validateDisplayName(input) || true
           }
         ];
 
@@ -123,13 +143,13 @@ class ProviderEditor extends BaseCommand {
                 ...codexArgs.map(arg => ({
                   name: `${arg.label} (${arg.name})${arg.description ? ' - ' + arg.description : ''}`,
                   value: arg.name,
-                  checked: existingLaunchArgs.includes(arg.name),
+                  checked: existingLaunchArgs.includes(arg.name)
                 })),
                 ...customCodexArgs.map(arg => ({
                   name: `${arg} ${chalk.gray('(自定义参数)')}`,
                   value: arg,
-                  checked: true,
-                })),
+                  checked: true
+                }))
               ],
               validate: (selected) => {
                 const conflictError = checkExclusiveArgs(selected, codexArgs);
@@ -149,9 +169,9 @@ class ProviderEditor extends BaseCommand {
               choices: [
                 { name: '🔑 通用API密钥模式 - 支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN', value: 'api_key' },
                 { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商', value: 'auth_token' },
-                { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' },
+                { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' }
               ],
-              default: providerToEdit.authMode,
+              default: providerToEdit.authMode
             },
             {
               type: 'list',
@@ -180,23 +200,23 @@ class ProviderEditor extends BaseCommand {
                 }
                 return validator.validateUrl(input) || true;
               },
-              when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token',
+              when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token'
             },
             {
               type: 'input',
               name: 'authToken',
               message: (answers) => {
                 switch (answers.authMode) {
-                  case 'api_key':
-                    const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-                    return `Token (${tokenTypeLabel}):`;
-                  case 'auth_token': return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
-                  case 'oauth_token': return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
-                  default: return '认证令牌:';
+                case 'api_key':
+                  const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+                  return `Token (${tokenTypeLabel}):`;
+                case 'auth_token': return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
+                case 'oauth_token': return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
+                default: return '认证令牌:';
                 }
               },
               default: providerToEdit.authToken,
-              validate: (input) => validator.validateToken(input) || true,
+              validate: (input) => validator.validateToken(input) || true
             },
             {
               type: 'checkbox',
@@ -205,8 +225,8 @@ class ProviderEditor extends BaseCommand {
               choices: validator.getAvailableLaunchArgs().map(arg => ({
                 name: `${arg.label || arg.name} (${arg.name})${arg.description ? ' - ' + arg.description : ''}`,
                 value: arg.name,
-                checked: providerToEdit.launchArgs && providerToEdit.launchArgs.includes(arg.name),
-              })),
+                checked: providerToEdit.launchArgs && providerToEdit.launchArgs.includes(arg.name)
+              }))
             }
           );
         }
@@ -262,7 +282,7 @@ class ProviderEditor extends BaseCommand {
           // Retain original model settings unless we add editing for them
           primaryModel: existingProvider.models?.primary || null,
           smallFastModel: existingProvider.models?.smallFast || null,
-          setAsDefault: false, // Don't change default status on edit
+          setAsDefault: false // Don't change default status on edit
         });
       }
 

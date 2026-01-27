@@ -1,3 +1,9 @@
+/**
+ * Config Opener Utility
+ * 使用默认应用打开配置文件
+ * @module utils/config-opener
+ */
+
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
@@ -5,10 +11,19 @@ const { spawn } = require('child_process');
 
 const AKM_CONFIG_FILE = path.join(os.homedir(), '.akm-config.json');
 
+/**
+ * 检查配置文件是否存在
+ * @returns {Promise<boolean>} 文件是否存在
+ */
 function ensureConfigExists() {
   return fs.pathExists(AKM_CONFIG_FILE);
 }
 
+/**
+ * 使用系统默认应用打开文件
+ * @param {string} filePath - 文件路径
+ * @returns {Promise<void>}
+ */
 function openFileWithDefaultApp(filePath) {
   return new Promise((resolve, reject) => {
     let command;

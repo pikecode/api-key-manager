@@ -1,8 +1,19 @@
+/**
+ * Inquirer Setup Utility
+ * 自定义 Inquirer.js 提示样式和本地化
+ * @module utils/inquirer-setup
+ */
+
 const inquirer = require('inquirer');
 const CheckboxPrompt = require('inquirer/lib/prompts/checkbox');
 const chalk = require('chalk');
 const figures = require('figures');
 
+/**
+ * 本地化复选框提示类
+ * 扩展 Inquirer 的 CheckboxPrompt，添加中文提示和自定义样式
+ * @extends CheckboxPrompt
+ */
 class LocalizedCheckboxPrompt extends CheckboxPrompt {
   render(error) {
     let message = this.getQuestion();

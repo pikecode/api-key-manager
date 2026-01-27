@@ -57,17 +57,38 @@ if (InputPrompt && !InputPrompt.prototype.__allowEmptyPatched) {
 
 const ESC_CANCELLED_ERROR_CODE = 'ESC_CANCELLED';
 
+/**
+ * 命令基类
+ * 提供所有命令的通用功能，包括 ESC 键处理、提示交互等
+ */
 class BaseCommand {
+  /**
+   * 创建命令实例
+   * @param {Object} [options={}] - 配置选项
+   * @param {NodeJS.ReadStream} [options.input] - 输入流
+   */
   constructor(options = {}) {
     const input = options.input || process.stdin;
+    /** @type {EscNavigationManager} ESC 键管理器 */
     this.escManager = new EscNavigationManager(input);
+    /** @type {Object|null} 当前活动的提示 */
     this.activePrompt = null;
   }
 
+  /**
+   * 检查错误是否为 ESC 取消错误
+   * @param {Error} error - 错误对象
+   * @returns {boolean} 是否为 ESC 取消
+   */
   isEscCancelled(error) {
     return Boolean(error && error.code === ESC_CANCELLED_ERROR_CODE);
   }
 
+  /**
+   * 显示交互式提示
+   * @param {Array|Object} questions - Inquirer 问题配置
+   * @returns {Promise<Object>} 用户答案
+   */
   async prompt(questions) {
     const promptPromise = inquirer.prompt(questions);
     let settled = false;
@@ -201,6 +222,52 @@ class BaseCommand {
       await this.handleError(error, context);
     } finally {
       this.cleanupAllListeners();
+    }
+  }
+
+  /**
+   * 带 ESC 监听的 prompt 执行
+   * 自动处理 ESC 监听器的创建、移除和错误处理
+   * @param {Array} questions - inquirer 问卷配置
+   * @param {string} escMessage - ESC 返回信息
+   * @param {Function} escCallback - ESC 按下时的回调函数
+   * @returns {Promise<Object>} - prompt 答案
+   */
+  async promptWithESC(questions, escMessage, escCallback) {
+    const escListener = this.createESCListener(escCallback, escMessage);
+    try {
+      return await this.prompt(questions);
+    } catch (error) {
+      if (this.isEscCancelled(error)) {
+        this.removeESCListener(escListener);
+        throw error;
+      }
+      throw error;
+    } finally {
+      this.removeESCListener(escListener);
+    }
+  }
+
+  /**
+   * 带 ESC 监听的 prompt 执行，支持返回默认值
+   * @param {Array} questions - inquirer 问卷配置
+   * @param {string} escMessage - ESC 返回信息
+   * @param {Function} escCallback - ESC 按下时的回调函数
+   * @param {*} escReturnValue - ESC 按下时返回的值
+   * @returns {Promise<Object|*>} - prompt 答案或 escReturnValue
+   */
+  async promptWithESCAndDefault(questions, escMessage, escCallback, escReturnValue) {
+    const escListener = this.createESCListener(escCallback, escMessage);
+    try {
+      return await this.prompt(questions);
+    } catch (error) {
+      if (this.isEscCancelled(error)) {
+        this.removeESCListener(escListener);
+        return escReturnValue;
+      }
+      throw error;
+    } finally {
+      this.removeESCListener(escListener);
     }
   }
 

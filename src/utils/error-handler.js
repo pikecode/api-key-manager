@@ -4,32 +4,32 @@ const { Logger } = require('./logger');
 class ErrorHandler {
   static handle(error, context = '') {
     const contextStr = context ? `[${context}] ` : '';
-    
+
     switch (error.type) {
-      case 'CONFIG_NOT_FOUND':
-        Logger.error(`${contextStr}配置文件不存在，请先添加供应商`);
-        break;
-      case 'PROVIDER_NOT_FOUND':
-        Logger.error(`${contextStr}指定的供应商不存在`);
-        break;
-      case 'INVALID_TOKEN':
-        Logger.error(`${contextStr}Token格式无效`);
-        break;
-      case 'INVALID_URL':
-        Logger.error(`${contextStr}URL格式无效`);
-        break;
-      case 'INVALID_NAME':
-        Logger.error(`${contextStr}供应商名称格式无效`);
-        break;
-      case 'FILE_PERMISSION':
-        Logger.error(`${contextStr}文件权限不足`);
-        break;
-      case 'NETWORK_ERROR':
-        Logger.error(`${contextStr}网络连接错误`);
-        break;
-      default:
-        Logger.error(`${contextStr}${error.message || '未知错误'}`);
-        break;
+    case 'CONFIG_NOT_FOUND':
+      Logger.error(`${contextStr}配置文件不存在，请先添加供应商`);
+      break;
+    case 'PROVIDER_NOT_FOUND':
+      Logger.error(`${contextStr}指定的供应商不存在`);
+      break;
+    case 'INVALID_TOKEN':
+      Logger.error(`${contextStr}Token格式无效`);
+      break;
+    case 'INVALID_URL':
+      Logger.error(`${contextStr}URL格式无效`);
+      break;
+    case 'INVALID_NAME':
+      Logger.error(`${contextStr}供应商名称格式无效`);
+      break;
+    case 'FILE_PERMISSION':
+      Logger.error(`${contextStr}文件权限不足`);
+      break;
+    case 'NETWORK_ERROR':
+      Logger.error(`${contextStr}网络连接错误`);
+      break;
+    default:
+      Logger.error(`${contextStr}${error.message || '未知错误'}`);
+      break;
     }
   }
 

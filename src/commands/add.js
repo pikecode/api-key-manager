@@ -1,19 +1,43 @@
+/**
+ * Provider Adder Command
+ * 添加新供应商的交互式命令
+ * @module commands/add
+ */
+
 const inquirer = require('inquirer');
 const chalk = require('chalk');
 const { configManager } = require('../config');
 const { validator } = require('../utils/validator');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
-const { maskToken } = require('../utils/secrets');
 const { BaseCommand } = require('./BaseCommand');
+const {
+  AUTH_MODE_DISPLAY_DETAILED,
+  TOKEN_TYPE_DISPLAY,
+  IDE_NAMES
+} = require('../constants');
 
+/**
+ * 供应商添加器类
+ * 用于交互式添加新的 API 供应商配置
+ * @extends BaseCommand
+ */
 class ProviderAdder extends BaseCommand {
+  /**
+   * 创建供应商添加器实例
+   * @param {Object} options - 配置选项
+   * @param {string} [options.ideName] - 预设的 IDE 名称（claude-code 或 codex）
+   */
   constructor(options = {}) {
     super();
     this.configManager = configManager;
     this.presetIdeName = options.ideName || null;
   }
 
+  /**
+   * 执行交互式添加供应商流程
+   * @returns {Promise<void>}
+   */
   async interactive() {
     console.log(UIHelper.createTitle('添加新供应商', UIHelper.icons.add));
     console.log();
@@ -26,18 +50,10 @@ class ProviderAdder extends BaseCommand {
       ['ESC', '取消添加']
     ]));
     console.log();
-    
-    // 设置 ESC 键监听
-    const escListener = this.createESCListener(() => {
-      Logger.info('取消添加供应商');
-      // 使用CommandRegistry避免循环引用
-      const { registry } = require('../CommandRegistry');
-      registry.executeCommand('switch');
-    }, '取消添加');
 
     try {
       // 首先选择是否使用预设配置
-      const typeAnswer = await this.prompt([
+      const typeAnswer = await this.promptWithESC([
         {
           type: 'list',
           name: 'providerType',
@@ -48,10 +64,12 @@ class ProviderAdder extends BaseCommand {
           ],
           default: 'custom'
         }
-      ]);
-
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
+      ], '取消添加', () => {
+        Logger.info('取消添加供应商');
+        // 使用CommandRegistry避免循环引用
+        const { registry } = require('../CommandRegistry');
+        registry.executeCommand('switch');
+      });
 
       if (typeAnswer.providerType === 'official_oauth') {
         return await this.addOfficialOAuthProvider();
@@ -59,8 +77,6 @@ class ProviderAdder extends BaseCommand {
         return await this.addCustomProvider();
       }
     } catch (error) {
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
       if (this.isEscCancelled(error)) {
         return;
       }
@@ -80,17 +96,9 @@ class ProviderAdder extends BaseCommand {
       ['ESC', '取消添加']
     ]));
     console.log();
-    
-    // 设置 ESC 键监听
-    const escListener = this.createESCListener(() => {
-      Logger.info('取消添加供应商');
-      // 使用CommandRegistry避免循环引用
-      const { registry } = require('../CommandRegistry');
-      registry.executeCommand('switch');
-    }, '取消添加');
 
     try {
-      const answers = await this.prompt([
+      const answers = await this.promptWithESC([
         {
           type: 'input',
           name: 'name',
@@ -132,11 +140,13 @@ class ProviderAdder extends BaseCommand {
           message: '是否设置为当前供应商?',
           default: true
         }
-      ]);
+      ], '取消添加', () => {
+        Logger.info('取消添加供应商');
+        // 使用CommandRegistry避免循环引用
+        const { registry } = require('../CommandRegistry');
+        registry.executeCommand('switch');
+      });
 
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
-      
       // 使用官方 OAuth 配置
       await this.saveProvider({
         ...answers,
@@ -144,8 +154,6 @@ class ProviderAdder extends BaseCommand {
         baseUrl: null // OAuth 模式不需要 baseUrl
       });
     } catch (error) {
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
       if (this.isEscCancelled(error)) {
         return;
       }
@@ -166,16 +174,8 @@ class ProviderAdder extends BaseCommand {
     ]));
     console.log();
 
-    // 设置 ESC 键监听
-    const escListener = this.createESCListener(() => {
-      Logger.info('取消添加供应商');
-      // 使用CommandRegistry避免循环引用
-      const { registry } = require('../CommandRegistry');
-      registry.executeCommand('switch');
-    }, '取消添加');
-
     try {
-      const answers = await this.prompt([
+      const answers = await this.promptWithESC([
         {
           type: 'list',
           name: 'ideName',
@@ -214,6 +214,17 @@ class ProviderAdder extends BaseCommand {
           message: '请输入供应商显示名称 (可选，默认为供应商名称):',
           validate: (input) => {
             const error = validator.validateDisplayName(input);
+            if (error) return error;
+            return true;
+          }
+        },
+        {
+          type: 'input',
+          name: 'alias',
+          message: '请输入供应商别名 (可选，用于快速切换):',
+          validate: (input) => {
+            if (!input) return true; // 别名是可选的
+            const error = validator.validateName(input);
             if (error) return error;
             return true;
           }
@@ -270,15 +281,15 @@ class ProviderAdder extends BaseCommand {
           name: 'authToken',
           message: (answers) => {
             switch (answers.authMode) {
-              case 'api_key':
-                const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-                return `请输入Token (${tokenTypeLabel}):`;
-              case 'auth_token':
-                return '请输入认证令牌 (ANTHROPIC_AUTH_TOKEN):';
-              case 'oauth_token':
-                return '请输入OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
-              default:
-                return '请输入认证令牌:';
+            case 'api_key':
+              const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+              return `请输入Token (${tokenTypeLabel}):`;
+            case 'auth_token':
+              return '请输入认证令牌 (ANTHROPIC_AUTH_TOKEN):';
+            case 'oauth_token':
+              return '请输入OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
+            default:
+              return '请输入认证令牌:';
             }
           },
           validate: (input) => {
@@ -340,10 +351,12 @@ class ProviderAdder extends BaseCommand {
           default: false,
           when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex'
         }
-      ]);
-
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
+      ], '取消添加', () => {
+        Logger.info('取消添加供应商');
+        // 使用CommandRegistry避免循环引用
+        const { registry } = require('../CommandRegistry');
+        registry.executeCommand('switch');
+      });
 
       // 如果是预设的 ideName，设置到 answers 中
       if (!answers.ideName && this.presetIdeName) {
@@ -390,8 +403,6 @@ class ProviderAdder extends BaseCommand {
 
       await this.saveProvider(answers);
     } catch (error) {
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
       if (this.isEscCancelled(error)) {
         return;
       }
@@ -448,26 +459,22 @@ class ProviderAdder extends BaseCommand {
   }
 
   async confirmOverwrite(name) {
-    const escListener = this.createESCListener(() => {
-      Logger.info('取消覆盖供应商');
-      const { switchCommand } = require('./switch');
-      switchCommand();
-    }, '取消覆盖');
-
     try {
-      const { overwrite } = await this.prompt([
+      const { overwrite } = await this.promptWithESC([
         {
           type: 'confirm',
           name: 'overwrite',
           message: `供应商 '${name}' 已存在，是否覆盖?`,
           default: false
         }
-      ]);
+      ], '取消覆盖', () => {
+        Logger.info('取消覆盖供应商');
+        const { switchCommand } = require('./switch');
+        switchCommand();
+      });
 
-      this.removeESCListener(escListener);
       return overwrite;
     } catch (error) {
-      this.removeESCListener(escListener);
       throw error;
     }
   }
@@ -487,33 +494,22 @@ class ProviderAdder extends BaseCommand {
     ]));
     console.log();
 
-    const escListener = this.createESCListener(() => {
-      Logger.info('跳过启动参数配置');
-    }, '跳过配置');
-
-    try {
-      const { launchArgs } = await this.prompt([
-        {
-          type: 'checkbox',
-          name: 'launchArgs',
-          message: '请选择启动参数:',
-          choices: validator.getAvailableLaunchArgs().map(arg => ({
-            name: `${arg.name} - ${arg.description}`,
-            value: arg.name,
-            checked: false
-          }))
-        }
-      ]);
-
-      this.removeESCListener(escListener);
-      return launchArgs;
-    } catch (error) {
-      this.removeESCListener(escListener);
-      if (this.isEscCancelled(error)) {
-        return [];
+    const result = await this.promptWithESCAndDefault([
+      {
+        type: 'checkbox',
+        name: 'launchArgs',
+        message: '请选择启动参数:',
+        choices: validator.getAvailableLaunchArgs().map(arg => ({
+          name: `${arg.name} - ${arg.description}`,
+          value: arg.name,
+          checked: false
+        }))
       }
-      throw error;
-    }
+    ], '跳过配置', () => {
+      Logger.info('跳过启动参数配置');
+    }, { launchArgs: [] });
+
+    return result.launchArgs;
   }
 
   async promptModelConfiguration() {
@@ -528,48 +524,37 @@ class ProviderAdder extends BaseCommand {
     ]));
     console.log();
 
-    const escListener = this.createESCListener(() => {
-      Logger.info('跳过模型参数配置');
-    }, '跳过配置');
-
-    try {
-      const responses = await this.prompt([
-        {
-          type: 'input',
-          name: 'primaryModel',
-          message: '主模型 (ANTHROPIC_MODEL)：',
-          default: '',
-          validate: (input) => {
-            const error = validator.validateModel(input);
-            if (error) return error;
-            return true;
-          }
-        },
-        {
-          type: 'input',
-          name: 'smallFastModel',
-          message: '快速模型 (ANTHROPIC_SMALL_FAST_MODEL)：',
-          default: '',
-          validate: (input) => {
-            const error = validator.validateModel(input);
-            if (error) return error;
-            return true;
-          }
+    const responses = await this.promptWithESCAndDefault([
+      {
+        type: 'input',
+        name: 'primaryModel',
+        message: '主模型 (ANTHROPIC_MODEL)：',
+        default: '',
+        validate: (input) => {
+          const error = validator.validateModel(input);
+          if (error) return error;
+          return true;
         }
-      ]);
-
-      this.removeESCListener(escListener);
-      return {
-        primaryModel: responses.primaryModel,
-        smallFastModel: responses.smallFastModel
-      };
-    } catch (error) {
-      this.removeESCListener(escListener);
-      if (this.isEscCancelled(error)) {
-        return { primaryModel: null, smallFastModel: null };
+      },
+      {
+        type: 'input',
+        name: 'smallFastModel',
+        message: '快速模型 (ANTHROPIC_SMALL_FAST_MODEL)：',
+        default: '',
+        validate: (input) => {
+          const error = validator.validateModel(input);
+          if (error) return error;
+          return true;
+        }
       }
-      throw error;
-    }
+    ], '跳过配置', () => {
+      Logger.info('跳过模型参数配置');
+    }, { primaryModel: null, smallFastModel: null });
+
+    return {
+      primaryModel: responses.primaryModel,
+      smallFastModel: responses.smallFastModel
+    };
   }
 
   async importCodexConfig() {
@@ -627,15 +612,11 @@ class ProviderAdder extends BaseCommand {
     ]));
     console.log();
 
-    const escListener = this.createESCListener(() => {
-      Logger.info('跳过 Codex 启动参数配置');
-    }, '跳过配置');
-
     try {
       const { getCodexLaunchArgs, checkExclusiveArgs } = require('../utils/launch-args');
       const codexArgs = getCodexLaunchArgs();
 
-      const { launchArgs } = await this.prompt([
+      const result = await this.promptWithESCAndDefault([
         {
           type: 'checkbox',
           name: 'launchArgs',
@@ -646,9 +627,11 @@ class ProviderAdder extends BaseCommand {
             checked: arg.checked
           }))
         }
-      ]);
+      ], '跳过配置', () => {
+        Logger.info('跳过 Codex 启动参数配置');
+      }, { launchArgs: [] });
 
-      this.removeESCListener(escListener);
+      const { launchArgs } = result;
 
       const conflictError = checkExclusiveArgs(launchArgs, codexArgs);
       if (conflictError) {
@@ -657,10 +640,6 @@ class ProviderAdder extends BaseCommand {
       }
       return launchArgs;
     } catch (error) {
-      this.removeESCListener(escListener);
-      if (this.isEscCancelled(error)) {
-        return [];
-      }
       throw error;
     }
   }
@@ -679,7 +658,7 @@ class ProviderAdder extends BaseCommand {
         console.log(chalk.gray(`  OPENAI_BASE_URL: ${answers.baseUrl}`));
       }
       if (answers.authToken) {
-        console.log(chalk.gray(`  OPENAI_API_KEY: ${maskToken(answers.authToken)}`));
+        console.log(chalk.gray(`  OPENAI_API_KEY: ${answers.authToken}`));
       }
       if (answers.launchArgs && answers.launchArgs.length > 0) {
         console.log(chalk.gray(`  启动参数: ${answers.launchArgs.join(' ')}`));
@@ -688,24 +667,18 @@ class ProviderAdder extends BaseCommand {
       return;
     }
 
-    const authModeDisplay = {
-      api_key: '通用API密钥模式',
-      auth_token: '认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN)',
-      oauth_token: 'OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN)'
-    };
-
-    console.log(chalk.gray(`  认证模式: ${authModeDisplay[answers.authMode] || answers.authMode}`));
+    console.log(chalk.gray(`  认证模式: ${AUTH_MODE_DISPLAY_DETAILED[answers.authMode] || answers.authMode}`));
 
     // 如果是 api_key 模式，显示 tokenType
     if (answers.authMode === 'api_key' && answers.tokenType) {
-      const tokenTypeDisplay = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+      const tokenTypeDisplay = TOKEN_TYPE_DISPLAY[answers.tokenType];
       console.log(chalk.gray(`  Token类型: ${tokenTypeDisplay}`));
     }
 
     if (answers.baseUrl) {
       console.log(chalk.gray(`  基础URL: ${answers.baseUrl}`));
     }
-    console.log(chalk.gray(`  Token: ${maskToken(answers.authToken)}`));
+    console.log(chalk.gray(`  Token: ${answers.authToken}`));
 
     if (launchArgs.length > 0) {
       console.log(chalk.gray(`  启动参数: ${launchArgs.join(' ')}`));

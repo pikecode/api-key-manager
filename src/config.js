@@ -3,15 +3,54 @@ const path = require('path');
 const os = require('os');
 const chalk = require('chalk');
 
+/**
+ * @typedef {Object} ProviderConfig
+ * @property {string} name - 供应商名称
+ * @property {string} displayName - 显示名称
+ * @property {string} ideName - IDE 名称 ('claude' 或 'codex')
+ * @property {string} authMode - 认证模式
+ * @property {string} authToken - 认证令牌
+ * @property {string|null} baseUrl - API 基础 URL
+ * @property {string|null} tokenType - Token 类型
+ * @property {Object|null} models - 模型配置
+ * @property {string[]} launchArgs - 启动参数
+ * @property {boolean} current - 是否为当前供应商
+ * @property {number} usageCount - 使用次数
+ * @property {string} lastUsed - 最后使用时间
+ * @property {string} createdAt - 创建时间
+ */
+
+/**
+ * @typedef {Object} Config
+ * @property {string} version - 配置版本
+ * @property {string|null} currentProvider - 当前供应商名称
+ * @property {Object.<string, ProviderConfig>} providers - 供应商配置对象
+ */
+
+/**
+ * 配置管理器
+ * 管理 API 供应商配置的加载、保存和操作
+ */
 class ConfigManager {
   constructor() {
+    /** @type {string} 配置文件路径 */
     this.configPath = path.join(os.homedir(), '.akm-config.json');
-    this.config = null; // 延迟加载
+    /** @type {Config|null} 配置数据 */
+    this.config = null;
+    /** @type {boolean} 是否已加载 */
     this.isLoaded = false;
+    /** @type {Date|null} 最后修改时间 */
     this.lastModified = null;
-    this.loadPromise = null; // 防止并发加载
+    /** @type {Promise<Config>|null} 加载 Promise，防止并发加载 */
+    this.loadPromise = null;
   }
 
+  /**
+   * 标准化可选字符串值
+   * @private
+   * @param {*} value - 输入值
+   * @returns {string|null} 标准化后的值
+   */
   _normalizeOptionalString(value) {
     if (value === null || value === undefined) {
       return null;
@@ -23,6 +62,10 @@ class ConfigManager {
     return trimmed.length === 0 ? null : trimmed;
   }
 
+  /**
+   * 获取默认配置
+   * @returns {Config} 默认配置对象
+   */
   getDefaultConfig() {
     return {
       version: '1.0.0',
@@ -31,6 +74,11 @@ class ConfigManager {
     };
   }
 
+  /**
+   * 加载配置文件
+   * @param {boolean} [forceReload=false] - 是否强制重新加载
+   * @returns {Promise<Config>} 配置对象
+   */
   async load(forceReload = false) {
     // 如果正在加载，等待当前加载完成
     if (this.loadPromise) {
@@ -248,14 +296,21 @@ class ConfigManager {
       ? providerConfig.launchArgs
       : (existing?.launchArgs || []);
 
+    // 处理别名
+    const alias = providerConfig.alias !== undefined
+      ? this._normalizeOptionalString(providerConfig.alias)
+      : (existing?.alias || null);
+
     // 基础字段
     this.config.providers[name] = {
       name,
       displayName: providerConfig.displayName || existing?.displayName || name,
+      alias,
       ideName,
       baseUrl,
       authToken,
       launchArgs,
+      lastUsedArgs: existing?.lastUsedArgs || null,
       createdAt: existing?.createdAt || now,
       lastUsed: existing?.lastUsed || now,
       usageCount: existing?.usageCount || 0,
@@ -338,12 +393,59 @@ class ConfigManager {
     return await this.save();
   }
 
+  /**
+   * 更新供应商的上次使用启动参数
+   * @param {string} name - 供应商名称
+   * @param {string[]} args - 启动参数数组
+   * @returns {Promise<void>}
+   */
+  async updateLastUsedArgs(name, args) {
+    await this.ensureLoaded();
+
+    if (!this.config.providers[name]) {
+      throw new Error(`供应商 '${name}' 不存在`);
+    }
+
+    // 更新上次使用的启动参数
+    this.config.providers[name].lastUsedArgs = args;
+    this.config.providers[name].lastUsed = new Date().toISOString();
+
+    // 增加使用次数
+    this.config.providers[name].usageCount = (this.config.providers[name].usageCount || 0) + 1;
+
+    return await this.save();
+  }
+
   getProvider(name) {
     // 同步方法，但需要先确保配置已加载
     if (!this.isLoaded) {
       throw new Error('配置未加载，请先调用 load() 方法');
     }
     return this.config.providers[name];
+  }
+
+  /**
+   * 通过名称或别名获取供应商
+   * @param {string} nameOrAlias - 供应商名称或别名
+   * @returns {ProviderConfig|null} 供应商配置对象，未找到返回 null
+   */
+  getProviderByNameOrAlias(nameOrAlias) {
+    // 同步方法，但需要先确保配置已加载
+    if (!this.isLoaded) {
+      throw new Error('配置未加载，请先调用 load() 方法');
+    }
+
+    // 先尝试按名称查找
+    if (this.config.providers[nameOrAlias]) {
+      return this.config.providers[nameOrAlias];
+    }
+
+    // 再尝试按别名查找
+    const providerEntry = Object.entries(this.config.providers).find(
+      ([_, provider]) => provider.alias && provider.alias.toLowerCase() === nameOrAlias.toLowerCase()
+    );
+
+    return providerEntry ? providerEntry[1] : null;
   }
 
   listProviders() {

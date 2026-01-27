@@ -1,18 +1,40 @@
+/**
+ * Provider Lister Command
+ * 列出和显示所有配置的供应商
+ * @module commands/list
+ */
+
 const chalk = require('chalk');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
 const { maybeMaskToken } = require('../utils/secrets');
+const { AUTH_MODE_DISPLAY, TOKEN_TYPE_DISPLAY, BASE_URL } = require('../constants');
 
+/**
+ * 供应商列表显示类
+ * 用于列出、过滤和显示所有配置的 API 供应商
+ */
 class ProviderLister {
+  /**
+   * 创建供应商列表显示器实例
+   */
   constructor() {
     this.configManager = configManager;
     this.statusChecker = new ProviderStatusChecker();
   }
 
+  /**
+   * 列出供应商配置
+   * @param {string|null} filter - 过滤器 ('codex', 'claude', 或 null 表示全部)
+   * @param {Object} options - 显示选项
+   * @param {boolean} [options.showToken=true] - 是否显示完整 token
+   * @returns {Promise<void>}
+   */
   async list(filter = null, options = {}) {
     try {
-      const showToken = Boolean(options.showToken);
+      // 默认显示完整 token，不再加密
+      const showToken = options.showToken !== false;
       await this.configManager.ensureLoaded();
       let providers = this.configManager.listProviders();
       const currentProvider = this.configManager.getCurrentProvider();
@@ -54,7 +76,9 @@ class ProviderLister {
           ? chalk.cyan('[Codex]')
           : chalk.magenta('[Claude]');
 
-        console.log(`${status} ${availabilityIcon} ${ideTag} ${nameColor(provider.name)} (${provider.displayName}) - ${availabilityText}`);
+        // 如果有别名，显示别名
+        const aliasText = provider.alias ? chalk.yellow(` [别名: ${provider.alias}]`) : '';
+        console.log(`${status} ${availabilityIcon} ${ideTag} ${nameColor(provider.name)} (${provider.displayName})${aliasText} - ${availabilityText}`);
 
         if (provider.ideName === 'codex') {
           console.log(chalk.gray('   IDE: Codex CLI'));
@@ -66,12 +90,7 @@ class ProviderLister {
           }
         } else {
           // 显示认证模式
-          const authModeDisplay = {
-            api_key: '通用API密钥模式',
-            auth_token: '认证令牌模式',
-            oauth_token: 'OAuth令牌模式'
-          };
-          console.log(chalk.gray(`   认证模式: ${authModeDisplay[provider.authMode] || provider.authMode}`));
+          console.log(chalk.gray(`   认证模式: ${AUTH_MODE_DISPLAY[provider.authMode] || provider.authMode}`));
 
           // 根据不同模式显示对应的环境变量名称
           if (provider.authMode === 'oauth_token') {
@@ -88,7 +107,7 @@ class ProviderLister {
               console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
             }
             if (provider.authToken) {
-              const tokenEnvName = provider.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+              const tokenEnvName = TOKEN_TYPE_DISPLAY[provider.tokenType] || 'ANTHROPIC_API_KEY';
               console.log(chalk.gray(`   ${tokenEnvName}: ${maybeMaskToken(provider.authToken, showToken)}`));
             }
           } else {
@@ -118,7 +137,7 @@ class ProviderLister {
       });
 
       console.log(chalk.gray('═'.repeat(60)));
-      
+
       if (currentProvider) {
         console.log(chalk.green(`\n当前供应商: ${currentProvider.displayName}`));
       } else {
@@ -126,7 +145,7 @@ class ProviderLister {
       }
 
       console.log(chalk.blue(`\n总计: ${providers.length} 个供应商`));
-      
+
     } catch (error) {
       Logger.error(`获取供应商列表失败: ${error.message}`);
       throw error;

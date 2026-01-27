@@ -62,7 +62,7 @@ describe('Edit Provider IDE Type', () => {
       };
 
       // Try to incorrectly change to claude
-      let edited = { ...codexProvider, ideName: 'claude' };
+      const edited = { ...codexProvider, ideName: 'claude' };
 
       // Enforce preservation logic
       edited.ideName = codexProvider.ideName === 'codex' ? 'codex' : 'claude';

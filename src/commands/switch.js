@@ -1,3 +1,9 @@
+/**
+ * Environment Switcher Command
+ * 供应商切换和管理的主命令
+ * @module commands/switch
+ */
+
 const path = require('path');
 const inquirer = require('inquirer');
 const chalk = require('chalk');
@@ -11,8 +17,15 @@ const { findSettingsConflict, backupSettingsFile, clearConflictKeys, saveSetting
 const { BaseCommand } = require('./BaseCommand');
 const { validator } = require('../utils/validator');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
-const { maskToken } = require('../utils/secrets');
+const { AUTH_MODE_DISPLAY, TOKEN_TYPE_DISPLAY, BASE_URL } = require('../constants');
+const { LaunchArgsHelper } = require('./switch/launch-args-helper');
+const { StatusHelper } = require('./switch/status-helper');
 
+/**
+ * 环境切换器类
+ * 提供交互式界面用于选择、切换、管理和启动 API 供应商
+ * @extends BaseCommand
+ */
 class EnvSwitcher extends BaseCommand {
   constructor() {
     super();
@@ -27,10 +40,17 @@ class EnvSwitcher extends BaseCommand {
 
   async validateProvider(providerName) {
     await this.configManager.load();
-    const provider = this.configManager.getProvider(providerName);
+    
+    // 先尝试按名称查找，再尝试按别名查找
+    let provider = this.configManager.getProvider(providerName);
+    if (!provider) {
+      provider = this.configManager.getProviderByNameOrAlias(providerName);
+    }
+    
     if (!provider) {
       throw new Error(`供应商 '${providerName}' 不存在\n使用 'akm list' 查看所有已配置的供应商`);
     }
+    
     return provider;
   }
 
@@ -40,7 +60,12 @@ class EnvSwitcher extends BaseCommand {
       const provider = await this.validateProvider(providerName);
       const isCodex = provider.ideName === 'codex';
       const availableArgs = isCodex ? this.getCodexLaunchArgs() : this.getAvailableLaunchArgs();
-      const defaultLaunchArgs = Array.isArray(provider.launchArgs) ? provider.launchArgs : [];
+
+      // 优先使用上次使用的参数，如果没有则使用默认的 launchArgs
+      const defaultLaunchArgs = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0
+        ? provider.lastUsedArgs
+        : (Array.isArray(provider.launchArgs) ? provider.launchArgs : []);
+
       const knownArgNames = new Set(availableArgs.map(arg => arg.name));
       const customLaunchArgs = defaultLaunchArgs
         .filter(arg => typeof arg === 'string' && !knownArgNames.has(arg));
@@ -57,7 +82,14 @@ class EnvSwitcher extends BaseCommand {
         }))
       ];
       const ideDisplayName = isCodex ? 'Codex CLI' : 'Claude Code';
-      
+
+      // 显示提示：是否使用上次的参数
+      const isUsingLastUsed = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0;
+      if (isUsingLastUsed) {
+        console.log(UIHelper.colors.muted('💡 正在使用上次的启动参数'));
+        console.log();
+      }
+
       console.log(UIHelper.createTitle('启动配置', UIHelper.icons.launch));
       console.log();
       console.log(UIHelper.createCard('供应商', UIHelper.formatProvider(provider), UIHelper.icons.info));
@@ -70,13 +102,13 @@ class EnvSwitcher extends BaseCommand {
         ['ESC', '返回供应商选择']
       ]));
       console.log();
-      
+
       // 设置 ESC 键监听
       const escListener = this.createESCListener(() => {
         Logger.info('返回供应商选择');
         this.showProviderSelection();
       }, '返回供应商选择');
-      
+
       // 显示启动参数选择界面
       const choices = [
         {
@@ -108,7 +140,7 @@ class EnvSwitcher extends BaseCommand {
         }
         throw error;
       }
-      
+
       this.removeESCListener(escListener);
 
       // 检查互斥参数
@@ -118,9 +150,12 @@ class EnvSwitcher extends BaseCommand {
         return await this.showLaunchArgsSelection(providerName);
       }
 
+      // 保存上次使用的启动参数
+      await this.configManager.updateLastUsedArgs(providerName, answers.selectedArgs);
+
       // 选择参数后直接启动
       await this.launchProvider(provider, answers.selectedArgs);
-      
+
     } catch (error) {
       await this.handleError(error, '选择启动参数');
     }
@@ -282,6 +317,64 @@ class EnvSwitcher extends BaseCommand {
     }
   }
 
+  /**
+   * 快速启动供应商（跳过参数选择）
+   * @param {string} providerName - 供应商名称
+   * @param {Object} options - 启动选项
+   * @param {boolean} options.quick - 使用上次的启动参数
+   * @param {boolean} options.noArgs - 不使用任何启动参数
+   */
+  /**
+   * 快速启动供应商（跳过参数选择）
+   * @param {string} providerName - 供应商名称或别名
+   * @param {Object} options - 启动选项
+   * @param {boolean} options.quick - 使用上次的启动参数
+   * @param {boolean} options.noArgs - 不使用任何启动参数
+   */
+  async quickLaunchProvider(providerName, options) {
+    try {
+      await this.configManager.ensureLoaded();
+      
+      // 支持别名查找
+      let provider = this.configManager.getProvider(providerName);
+      if (!provider) {
+        provider = this.configManager.getProviderByNameOrAlias(providerName);
+      }
+
+      if (!provider) {
+        throw new Error(`供应商 '${providerName}' 不存在\n使用 'akm list' 查看所有已配置的供应商`);
+      }
+
+      // 确定使用的启动参数
+      let selectedArgs;
+      if (options.noArgs) {
+        // 使用空参数
+        selectedArgs = [];
+        console.log(UIHelper.colors.muted('💡 使用空参数启动'));
+      } else if (options.quick) {
+        // 使用上次的启动参数或默认参数
+        selectedArgs = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0
+          ? provider.lastUsedArgs
+          : (Array.isArray(provider.launchArgs) ? provider.launchArgs : []);
+        
+        if (Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0) {
+          console.log(UIHelper.colors.muted('💡 使用上次的启动参数: ' + selectedArgs.join(' ')));
+        } else {
+          console.log(UIHelper.colors.muted('💡 使用默认启动参数: ' + (selectedArgs.length > 0 ? selectedArgs.join(' ') : '(无)')));
+        }
+      }
+
+      // 更新上次使用的参数（使用真实的 provider.name 而不是别名）
+      await this.configManager.updateLastUsedArgs(provider.name, selectedArgs);
+
+      // 直接启动供应商
+      await this.launchProvider(provider, selectedArgs);
+
+    } catch (error) {
+      await this.handleError(error, '快速启动供应商');
+    }
+  }
+
   getAvailableLaunchArgs() {
     const { getClaudeLaunchArgs } = require('../utils/launch-args');
     return getClaudeLaunchArgs();
@@ -315,7 +408,7 @@ class EnvSwitcher extends BaseCommand {
       const initialStatusMap = this._buildInitialStatusMap(providers);
       // 显示欢迎界面（立即渲染）
       this.showWelcomeScreen(providers, initialStatusMap, null);
-      
+
       if (providers.length === 0) {
         if (this.filter) {
           const filterName = this.filter === 'codex' ? 'Codex CLI' : 'Claude Code';
@@ -335,7 +428,7 @@ class EnvSwitcher extends BaseCommand {
       if (providers.length > 0) {
         this._startStatusRefresh(providers);
       }
-      
+
       // 添加特殊选项
       choices.push(
         new inquirer.Separator(),
@@ -371,7 +464,7 @@ class EnvSwitcher extends BaseCommand {
           pageSize: 12
         }
       ]);
-      
+
       // 移除 ESC 键监听
       this.removeESCListener(escListener);
 
@@ -385,7 +478,7 @@ class EnvSwitcher extends BaseCommand {
       const result = await this.handleSelection(answer.provider);
       this.currentPromptContext = null;
       return result;
-      
+
     } catch (error) {
       await this.handleError(error, '显示供应商选择');
     } finally {
@@ -408,11 +501,11 @@ class EnvSwitcher extends BaseCommand {
 
   showWelcomeScreen(providers, statusMap = {}, statusError = null) {
     this.clearScreen();
-    
+
     if (providers.length > 0) {
       console.log(UIHelper.colors.info(`总共 ${providers.length} 个供应商配置`));
     }
-    
+
     if (statusError) {
       console.log();
       console.log(UIHelper.createCard('状态检测', `检测失败: ${statusError.message}`, UIHelper.icons.warning));
@@ -431,18 +524,18 @@ class EnvSwitcher extends BaseCommand {
 
   async handleSelection(selection) {
     switch (selection) {
-      case '__ADD__':
-        // 使用CommandRegistry避免循环引用
-        const { registry } = require('../CommandRegistry');
-        return await registry.executeCommand('add');
-      case '__MANAGE__':
-        return await this.showManageMenu();
-      case '__EXIT__':
-        this.showExitScreen();
-        this.destroy();
-        process.exit(0);
-      default:
-        return await this.showLaunchArgsSelection(selection);
+    case '__ADD__':
+      // 使用CommandRegistry避免循环引用
+      const { registry } = require('../CommandRegistry');
+      return await registry.executeCommand('add');
+    case '__MANAGE__':
+      return await this.showManageMenu();
+    case '__EXIT__':
+      this.showExitScreen();
+      this.destroy();
+      process.exit(0);
+    default:
+      return await this.showLaunchArgsSelection(selection);
     }
   }
 
@@ -486,20 +579,20 @@ class EnvSwitcher extends BaseCommand {
       }
       throw error;
     }
-    
+
     this.removeESCListener(escListener);
 
     switch (answer.setting) {
-      case 'search':
-        return await this.showSearchProvider();
-      case 'batch':
-        return await this.showBatchEdit();
-      case 'global':
-        return await this.showGlobalSettings();
-      case 'stats':
-        return await this.showStatistics();
-      case 'back':
-        return await this.showProviderSelection();
+    case 'search':
+      return await this.showSearchProvider();
+    case 'batch':
+      return await this.showBatchEdit();
+    case 'global':
+      return await this.showGlobalSettings();
+    case 'stats':
+      return await this.showStatistics();
+    case 'back':
+      return await this.showProviderSelection();
     }
   }
 
@@ -514,13 +607,13 @@ class EnvSwitcher extends BaseCommand {
       ['ESC', '返回快速设置']
     ]));
     console.log();
-    
+
     // 设置 ESC 键监听
     const escListener = this.createESCListener(() => {
       Logger.info('返回快速设置');
       this.showQuickSettings();
     }, '返回快速设置');
-    
+
     try {
       await this.prompt([
         {
@@ -536,7 +629,7 @@ class EnvSwitcher extends BaseCommand {
       }
       throw error;
     }
-    
+
     this.removeESCListener(escListener);
 
     return await this.showQuickSettings();
@@ -553,13 +646,13 @@ class EnvSwitcher extends BaseCommand {
       ['ESC', '返回快速设置']
     ]));
     console.log();
-    
+
     // 设置 ESC 键监听
     const escListener = this.createESCListener(() => {
       Logger.info('返回快速设置');
       this.showQuickSettings();
     }, '返回快速设置');
-    
+
     try {
       await this.prompt([
         {
@@ -575,7 +668,7 @@ class EnvSwitcher extends BaseCommand {
       }
       throw error;
     }
-    
+
     this.removeESCListener(escListener);
 
     return await this.showQuickSettings();
@@ -612,12 +705,12 @@ class EnvSwitcher extends BaseCommand {
       }
       throw error;
     }
-    
+
     this.removeESCListener(escListener);
 
     await this.configManager.load();
     const providers = this.configManager.listProviders();
-    const searchResults = providers.filter(p => 
+    const searchResults = providers.filter(p =>
       p.name.toLowerCase().includes(answer.search.toLowerCase()) ||
       p.displayName.toLowerCase().includes(answer.search.toLowerCase())
     );
@@ -673,7 +766,7 @@ class EnvSwitcher extends BaseCommand {
       }
       throw error;
     }
-    
+
     this.removeESCListener(escListener2);
 
     if (result.provider === 'back') {
@@ -687,7 +780,7 @@ class EnvSwitcher extends BaseCommand {
     await this.configManager.load();
     const providers = this.configManager.listProviders();
     this.clearScreen();
-    
+
     const totalProviders = providers.length;
     const currentProvider = providers.find(p => p.current);
     const totalUsage = providers.reduce((sum, p) => sum + (p.usageCount || 0), 0);
@@ -695,7 +788,7 @@ class EnvSwitcher extends BaseCommand {
 
     console.log(UIHelper.createTitle('使用统计', UIHelper.icons.info));
     console.log();
-    
+
     const stats = [
       ['总供应商数', totalProviders],
       ['当前供应商', currentProvider ? currentProvider.displayName : '无'],
@@ -703,7 +796,7 @@ class EnvSwitcher extends BaseCommand {
       ['最常用供应商', mostUsed ? mostUsed.displayName : '无'],
       ['创建时间', providers.length > 0 ? UIHelper.formatTime(providers[0].createdAt) : '无']
     ];
-    
+
     console.log(UIHelper.createTable(['项目', '数据'], stats));
     console.log();
     console.log(UIHelper.createHintLine([
@@ -717,7 +810,7 @@ class EnvSwitcher extends BaseCommand {
       Logger.info('返回快速设置');
       this.showQuickSettings();
     }, '返回快速设置');
-    
+
     try {
       await this.prompt([
         {
@@ -733,7 +826,7 @@ class EnvSwitcher extends BaseCommand {
       }
       throw error;
     }
-    
+
     this.removeESCListener(escListener);
 
     return await this.showQuickSettings();
@@ -827,10 +920,10 @@ class EnvSwitcher extends BaseCommand {
         ['ESC', '返回主菜单']
       ]));
       console.log();
-      
+
       console.log(UIHelper.createTitle('供应商管理', UIHelper.icons.list));
       console.log();
-      
+
       if (providers.length === 0) {
         console.log(UIHelper.createCard('提示', '暂无配置的供应商\n请先运行 "akm add" 添加供应商配置', UIHelper.icons.warning));
         return await this.showProviderSelection();
@@ -871,7 +964,7 @@ class EnvSwitcher extends BaseCommand {
         }
         throw error;
       }
-      
+
       this.removeESCListener(escListener);
 
       this._cancelStatusRefresh();
@@ -879,7 +972,7 @@ class EnvSwitcher extends BaseCommand {
       const result = await this.handleManageAction(answer.action);
       this.currentPromptContext = null;
       return result;
-      
+
     } catch (error) {
       await this.handleError(error, '显示供应商管理');
     } finally {
@@ -932,64 +1025,19 @@ class EnvSwitcher extends BaseCommand {
   }
 
   _iconForState(state) {
-    if (state === 'online') {
-      return '🟢';
-    }
-    if (state === 'degraded') {
-      return '🟡';
-    }
-    if (state === 'offline') {
-      return '🔴';
-    }
-    if (state === 'pending') {
-      return '⏳';
-    }
-    return '⚪';
+    return StatusHelper.getIconForState(state);
   }
 
   _formatAvailability(availability) {
-    if (!availability) {
-      return chalk.gray('测试中...');
-    }
-    if (availability.state === 'online') {
-      return chalk.green(availability.label || '可用');
-    }
-    if (availability.state === 'degraded') {
-      return chalk.yellow(availability.label || '有限可用');
-    }
-    if (availability.state === 'offline') {
-      return chalk.red(availability.label || '不可用');
-    }
-    if (availability.state === 'pending') {
-      return chalk.gray(availability.label || '测试中...');
-    }
-    return chalk.gray(availability.label || '未知');
+    return StatusHelper.formatAvailability(availability);
   }
 
   _buildInitialStatusMap(providers) {
-    const cached = this.latestStatusMap || {};
-    const map = {};
-    providers.forEach(provider => {
-      map[provider.name] = cached[provider.name] || {
-        state: 'pending',
-        label: '测试中...',
-        latency: null
-      };
-    });
-    return map;
+    return StatusHelper.buildInitialStatusMap(providers, this.latestStatusMap || {});
   }
 
   _buildErrorStatusMap(providers, error) {
-    const message = error ? `检测失败: ${error.message}` : '检测失败';
-    const map = {};
-    providers.forEach(provider => {
-      map[provider.name] = {
-        state: 'offline',
-        label: message,
-        latency: null
-      };
-    });
-    return map;
+    return StatusHelper.buildErrorStatusMap(providers, error);
   }
 
   _startStatusRefresh(providers) {
@@ -1157,15 +1205,15 @@ class EnvSwitcher extends BaseCommand {
 
   async handleManageAction(action) {
     switch (action) {
-      case 'back':
-        return await this.showProviderSelection();
-      case 'exit':
-        Logger.info('👋 再见！');
-        this.destroy();
-        process.exit(0);
-      default:
-        // 如果选择的是供应商名称，显示该供应商的详细信息
-        return await this.showProviderDetails(action);
+    case 'back':
+      return await this.showProviderSelection();
+    case 'exit':
+      Logger.info('👋 再见！');
+      this.destroy();
+      process.exit(0);
+    default:
+      // 如果选择的是供应商名称，显示该供应商的详细信息
+      return await this.showProviderDetails(action);
     }
   }
 
@@ -1174,7 +1222,7 @@ class EnvSwitcher extends BaseCommand {
     try {
       const provider = await this.validateProvider(providerName);
       this.clearScreen();
-      
+
       console.log(UIHelper.createTitle('供应商详情', UIHelper.icons.info));
       console.log();
       console.log(UIHelper.createHintLine([
@@ -1183,33 +1231,27 @@ class EnvSwitcher extends BaseCommand {
         ['ESC', '返回管理列表']
       ]));
       console.log();
-      
-      const authModeDisplay = {
-        api_key: '通用API密钥模式',
-        auth_token: '认证令牌模式',
-        oauth_token: 'OAuth令牌模式'
-      };
 
       const details = [
         ['供应商名称', provider.name],
         ['显示名称', provider.displayName],
-        ['认证模式', authModeDisplay[provider.authMode] || provider.authMode],
+        ['认证模式', AUTH_MODE_DISPLAY[provider.authMode] || provider.authMode]
       ];
 
       // 如果是 api_key 模式，添加 tokenType 信息
       if (provider.authMode === 'api_key' && provider.tokenType) {
-        const tokenTypeDisplay = provider.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+        const tokenTypeDisplay = TOKEN_TYPE_DISPLAY[provider.tokenType];
         details.push(['Token类型', tokenTypeDisplay]);
       }
 
       // 继续添加其他信息
       const baseUrlDisplay = provider.baseUrl
         || ((provider.authMode === 'oauth_token' || provider.authMode === 'auth_token')
-          ? '✨ 官方默认服务器'
+          ? BASE_URL.OFFICIAL_DEFAULT
           : '⚠️ 未设置');
       details.push(
         ['基础URL', baseUrlDisplay],
-        ['认证令牌', provider.authToken ? maskToken(provider.authToken) : '未设置'],
+        ['认证令牌', provider.authToken || '未设置'],
         ['主模型', provider.models?.primary || '未设置'],
         ['快速模型', provider.models?.smallFast || '未设置'],
         ['创建时间', UIHelper.formatTime(provider.createdAt)],
@@ -1217,10 +1259,10 @@ class EnvSwitcher extends BaseCommand {
         ['当前状态', provider.current ? '✅ 使用中' : '⚫ 未使用'],
         ['使用次数', provider.usageCount || 0]
       );
-      
+
       console.log(UIHelper.createTable(['项目', '信息'], details));
       console.log();
-      
+
       if (provider.launchArgs && provider.launchArgs.length > 0) {
         console.log(UIHelper.createCard('默认启动参数', provider.launchArgs.join(', '), UIHelper.icons.settings));
         console.log();
@@ -1256,24 +1298,24 @@ class EnvSwitcher extends BaseCommand {
       }
 
       switch (answer.action) {
-        case 'back':
-          // 移除 ESC 键监听
-          this.removeESCListener(escListener);
-          return await this.showManageMenu();
-        case 'edit':
-          // 移除 ESC 键监听
-          this.removeESCListener(escListener);
-          return await this.editProvider(providerName);
-        case 'remove':
-          // 移除 ESC 键监听
-          this.removeESCListener(escListener);
-          return await this.removeProvider(providerName);
-        case 'launch':
-          // 移除 ESC 键监听
-          this.removeESCListener(escListener);
-          return await this.showLaunchArgsSelection(providerName);
+      case 'back':
+        // 移除 ESC 键监听
+        this.removeESCListener(escListener);
+        return await this.showManageMenu();
+      case 'edit':
+        // 移除 ESC 键监听
+        this.removeESCListener(escListener);
+        return await this.editProvider(providerName);
+      case 'remove':
+        // 移除 ESC 键监听
+        this.removeESCListener(escListener);
+        return await this.removeProvider(providerName);
+      case 'launch':
+        // 移除 ESC 键监听
+        this.removeESCListener(escListener);
+        return await this.showLaunchArgsSelection(providerName);
       }
-      
+
     } catch (error) {
       // 移除 ESC 键监听
       this.removeESCListener(escListener);
@@ -1285,9 +1327,9 @@ class EnvSwitcher extends BaseCommand {
     let escListener;
     try {
       await this.configManager.load();
-      const provider = this.configManager.getProvider(providerName);
+      let provider = this.configManager.getProvider(providerName);
       this.clearScreen();
-      
+
       if (!provider) {
         Logger.error(`供应商 '${providerName}' 不存在`);
         return await this.showManageMenu();
@@ -1319,6 +1361,19 @@ class EnvSwitcher extends BaseCommand {
           message: '显示名称:',
           default: provider.displayName,
           prefillDefault: true
+        },
+        {
+          type: 'input',
+          name: 'alias',
+          message: '别名 (用于快速切换):',
+          default: provider.alias,
+          prefillDefault: true,
+          validate: (input) => {
+            if (!input) return true; // 别名是可选的
+            const error = validator.validateName(input);
+            if (error) return error;
+            return true;
+          }
         }
       ];
 
@@ -1393,15 +1448,15 @@ class EnvSwitcher extends BaseCommand {
             return 'API Key (OPENAI_API_KEY):';
           }
           switch (answers.authMode) {
-            case 'api_key':
-              const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-              return `Token (${tokenTypeLabel}):`;
-            case 'auth_token':
-              return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
-            case 'oauth_token':
-              return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
-            default:
-              return '认证令牌:';
+          case 'api_key':
+            const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+            return `Token (${tokenTypeLabel}):`;
+          case 'auth_token':
+            return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
+          case 'oauth_token':
+            return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
+          default:
+            return '认证令牌:';
           }
         },
         default: provider.authToken,
@@ -1450,17 +1505,18 @@ class EnvSwitcher extends BaseCommand {
 
       // 更新供应商配置
       provider.displayName = answers.displayName || newName;
+      provider.alias = answers.alias || null;
       // oauth_token 模式不需要 baseUrl，显式设为 null
       provider.baseUrl = answers.authMode === 'oauth_token' ? null : answers.baseUrl;
       provider.authToken = answers.authToken;
-      
+
       // Claude Code 特定的更新
       if (!isCodex) {
         provider.authMode = answers.authMode;
         if (answers.tokenType) {
           provider.tokenType = answers.tokenType; // 仅在 authMode 为 'api_key' 时使用
         }
-        
+
         // 更新模型配置
         if (!provider.models) {
           provider.models = {};
@@ -1479,11 +1535,11 @@ class EnvSwitcher extends BaseCommand {
 
       await this.configManager.save();
       Logger.success(`供应商 '${newName}' 已更新`);
-      
+
       // 移除 ESC 键监听
       this.removeESCListener(escListener);
       return await this.showManageMenu();
-      
+
     } catch (error) {
       // 移除 ESC 键监听
       this.removeESCListener(escListener);
@@ -1498,7 +1554,7 @@ class EnvSwitcher extends BaseCommand {
       await this.configManager.load();
       const provider = this.configManager.getProvider(providerName);
       this.clearScreen();
-      
+
       if (!provider) {
         Logger.error(`供应商 '${providerName}' 不存在`);
         return await this.showManageMenu();
@@ -1538,7 +1594,7 @@ class EnvSwitcher extends BaseCommand {
       // 移除 ESC 键监听
       this.removeESCListener(escListener);
       return await this.showManageMenu();
-      
+
     } catch (error) {
       // 移除 ESC 键监听
       this.removeESCListener(escListener);
@@ -1554,7 +1610,12 @@ async function switchCommand(providerName, options = {}) {
 
   try {
     if (providerName) {
-      await switcher.showLaunchArgsSelection(providerName);
+      // 如果指定了 quick 或 noArgs 选项，直接启动
+      if (options.quick || options.noArgs) {
+        await switcher.quickLaunchProvider(providerName, options);
+      } else {
+        await switcher.showLaunchArgsSelection(providerName);
+      }
     } else {
       await switcher.showProviderSelection();
     }
@@ -1566,7 +1627,7 @@ async function switchCommand(providerName, options = {}) {
 
 async function editCommand(providerName) {
   const switcher = new EnvSwitcher();
-  
+
   try {
     await switcher.editProvider(providerName);
   } finally {

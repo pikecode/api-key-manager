@@ -1,7 +1,19 @@
+/**
+ * Update Checker Utility
+ * 检查 npm 包更新
+ * @module utils/update-checker
+ */
+
 const chalk = require('chalk');
 const inquirer = require('inquirer');
 const spawn = require('cross-spawn');
 
+/**
+ * 比较两个版本号
+ * @param {string} a - 版本号 A
+ * @param {string} b - 版本号 B
+ * @returns {number} -1 表示 a < b, 0 表示相等, 1 表示 a > b
+ */
 function compareVersions(a, b) {
   const pa = String(a).split('.').map(Number);
   const pb = String(b).split('.').map(Number);
@@ -15,16 +27,22 @@ function compareVersions(a, b) {
   return 0;
 }
 
+/**
+ * 获取 npm 包的最新版本号
+ * @param {string} pkgName - 包名
+ * @param {number} [timeoutMs=4000] - 超时时间（毫秒）
+ * @returns {Promise<string|null>} 最新版本号，失败返回 null
+ */
 function getLatestVersion(pkgName, timeoutMs = 4000) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve, _reject) => {
     let done = false;
     const child = spawn('npm', ['view', pkgName, 'version', '--json'], {
       shell: process.platform === 'win32',
-      stdio: ['ignore', 'pipe', 'ignore'],
+      stdio: ['ignore', 'pipe', 'ignore']
     });
 
     let out = '';
-    child.stdout.on('data', (d) => (out += d.toString()))
+    child.stdout.on('data', (d) => (out += d.toString()));
 
     const t = setTimeout(() => {
       if (done) return;
@@ -86,8 +104,8 @@ async function checkForUpdates({ packageName, currentVersion }) {
           type: 'confirm',
           name: 'doUpdate',
           message: '是否立即更新并重启？',
-          default: false,
-        },
+          default: false
+        }
       ]);
 
       if (!doUpdate) return;
@@ -96,7 +114,7 @@ async function checkForUpdates({ packageName, currentVersion }) {
       await new Promise((resolve) => {
         const child = spawn('npm', ['i', '-g', `${packageName}@latest`], {
           shell: process.platform === 'win32',
-          stdio: 'inherit',
+          stdio: 'inherit'
         });
         child.on('close', (code) => resolve(code === 0));
       }).then((ok) => {
@@ -113,7 +131,7 @@ async function checkForUpdates({ packageName, currentVersion }) {
 
         const child = spawn(restartCommand, restartArgs, {
           shell: process.platform === 'win32',
-          stdio: 'inherit',
+          stdio: 'inherit'
         });
         child.on('close', (code) => {
           process.exit(code || 0);

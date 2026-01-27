@@ -86,4 +86,9 @@ registry.registerLazy('backup', async () => {
   return backupCommand;
 });
 
+registry.registerLazy('validate', async () => {
+  const { validateCommand } = require('./commands/validate');
+  return validateCommand;
+});
+
 module.exports = { CommandRegistry, registry };

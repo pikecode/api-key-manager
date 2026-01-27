@@ -15,8 +15,8 @@ const validator = {
 
     // 禁止使用保留名称 (Windows)
     const reserved = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4',
-                      'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2',
-                      'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
+      'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2',
+      'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
     if (reserved.includes(name.toUpperCase())) {
       return '供应商名称不能使用系统保留名称';
     }
@@ -38,15 +38,15 @@ const validator = {
     if (displayName === null || displayName === undefined || displayName === '') {
       return null;
     }
-    
+
     if (typeof displayName !== 'string') {
       return '显示名称必须是字符串';
     }
-    
+
     if (displayName.length > 100) {
       return '显示名称不能超过100个字符';
     }
-    
+
     return null;
   },
 
@@ -54,17 +54,17 @@ const validator = {
     if (!url || typeof url !== 'string') {
       return required ? 'URL不能为空' : null;
     }
-    
+
     try {
       new URL(url);
     } catch (error) {
       return '请输入有效的URL';
     }
-    
+
     if (!url.startsWith('http://') && !url.startsWith('https://')) {
       return 'URL必须以http://或https://开头';
     }
-    
+
     return null;
   },
 
@@ -101,19 +101,19 @@ const validator = {
     if (!model) {
       return null;
     }
-    
+
     if (typeof model !== 'string') {
       return '模型名称必须是字符串';
     }
-    
+
     if (model.trim().length === 0) {
       return '模型名称不能为空字符串';
     }
-    
+
     if (model.length > 100) {
       return '模型名称不能超过100个字符';
     }
-    
+
     return null;
   },
 

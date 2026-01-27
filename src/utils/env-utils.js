@@ -14,7 +14,7 @@ function sanitizeEnvValue(value) {
   }
 
   // 移除控制字符
-  let cleaned = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+  const cleaned = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
   // 检测可能的 shell 命令注入（允许 $ 因为 token 可能包含）
   // 只禁止明确的命令分隔符和反引号执行
