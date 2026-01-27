@@ -11,7 +11,7 @@ const { checkForUpdates } = require('../src/utils/update-checker');
 program
   .name('akm')
   .description('API密钥管理工具 - Manage and switch multiple API provider configurations')
-  .version(pkg.version, '-v, -V, --version', '显示版本号');
+  .version(pkg.version, '-V, --version', '显示版本号');
 
 // Check for updates before any command runs
 program.hook('preAction', async () => {
