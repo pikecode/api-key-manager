@@ -1,6 +1,6 @@
 {
-  "name": "api-key-manager",
-  "version": "1.0.46",
+  "name": "@pikecode/api-key-manager",
+  "version": "1.0.44",
   "description": "A CLI tool for managing and switching multiple API provider configurations",
   "main": "src/index.js",
   "bin": {
@@ -23,7 +23,7 @@
     "build": "echo 'No build needed'",
     "prepare": "echo 'Preparing package'",
     "prepublishOnly": "npm test",
-    "release": "npm version patch && npm publish"
+    "release": "npm version patch && npm publish --access public"
   },
   "keywords": [
     "api",
