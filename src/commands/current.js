@@ -8,7 +8,7 @@ const chalk = require('chalk');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { maybeMaskToken } = require('../utils/secrets');
-const { AUTH_MODE_DISPLAY, TOKEN_TYPE_DISPLAY, BASE_URL, CURRENT_STATUS } = require('../constants');
+const { AUTH_MODE_DISPLAY, BASE_URL, CURRENT_STATUS } = require('../constants');
 
 /**
  * 当前配置显示类
@@ -73,12 +73,6 @@ class CurrentConfig {
       // 显示认证模式
       console.log(chalk.gray(`认证模式: ${AUTH_MODE_DISPLAY[currentProvider.authMode] || currentProvider.authMode}`));
 
-      // 如果是 api_key 模式，显示 tokenType
-      if (currentProvider.authMode === 'api_key' && currentProvider.tokenType) {
-        const tokenTypeDisplay = TOKEN_TYPE_DISPLAY[currentProvider.tokenType];
-        console.log(chalk.gray(`Token类型: ${tokenTypeDisplay}`));
-      }
-
       if (currentProvider.baseUrl) {
         console.log(chalk.gray(`基础URL: ${currentProvider.baseUrl}`));
       }
@@ -99,18 +93,10 @@ class CurrentConfig {
       if (currentProvider.baseUrl) {
         console.log(chalk.gray(`set ANTHROPIC_BASE_URL=${currentProvider.baseUrl}`));
       }
-      if (currentProvider.authMode === 'oauth_token') {
-        console.log(chalk.gray(`set CLAUDE_CODE_OAUTH_TOKEN=${maybeMaskToken(currentProvider.authToken, showToken)}`));
-      } else if (currentProvider.authMode === 'api_key') {
-        // 根据 tokenType 显示对应的环境变量
-        if (currentProvider.tokenType === 'auth_token') {
-          console.log(chalk.gray(`set ANTHROPIC_AUTH_TOKEN=${maybeMaskToken(currentProvider.authToken, showToken)}`));
-        } else {
-          console.log(chalk.gray(`set ANTHROPIC_API_KEY=${maybeMaskToken(currentProvider.authToken, showToken)}`));
-        }
-      } else {
-        // auth_token 模式
+      if (currentProvider.authMode === 'auth_token') {
         console.log(chalk.gray(`set ANTHROPIC_AUTH_TOKEN=${maybeMaskToken(currentProvider.authToken, showToken)}`));
+      } else {
+        console.log(chalk.gray(`set ANTHROPIC_API_KEY=${maybeMaskToken(currentProvider.authToken, showToken)}`));
       }
       if (currentProvider.models?.primary) {
         console.log(chalk.gray(`set ANTHROPIC_MODEL=${currentProvider.models.primary}`));

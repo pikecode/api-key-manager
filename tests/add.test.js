@@ -5,7 +5,7 @@
 
 const { configManager } = require('../src/config');
 const { validator } = require('../src/utils/validator');
-const { AUTH_MODE_DISPLAY_DETAILED, TOKEN_TYPE_DISPLAY, IDE_NAMES } = require('../src/constants');
+const { AUTH_MODE_DISPLAY_DETAILED, IDE_NAMES } = require('../src/constants');
 
 // Mock modules
 jest.mock('../src/config');
@@ -77,18 +77,17 @@ describe('Add Command Logic', () => {
   });
 
   describe('Provider Creation', () => {
-    it('应该创建 OAuth 供应商', () => {
+    it('应该创建 API Key 供应商（原 OAuth 场景）', () => {
       const providerData = {
         name: 'claude-official',
-        displayName: 'Claude Code Official (OAuth)',
-        authMode: 'oauth_token',
+        displayName: 'Claude Code Official',
+        authMode: 'api_key',
         authToken: 'sk-ant-oat01-xxxxx',
-        baseUrl: null,
-        tokenType: null
+        baseUrl: 'https://api.example.com'
       };
 
-      expect(providerData.authMode).toBe('oauth_token');
-      expect(providerData.baseUrl).toBeNull();
+      expect(providerData.authMode).toBe('api_key');
+      expect(providerData.baseUrl).toBeDefined();
     });
 
     it('应该创建 API Key 供应商', () => {
@@ -97,8 +96,7 @@ describe('Add Command Logic', () => {
         displayName: 'My Provider',
         authMode: 'api_key',
         authToken: 'sk-xxxxx',
-        baseUrl: 'https://api.example.com',
-        tokenType: 'api_key'
+        baseUrl: 'https://api.example.com'
       };
 
       expect(providerData.authMode).toBe('api_key');
@@ -111,8 +109,7 @@ describe('Add Command Logic', () => {
         displayName: 'My Provider',
         authMode: 'auth_token',
         authToken: 'sk-xxxxx',
-        baseUrl: null,
-        tokenType: null
+        baseUrl: null
       };
 
       expect(providerData.authMode).toBe('auth_token');
@@ -137,7 +134,7 @@ describe('Add Command Logic', () => {
       const providerData = {
         name: 'test-provider',
         displayName: 'Test Provider',
-        authMode: 'oauth_token'
+        authMode: 'api_key'
       };
 
       configManager.addProvider.mockResolvedValue(true);
@@ -160,12 +157,6 @@ describe('Add Command Logic', () => {
     it('应该定义所有认证模式详细信息', () => {
       expect(AUTH_MODE_DISPLAY_DETAILED).toHaveProperty('api_key');
       expect(AUTH_MODE_DISPLAY_DETAILED).toHaveProperty('auth_token');
-      expect(AUTH_MODE_DISPLAY_DETAILED).toHaveProperty('oauth_token');
-    });
-
-    it('应该定义 Token 类型显示', () => {
-      expect(TOKEN_TYPE_DISPLAY).toHaveProperty('auth_token');
-      expect(TOKEN_TYPE_DISPLAY).toHaveProperty('api_key');
     });
 
     it('应该定义 IDE 名称', () => {
@@ -226,7 +217,6 @@ describe('Add Command Logic', () => {
   describe('Constants', () => {
     it('应该导出所有必需的常量', () => {
       expect(AUTH_MODE_DISPLAY_DETAILED).toBeDefined();
-      expect(TOKEN_TYPE_DISPLAY).toBeDefined();
       expect(IDE_NAMES).toBeDefined();
     });
   });

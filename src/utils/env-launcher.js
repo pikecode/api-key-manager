@@ -6,26 +6,18 @@ function buildEnvVariables(config) {
 
   try {
     // Claude Code 配置
-    if (config.authMode === 'oauth_token') {
-      env.CLAUDE_CODE_OAUTH_TOKEN = sanitizeEnvValue(config.authToken);
-    } else if (config.authMode === 'api_key') {
-      if (!config.baseUrl) {
-        throw new Error('未配置基础地址');
-      }
-      env.ANTHROPIC_BASE_URL = sanitizeEnvValue(config.baseUrl);
-      // 根据 tokenType 选择设置哪种 token
-      if (config.tokenType === 'auth_token') {
-        env.ANTHROPIC_AUTH_TOKEN = sanitizeEnvValue(config.authToken);
-      } else {
-        // 默认使用 ANTHROPIC_API_KEY
-        env.ANTHROPIC_API_KEY = sanitizeEnvValue(config.authToken);
-      }
-    } else {
-      // auth_token 模式
+    if (config.authMode === 'auth_token') {
       if (config.baseUrl) {
         env.ANTHROPIC_BASE_URL = sanitizeEnvValue(config.baseUrl);
       }
       env.ANTHROPIC_AUTH_TOKEN = sanitizeEnvValue(config.authToken);
+    } else {
+      // api_key 模式（默认）
+      if (!config.baseUrl) {
+        throw new Error('未配置基础地址');
+      }
+      env.ANTHROPIC_BASE_URL = sanitizeEnvValue(config.baseUrl);
+      env.ANTHROPIC_API_KEY = sanitizeEnvValue(config.authToken);
     }
 
     if (config.models && config.models.primary) {

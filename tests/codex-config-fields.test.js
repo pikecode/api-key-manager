@@ -7,13 +7,11 @@ describe('Codex Configuration Fields', () => {
         baseUrl: 'https://api.openai.com',
         authToken: 'sk-xxx',
         authMode: null,
-        tokenType: null,
         models: null
       };
 
       expect(codexProvider.ideName).toBe('codex');
       expect(codexProvider.authMode).toBeNull();
-      expect(codexProvider.tokenType).toBeNull();
       expect(codexProvider.models).toBeNull();
     });
 
@@ -21,8 +19,7 @@ describe('Codex Configuration Fields', () => {
       const claudeProvider = {
         name: 'claude-provider',
         ideName: 'claude',
-        authMode: 'oauth_token',
-        tokenType: 'api_key',
+        authMode: 'api_key',
         models: {
           primary: 'claude-opus-4-20250514',
           smallFast: 'claude-3-5-haiku-20241022'
@@ -40,19 +37,16 @@ describe('Codex Configuration Fields', () => {
         name: 'test',
         ideName: 'codex',
         authMode: 'openai_api_key', // Should be null
-        tokenType: 'api_key', // Should be null
         models: { primary: 'gpt-4' } // Should be null
       };
 
       // Clean it up
       if (mixedProvider.ideName === 'codex') {
         mixedProvider.authMode = null;
-        mixedProvider.tokenType = null;
         mixedProvider.models = null;
       }
 
       expect(mixedProvider.authMode).toBeNull();
-      expect(mixedProvider.tokenType).toBeNull();
       expect(mixedProvider.models).toBeNull();
     });
 
@@ -61,7 +55,6 @@ describe('Codex Configuration Fields', () => {
         name: 'claude-test',
         ideName: 'claude',
         authMode: 'api_key',
-        tokenType: 'auth_token',
         models: {
           primary: 'claude-3-5-sonnet-20241022',
           smallFast: 'claude-3-5-haiku-20241022'
@@ -70,7 +63,6 @@ describe('Codex Configuration Fields', () => {
 
       // Should not be modified
       expect(claudeProvider.authMode).not.toBeNull();
-      expect(claudeProvider.tokenType).not.toBeNull();
       expect(claudeProvider.models).not.toBeNull();
       expect(claudeProvider.models.primary).toBeTruthy();
     });

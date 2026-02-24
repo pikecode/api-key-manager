@@ -17,7 +17,7 @@ const { findSettingsConflict, backupSettingsFile, clearConflictKeys, saveSetting
 const { BaseCommand } = require('./BaseCommand');
 const { validator } = require('../utils/validator');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
-const { AUTH_MODE_DISPLAY, TOKEN_TYPE_DISPLAY, BASE_URL } = require('../constants');
+const { AUTH_MODE_DISPLAY, BASE_URL } = require('../constants');
 const { LaunchArgsHelper } = require('./switch/launch-args-helper');
 const { StatusHelper } = require('./switch/status-helper');
 
@@ -1238,15 +1238,9 @@ class EnvSwitcher extends BaseCommand {
         ['认证模式', AUTH_MODE_DISPLAY[provider.authMode] || provider.authMode]
       ];
 
-      // 如果是 api_key 模式，添加 tokenType 信息
-      if (provider.authMode === 'api_key' && provider.tokenType) {
-        const tokenTypeDisplay = TOKEN_TYPE_DISPLAY[provider.tokenType];
-        details.push(['Token类型', tokenTypeDisplay]);
-      }
-
       // 继续添加其他信息
       const baseUrlDisplay = provider.baseUrl
-        || ((provider.authMode === 'oauth_token' || provider.authMode === 'auth_token')
+        || (provider.authMode === 'auth_token'
           ? BASE_URL.OFFICIAL_DEFAULT
           : '⚠️ 未设置');
       details.push(
@@ -1385,22 +1379,10 @@ class EnvSwitcher extends BaseCommand {
             name: 'authMode',
             message: '认证模式:',
             choices: [
-              { name: '🔑 通用API密钥模式 - 支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN', value: 'api_key' },
-              { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商', value: 'auth_token' },
-              { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' }
+              { name: '🔑 ANTHROPIC_API_KEY - 大多数第三方代理使用', value: 'api_key' },
+              { name: '🔐 ANTHROPIC_AUTH_TOKEN - 部分服务商使用', value: 'auth_token' }
             ],
             default: provider.authMode || 'api_key'
-          },
-          {
-            type: 'list',
-            name: 'tokenType',
-            message: 'Token类型:',
-            choices: [
-              { name: '🔑 ANTHROPIC_API_KEY - 通用API密钥', value: 'api_key' },
-              { name: '🔐 ANTHROPIC_AUTH_TOKEN - 认证令牌', value: 'auth_token' }
-            ],
-            default: provider.tokenType || 'api_key',
-            when: (answers) => answers.authMode === 'api_key'
           },
           {
             type: 'input',
@@ -1447,17 +1429,8 @@ class EnvSwitcher extends BaseCommand {
           if (isCodex) {
             return 'API Key (OPENAI_API_KEY):';
           }
-          switch (answers.authMode) {
-          case 'api_key':
-            const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-            return `Token (${tokenTypeLabel}):`;
-          case 'auth_token':
-            return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
-          case 'oauth_token':
-            return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
-          default:
-            return '认证令牌:';
-          }
+          const envVar = answers.authMode === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+          return `Token (${envVar}):`;
         },
         default: provider.authToken,
         prefillDefault: true
@@ -1506,16 +1479,12 @@ class EnvSwitcher extends BaseCommand {
       // 更新供应商配置
       provider.displayName = answers.displayName || newName;
       provider.alias = answers.alias || null;
-      // oauth_token 模式不需要 baseUrl，显式设为 null
-      provider.baseUrl = answers.authMode === 'oauth_token' ? null : answers.baseUrl;
+      provider.baseUrl = answers.baseUrl;
       provider.authToken = answers.authToken;
 
       // Claude Code 特定的更新
       if (!isCodex) {
         provider.authMode = answers.authMode;
-        if (answers.tokenType) {
-          provider.tokenType = answers.tokenType; // 仅在 authMode 为 'api_key' 时使用
-        }
 
         // 更新模型配置
         if (!provider.models) {
@@ -1526,7 +1495,6 @@ class EnvSwitcher extends BaseCommand {
       } else {
         // 确保 Codex 配置不包含 Claude 特定字段
         provider.authMode = null;
-        provider.tokenType = null;
         provider.models = null;
       }
 

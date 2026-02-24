@@ -11,7 +11,6 @@ const chalk = require('chalk');
  * @property {string} authMode - 认证模式
  * @property {string} authToken - 认证令牌
  * @property {string|null} baseUrl - API 基础 URL
- * @property {string|null} tokenType - Token 类型
  * @property {Object|null} models - 模型配置
  * @property {string[]} launchArgs - 启动参数
  * @property {boolean} current - 是否为当前供应商
@@ -320,9 +319,6 @@ class ConfigManager {
     // Claude Code 特定字段
     if (!isCodex) {
       const authMode = providerConfig.authMode || existing?.authMode || 'api_key';
-      const tokenType = authMode === 'api_key'
-        ? (providerConfig.tokenType ?? existing?.tokenType ?? 'api_key')
-        : null;
       const primaryModel = providerConfig.primaryModel !== undefined
         ? providerConfig.primaryModel
         : (existing?.models?.primary ?? null);
@@ -331,7 +327,6 @@ class ConfigManager {
         : (existing?.models?.smallFast ?? null);
 
       this.config.providers[name].authMode = authMode;
-      this.config.providers[name].tokenType = tokenType;
       this.config.providers[name].models = {
         primary: primaryModel,
         smallFast: smallFastModel
@@ -339,7 +334,6 @@ class ConfigManager {
     } else {
       // Codex 不需要这些字段，设置为 null 以保持向后兼容
       this.config.providers[name].authMode = null;
-      this.config.providers[name].tokenType = null;
       this.config.providers[name].models = null;
     }
 

@@ -13,7 +13,6 @@ const { UIHelper } = require('../utils/ui-helper');
 const { BaseCommand } = require('./BaseCommand');
 const {
   AUTH_MODE_DISPLAY_DETAILED,
-  TOKEN_TYPE_DISPLAY,
   IDE_NAMES
 } = require('../constants');
 
@@ -41,55 +40,9 @@ class ProviderAdder extends BaseCommand {
   async interactive() {
     console.log(UIHelper.createTitle('添加新供应商', UIHelper.icons.add));
     console.log();
-    console.log(UIHelper.createTooltip('选择供应商类型或手动配置'));
+    console.log(UIHelper.createTooltip('请填写供应商配置信息'));
     console.log();
-    console.log(UIHelper.createStepIndicator(1, 3, '选择供应商类型'));
-    console.log(UIHelper.createHintLine([
-      ['↑ / ↓', '选择类型'],
-      ['Enter', '确认'],
-      ['ESC', '取消添加']
-    ]));
-    console.log();
-
-    try {
-      // 首先选择是否使用预设配置
-      const typeAnswer = await this.promptWithESC([
-        {
-          type: 'list',
-          name: 'providerType',
-          message: '选择供应商类型:',
-          choices: [
-            { name: '🔒 官方 Claude Code (OAuth)', value: 'official_oauth' },
-            { name: '⚙️ 自定义配置', value: 'custom' }
-          ],
-          default: 'custom'
-        }
-      ], '取消添加', () => {
-        Logger.info('取消添加供应商');
-        // 使用CommandRegistry避免循环引用
-        const { registry } = require('../CommandRegistry');
-        registry.executeCommand('switch');
-      });
-
-      if (typeAnswer.providerType === 'official_oauth') {
-        return await this.addOfficialOAuthProvider();
-      } else {
-        return await this.addCustomProvider();
-      }
-    } catch (error) {
-      if (this.isEscCancelled(error)) {
-        return;
-      }
-      throw error;
-    }
-  }
-
-  async addOfficialOAuthProvider() {
-    console.log(UIHelper.createTitle('添加官方 OAuth 供应商', UIHelper.icons.add));
-    console.log();
-    console.log(UIHelper.createTooltip('配置官方 Claude Code OAuth 认证'));
-    console.log();
-    console.log(UIHelper.createStepIndicator(2, 3, '填写官方 OAuth 信息'));
+    console.log(UIHelper.createStepIndicator(1, 2, '填写供应商信息'));
     console.log(UIHelper.createHintLine([
       ['Enter', '确认输入'],
       ['Tab', '切换字段'],
@@ -98,61 +51,7 @@ class ProviderAdder extends BaseCommand {
     console.log();
 
     try {
-      const answers = await this.promptWithESC([
-        {
-          type: 'input',
-          name: 'name',
-          message: '请输入供应商名称 (用于命令行):',
-          default: 'claude-official',
-          validate: (input) => {
-            const error = validator.validateName(input);
-            if (error) return error;
-            return true;
-          }
-        },
-        {
-          type: 'input',
-          name: 'displayName',
-          message: '请输入供应商显示名称:',
-          default: 'Claude Code 官方 (OAuth)',
-          validate: (input) => {
-            const error = validator.validateDisplayName(input);
-            if (error) return error;
-            return true;
-          }
-        },
-        {
-          type: 'input',
-          name: 'authToken',
-          message: '请输入 OAuth Token (sk-ant-oat01-...):',
-          validate: (input) => {
-            if (!input || !input.startsWith('sk-ant-oat01-')) {
-              return '请输入有效的 OAuth Token (格式: sk-ant-oat01-...)';
-            }
-            const error = validator.validateToken(input);
-            if (error) return error;
-            return true;
-          }
-        },
-        {
-          type: 'confirm',
-          name: 'setAsDefault',
-          message: '是否设置为当前供应商?',
-          default: true
-        }
-      ], '取消添加', () => {
-        Logger.info('取消添加供应商');
-        // 使用CommandRegistry避免循环引用
-        const { registry } = require('../CommandRegistry');
-        registry.executeCommand('switch');
-      });
-
-      // 使用官方 OAuth 配置
-      await this.saveProvider({
-        ...answers,
-        authMode: 'oauth_token',
-        baseUrl: null // OAuth 模式不需要 baseUrl
-      });
+      return await this.addCustomProvider();
     } catch (error) {
       if (this.isEscCancelled(error)) {
         return;
@@ -162,18 +61,6 @@ class ProviderAdder extends BaseCommand {
   }
 
   async addCustomProvider() {
-    console.log(UIHelper.createTitle('添加自定义供应商', UIHelper.icons.add));
-    console.log();
-    console.log(UIHelper.createTooltip('请填写供应商配置信息'));
-    console.log();
-    console.log(UIHelper.createStepIndicator(2, 3, '填写供应商信息'));
-    console.log(UIHelper.createHintLine([
-      ['Enter', '确认输入'],
-      ['Tab', '切换字段'],
-      ['ESC', '取消添加']
-    ]));
-    console.log();
-
     try {
       const answers = await this.promptWithESC([
         {
@@ -201,29 +88,8 @@ class ProviderAdder extends BaseCommand {
         {
           type: 'input',
           name: 'name',
-          message: '请输入供应商名称 (用于命令行):',
+          message: '请输入供应商名称:',
           validate: (input) => {
-            const error = validator.validateName(input);
-            if (error) return error;
-            return true;
-          }
-        },
-        {
-          type: 'input',
-          name: 'displayName',
-          message: '请输入供应商显示名称 (可选，默认为供应商名称):',
-          validate: (input) => {
-            const error = validator.validateDisplayName(input);
-            if (error) return error;
-            return true;
-          }
-        },
-        {
-          type: 'input',
-          name: 'alias',
-          message: '请输入供应商别名 (可选，用于快速切换):',
-          validate: (input) => {
-            if (!input) return true; // 别名是可选的
             const error = validator.validateName(input);
             if (error) return error;
             return true;
@@ -234,63 +100,30 @@ class ProviderAdder extends BaseCommand {
           name: 'authMode',
           message: '选择认证模式:',
           choices: [
-            { name: '🔑 通用API密钥模式 - 支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN', value: 'api_key' },
-            { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商', value: 'auth_token' },
-            { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' }
+            { name: '🔑 ANTHROPIC_API_KEY - 大多数第三方代理使用', value: 'api_key' },
+            { name: '🔐 ANTHROPIC_AUTH_TOKEN - 部分服务商使用', value: 'auth_token' }
           ],
           default: 'api_key',
           when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex'
         },
         {
-          type: 'list',
-          name: 'tokenType',
-          message: '选择Token类型:',
-          choices: [
-            { name: '🔑 ANTHROPIC_API_KEY - 通用API密钥', value: 'api_key' },
-            { name: '🔐 ANTHROPIC_AUTH_TOKEN - 认证令牌', value: 'auth_token' }
-          ],
-          default: 'api_key',
-          when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex' && answers.authMode === 'api_key'
-        },
-        {
           type: 'input',
           name: 'baseUrl',
-          message: (answers) => {
-            if (answers.authMode === 'auth_token') {
-              return '请输入API基础URL (如使用官方API可留空):';
-            }
-            return '请输入API基础URL:';
-          },
-          validate: (input, answers) => {
-            // auth_token 模式允许空值（使用官方 API）
-            if (input === '' && answers.authMode === 'auth_token') {
-              return true;
-            }
-            // 其他模式需要有效的 URL
-            if (!input && answers.authMode === 'api_key') {
-              return 'API基础URL不能为空';
-            }
+          message: '请输入 API 基础URL (ANTHROPIC_BASE_URL):',
+          validate: (input) => {
+            if (!input) return 'API 基础URL不能为空';
             const error = validator.validateUrl(input);
             if (error) return error;
             return true;
           },
-          when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex' && (answers.authMode === 'api_key' || answers.authMode === 'auth_token')
+          when: (answers) => (answers.ideName || this.presetIdeName) !== 'codex'
         },
         {
           type: 'input',
           name: 'authToken',
           message: (answers) => {
-            switch (answers.authMode) {
-            case 'api_key':
-              const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-              return `请输入Token (${tokenTypeLabel}):`;
-            case 'auth_token':
-              return '请输入认证令牌 (ANTHROPIC_AUTH_TOKEN):';
-            case 'oauth_token':
-              return '请输入OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
-            default:
-              return '请输入认证令牌:';
-            }
+            const envVar = answers.authMode === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+            return `请输入 Token (${envVar}):`;
           },
           validate: (input) => {
             const error = validator.validateToken(input);
@@ -365,7 +198,6 @@ class ProviderAdder extends BaseCommand {
 
       if (answers.ideName === 'codex') {
         answers.authMode = 'openai_api_key';
-        answers.tokenType = null;
         answers.codexFiles = null;
 
         // 从现有配置导入
@@ -436,7 +268,6 @@ class ProviderAdder extends BaseCommand {
         baseUrl: answers.baseUrl,
         authToken: answers.authToken,
         authMode: answers.authMode,
-        tokenType: answers.tokenType, // 仅在 authMode 为 'api_key' 时使用
         codexFiles: answers.codexFiles || null,
         launchArgs,
         primaryModel: modelConfig.primaryModel,
@@ -484,7 +315,7 @@ class ProviderAdder extends BaseCommand {
     console.log();
     console.log(UIHelper.createTooltip('选择要使用的启动参数'));
     console.log();
-    console.log(UIHelper.createStepIndicator(3, 3, '可选: 配置启动参数'));
+    console.log(UIHelper.createStepIndicator(2, 2, '可选: 配置启动参数'));
     console.log(UIHelper.createHintLine([
       ['空格', '切换选中'],
       ['A', '全选'],
@@ -517,7 +348,7 @@ class ProviderAdder extends BaseCommand {
     console.log();
     console.log(UIHelper.createTooltip('配置主模型和快速模型（可选）'));
     console.log();
-    console.log(UIHelper.createStepIndicator(3, 3, '可选: 配置模型参数'));
+    console.log(UIHelper.createStepIndicator(2, 2, '可选: 配置模型参数'));
     console.log(UIHelper.createHintLine([
       ['Enter', '确认输入'],
       ['ESC', '跳过配置']
@@ -668,12 +499,6 @@ class ProviderAdder extends BaseCommand {
     }
 
     console.log(chalk.gray(`  认证模式: ${AUTH_MODE_DISPLAY_DETAILED[answers.authMode] || answers.authMode}`));
-
-    // 如果是 api_key 模式，显示 tokenType
-    if (answers.authMode === 'api_key' && answers.tokenType) {
-      const tokenTypeDisplay = TOKEN_TYPE_DISPLAY[answers.tokenType];
-      console.log(chalk.gray(`  Token类型: ${tokenTypeDisplay}`));
-    }
 
     if (answers.baseUrl) {
       console.log(chalk.gray(`  基础URL: ${answers.baseUrl}`));

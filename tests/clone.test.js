@@ -55,7 +55,6 @@ const mockClaudeProvider = {
   authToken: 'sk-ant-test123',
   baseUrl: null,
   authMode: 'api_key',
-  tokenType: 'api_key',
   launchArgs: [],
   models: { primary: null, smallFast: null }
 };
@@ -67,7 +66,6 @@ const mockCodexProvider = {
   authToken: 'sk-openai-test123',
   baseUrl: 'https://api.openai.com',
   authMode: null,
-  tokenType: null,
   launchArgs: [],
   models: null
 };

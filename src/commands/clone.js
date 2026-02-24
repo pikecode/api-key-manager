@@ -170,9 +170,8 @@ class ProviderCloner extends BaseCommand {
             name: 'authMode',
             message: '认证模式:',
             choices: [
-              { name: '🔑 通用API密钥模式 (ANTHROPIC_API_KEY / ANTHROPIC_AUTH_TOKEN)', value: 'api_key' },
-              { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN)', value: 'auth_token' },
-              { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN)', value: 'oauth_token' }
+              { name: '🔑 ANTHROPIC_API_KEY - 大多数第三方代理使用', value: 'api_key' },
+              { name: '🔐 ANTHROPIC_AUTH_TOKEN - 部分服务商使用', value: 'auth_token' }
             ],
             default: source.authMode || 'api_key'
           });
@@ -230,9 +229,8 @@ class ProviderCloner extends BaseCommand {
         displayName: basicInfo.displayName,
         ideName: source.ideName,
         authToken: overrides.authToken !== undefined ? overrides.authToken : source.authToken,
-        baseUrl: authMode === 'oauth_token' ? null : baseUrl,
+        baseUrl,
         authMode,
-        tokenType: source.tokenType,
         launchArgs: overrides.launchArgs !== undefined ? overrides.launchArgs : (source.launchArgs || []),
         primaryModel: source.models?.primary || null,
         smallFastModel: source.models?.smallFast || null,

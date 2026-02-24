@@ -37,43 +37,13 @@ describe('Environment Launcher', () => {
     jest.clearAllMocks();
   });
 
-  describe('OAuth Token Mode', () => {
-    it('应该设置 CLAUDE_CODE_OAUTH_TOKEN', async () => {
-      const config = {
-        name: 'test-provider',
-        authMode: 'oauth_token',
-        authToken: 'sk-ant-oat01-xxxxx'
-      };
-
-      // Setup mock to resolve immediately
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await executeWithEnv(config);
-
-      expect(spawn).toHaveBeenCalledWith(
-        'claude',
-        [],
-        expect.objectContaining({
-          env: expect.objectContaining({
-            CLAUDE_CODE_OAUTH_TOKEN: 'sk-ant-oat01-xxxxx'
-          })
-        })
-      );
-    });
-  });
-
   describe('API Key Mode', () => {
     it('应该设置 ANTHROPIC_API_KEY 和 ANTHROPIC_BASE_URL', async () => {
       const config = {
         name: 'test-provider',
         authMode: 'api_key',
         authToken: 'sk-xxxxx',
-        baseUrl: 'https://api.example.com',
-        tokenType: 'api_key'
+        baseUrl: 'https://api.example.com'
       };
 
       mockChild.on.mockImplementation((event, callback) => {
@@ -96,41 +66,11 @@ describe('Environment Launcher', () => {
       );
     });
 
-    it('应该设置 ANTHROPIC_AUTH_TOKEN 当 tokenType 是 auth_token', async () => {
-      const config = {
-        name: 'test-provider',
-        authMode: 'api_key',
-        authToken: 'sk-xxxxx',
-        baseUrl: 'https://api.example.com',
-        tokenType: 'auth_token'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await executeWithEnv(config);
-
-      expect(spawn).toHaveBeenCalledWith(
-        'claude',
-        [],
-        expect.objectContaining({
-          env: expect.objectContaining({
-            ANTHROPIC_AUTH_TOKEN: 'sk-xxxxx',
-            ANTHROPIC_BASE_URL: 'https://api.example.com'
-          })
-        })
-      );
-    });
-
     it('应该在缺少 baseUrl 时抛出错误', async () => {
       const config = {
         name: 'test-provider',
         authMode: 'api_key',
-        authToken: 'sk-xxxxx',
-        tokenType: 'api_key'
+        authToken: 'sk-xxxxx'
       };
 
       await expect(executeWithEnv(config)).rejects.toThrow('未配置基础地址');
@@ -197,8 +137,8 @@ describe('Environment Launcher', () => {
     it('应该设置主模型', async () => {
       const config = {
         name: 'test-provider',
-        authMode: 'oauth_token',
-        authToken: 'sk-ant-oat01-xxxxx',
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx',
         models: {
           primary: 'claude-3-sonnet-20240229'
         }
@@ -226,8 +166,8 @@ describe('Environment Launcher', () => {
     it('应该设置快速模型', async () => {
       const config = {
         name: 'test-provider',
-        authMode: 'oauth_token',
-        authToken: 'sk-ant-oat01-xxxxx',
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx',
         models: {
           smallFast: 'claude-3-haiku-20240307'
         }
@@ -257,8 +197,8 @@ describe('Environment Launcher', () => {
     it('应该传递启动参数', async () => {
       const config = {
         name: 'test-provider',
-        authMode: 'oauth_token',
-        authToken: 'sk-ant-oat01-xxxxx'
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
       };
 
       mockChild.on.mockImplementation((event, callback) => {
@@ -281,8 +221,8 @@ describe('Environment Launcher', () => {
     it('应该处理非零退出代码', async () => {
       const config = {
         name: 'test-provider',
-        authMode: 'oauth_token',
-        authToken: 'sk-ant-oat01-xxxxx'
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
       };
 
       mockChild.on.mockImplementation((event, callback) => {
@@ -297,8 +237,8 @@ describe('Environment Launcher', () => {
     it('应该处理 ENOENT 错误', async () => {
       const config = {
         name: 'test-provider',
-        authMode: 'oauth_token',
-        authToken: 'sk-ant-oat01-xxxxx'
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
       };
 
       mockChild.on.mockImplementation((event, callback) => {
@@ -313,8 +253,8 @@ describe('Environment Launcher', () => {
     it('应该处理其他启动错误', async () => {
       const config = {
         name: 'test-provider',
-        authMode: 'oauth_token',
-        authToken: 'sk-ant-oat01-xxxxx'
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
       };
 
       mockChild.on.mockImplementation((event, callback) => {
@@ -331,8 +271,8 @@ describe('Environment Launcher', () => {
     it('应该清除终端', async () => {
       const config = {
         name: 'test-provider',
-        authMode: 'oauth_token',
-        authToken: 'sk-ant-oat01-xxxxx'
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
       };
 
       mockChild.on.mockImplementation((event, callback) => {

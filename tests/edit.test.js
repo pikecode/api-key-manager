@@ -5,7 +5,7 @@
 
 const { configManager } = require('../src/config');
 const { validator } = require('../src/utils/validator');
-const { AUTH_MODE_DISPLAY, TOKEN_TYPE_DISPLAY, BASE_URL } = require('../src/constants');
+const { AUTH_MODE_DISPLAY, BASE_URL } = require('../src/constants');
 
 // Mock modules
 jest.mock('../src/config');
@@ -21,7 +21,7 @@ describe('Edit Command Logic', () => {
       const mockProvider = {
         name: 'test-provider',
         displayName: 'Test Provider',
-        authMode: 'oauth_token',
+        authMode: 'api_key',
         authToken: 'sk-ant-oat01-xxxxx'
       };
 
@@ -138,12 +138,12 @@ describe('Edit Command Logic', () => {
   describe('Field Editing', () => {
     it('应该支持编辑认证模式', () => {
       const provider = {
-        authMode: 'oauth_token',
-        canChangeAuthMode: false // OAuth 不能更改
+        authMode: 'api_key',
+        canChangeAuthMode: true
       };
 
-      expect(provider.authMode).toBe('oauth_token');
-      expect(provider.canChangeAuthMode).toBe(false);
+      expect(provider.authMode).toBe('api_key');
+      expect(provider.canChangeAuthMode).toBe(true);
     });
 
     it('应该支持编辑 IDE 类型', () => {
@@ -199,16 +199,16 @@ describe('Edit Command Logic', () => {
         authMode: 'api_key'
       };
 
-      expect(AUTH_MODE_DISPLAY[provider.authMode]).toBe('通用API密钥模式');
+      expect(AUTH_MODE_DISPLAY[provider.authMode]).toBe('API Key 模式');
     });
 
-    it('应该正确显示 Token 类型', () => {
+    it('应该正确显示 Auth Token 模式的环境变量', () => {
       const provider = {
-        authMode: 'api_key',
-        tokenType: 'api_key'
+        authMode: 'auth_token'
       };
 
-      expect(TOKEN_TYPE_DISPLAY[provider.tokenType]).toBe('ANTHROPIC_API_KEY');
+      const envVar = provider.authMode === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+      expect(envVar).toBe('ANTHROPIC_AUTH_TOKEN');
     });
 
     it('应该显示基础 URL 信息', () => {
@@ -239,12 +239,6 @@ describe('Edit Command Logic', () => {
     it('应该定义所有认证模式', () => {
       expect(AUTH_MODE_DISPLAY).toHaveProperty('api_key');
       expect(AUTH_MODE_DISPLAY).toHaveProperty('auth_token');
-      expect(AUTH_MODE_DISPLAY).toHaveProperty('oauth_token');
-    });
-
-    it('应该定义所有 Token 类型', () => {
-      expect(TOKEN_TYPE_DISPLAY).toHaveProperty('auth_token');
-      expect(TOKEN_TYPE_DISPLAY).toHaveProperty('api_key');
     });
 
     it('应该定义 URL 显示信息', () => {

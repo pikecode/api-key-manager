@@ -161,19 +161,19 @@ describe('Validate Command Logic', () => {
       expect(provider.baseUrl).toBeNull();
     });
 
-    it('oauth_token 模式不应该有 baseUrl', async () => {
-      await configManager.addProvider('oauth-provider', {
-        displayName: 'OAuth Provider',
+    it('api_key 模式需要 baseUrl', async () => {
+      await configManager.addProvider('api-key-provider', {
+        displayName: 'API Key Provider',
         ideName: 'claude',
-        authMode: 'oauth_token',
+        authMode: 'api_key',
         authToken: 'test-token',
         baseUrl: 'https://api.example.com'
       });
 
-      const provider = configManager.getProvider('oauth-provider');
+      const provider = configManager.getProvider('api-key-provider');
 
-      // oauth_token 模式 baseUrl 会被清除
-      expect(provider.authMode).toBe('oauth_token');
+      expect(provider.authMode).toBe('api_key');
+      expect(provider.baseUrl).toBe('https://api.example.com');
     });
   });
 

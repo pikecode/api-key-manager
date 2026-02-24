@@ -11,7 +11,7 @@ const { validator } = require('../utils/validator');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
 const { BaseCommand } = require('./BaseCommand');
-const { AUTH_MODE_DISPLAY, TOKEN_TYPE_DISPLAY, IDE_NAMES } = require('../constants');
+const { AUTH_MODE_DISPLAY, IDE_NAMES } = require('../constants');
 
 /**
  * 供应商编辑器类
@@ -167,53 +167,27 @@ class ProviderEditor extends BaseCommand {
               name: 'authMode',
               message: '认证模式:',
               choices: [
-                { name: '🔑 通用API密钥模式 - 支持 ANTHROPIC_API_KEY 和 ANTHROPIC_AUTH_TOKEN', value: 'api_key' },
-                { name: '🔐 认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN) - 适用于某些服务商', value: 'auth_token' },
-                { name: '🌐 OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN) - 适用于官方Claude Code', value: 'oauth_token' }
+                { name: '🔑 ANTHROPIC_API_KEY - 大多数第三方代理使用', value: 'api_key' },
+                { name: '🔐 ANTHROPIC_AUTH_TOKEN - 部分服务商使用', value: 'auth_token' }
               ],
               default: providerToEdit.authMode
             },
             {
-              type: 'list',
-              name: 'tokenType',
-              message: 'Token类型:',
-              choices: [
-                { name: '🔑 ANTHROPIC_API_KEY - 通用API密钥', value: 'api_key' },
-                { name: '🔐 ANTHROPIC_AUTH_TOKEN - 认证令牌', value: 'auth_token' }
-              ],
-              default: providerToEdit.tokenType || 'api_key',
-              when: (answers) => answers.authMode === 'api_key'
-            },
-            {
               type: 'input',
               name: 'baseUrl',
-              message: (answers) => {
-                if (answers.authMode === 'auth_token') {
-                  return 'API基础URL (留空使用官方API):';
-                }
-                return 'API基础URL:';
-              },
+              message: 'API 基础URL (ANTHROPIC_BASE_URL):',
               default: providerToEdit.baseUrl || '',
-              validate: (input, answers) => {
-                if (answers.authMode === 'auth_token' && !input) {
-                  return true;
-                }
+              validate: (input) => {
+                if (!input) return 'API 基础URL不能为空';
                 return validator.validateUrl(input) || true;
-              },
-              when: (answers) => answers.authMode === 'api_key' || answers.authMode === 'auth_token'
+              }
             },
             {
               type: 'input',
               name: 'authToken',
               message: (answers) => {
-                switch (answers.authMode) {
-                case 'api_key':
-                  const tokenTypeLabel = answers.tokenType === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-                  return `Token (${tokenTypeLabel}):`;
-                case 'auth_token': return '认证令牌 (ANTHROPIC_AUTH_TOKEN):';
-                case 'oauth_token': return 'OAuth令牌 (CLAUDE_CODE_OAUTH_TOKEN):';
-                default: return '认证令牌:';
-                }
+                const envVar = answers.authMode === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
+                return `Token (${envVar}):`;
               },
               default: providerToEdit.authToken,
               validate: (input) => validator.validateToken(input) || true
@@ -269,15 +243,12 @@ class ProviderEditor extends BaseCommand {
         });
       } else {
         // Re-use addProvider which can overwrite existing providers
-        // oauth_token 模式不需要 baseUrl，显式设为 null
-        const baseUrl = answers.authMode === 'oauth_token' ? null : answers.baseUrl;
         await this.configManager.addProvider(name, {
           displayName: answers.displayName,
           ideName,
-          baseUrl,
+          baseUrl: answers.baseUrl,
           authToken: answers.authToken,
           authMode: answers.authMode,
-          tokenType: answers.tokenType, // 仅在 authMode 为 'api_key' 时使用
           launchArgs: answers.launchArgs,
           // Retain original model settings unless we add editing for them
           primaryModel: existingProvider.models?.primary || null,

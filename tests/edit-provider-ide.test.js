@@ -28,7 +28,7 @@ describe('Edit Provider IDE Type', () => {
         name: 'my-claude',
         displayName: 'My Claude',
         ideName: 'claude',
-        authMode: 'oauth_token',
+        authMode: 'api_key',
         authToken: 'sk-ant-oauth-token',
         models: {
           primary: 'claude-3-5-sonnet-20241022',

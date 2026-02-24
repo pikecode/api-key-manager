@@ -102,8 +102,7 @@ describe('ConfigManager', () => {
         displayName: 'Updated Provider',
         baseUrl: 'https://test.com',
         authToken: 'new-token-123456',
-        authMode: 'api_key',
-        tokenType: 'api_key'
+        authMode: 'api_key'
       });
 
       const after = await configManager.load(true);
@@ -113,18 +112,17 @@ describe('ConfigManager', () => {
       expect(after.providers.test.current).toBe(true);
     });
 
-    test('should keep tokenType null for codex provider', async () => {
+    test('should keep authMode null for codex provider', async () => {
       await configManager.addProvider('codex', {
         displayName: 'Codex CLI',
         ideName: 'codex',
         authMode: 'openai_api_key',
         authToken: 'sk-test-token-123456',
-        baseUrl: null,
-        tokenType: null
+        baseUrl: null
       });
 
       const config = await configManager.load(true);
-      expect(config.providers.codex.tokenType).toBeNull();
+      expect(config.providers.codex.authMode).toBeNull();
     });
   });
 

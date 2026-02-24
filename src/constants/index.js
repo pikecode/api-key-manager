@@ -9,32 +9,22 @@
  * 认证模式的显示名称映射
  */
 const AUTH_MODE_DISPLAY = {
-  api_key: '通用API密钥模式',
-  auth_token: '认证令牌模式',
-  oauth_token: 'OAuth令牌模式'
+  api_key: 'API Key 模式',
+  auth_token: 'Auth Token 模式'
 };
 
 /**
  * 认证模式详细说明（用于添加供应商时）
  */
 const AUTH_MODE_DISPLAY_DETAILED = {
-  api_key: '通用API密钥模式',
-  auth_token: '认证令牌模式 (仅 ANTHROPIC_AUTH_TOKEN)',
-  oauth_token: 'OAuth令牌模式 (CLAUDE_CODE_OAUTH_TOKEN)'
+  api_key: 'API Key 模式 (ANTHROPIC_API_KEY)',
+  auth_token: 'Auth Token 模式 (ANTHROPIC_AUTH_TOKEN)'
 };
 
 /**
  * 所有支持的认证模式列表
  */
-const AUTH_MODES = ['api_key', 'auth_token', 'oauth_token'];
-
-/**
- * Token 类型显示映射
- */
-const TOKEN_TYPE_DISPLAY = {
-  auth_token: 'ANTHROPIC_AUTH_TOKEN',
-  api_key: 'ANTHROPIC_API_KEY'
-};
+const AUTH_MODES = ['api_key', 'auth_token'];
 
 // ============ ESC 返回提示常量 ============
 
@@ -202,8 +192,7 @@ const ENV_VARS = {
   ANTHROPIC_AUTH_TOKEN: 'ANTHROPIC_AUTH_TOKEN',
   ANTHROPIC_API_KEY: 'ANTHROPIC_API_KEY',
   OPENAI_API_KEY: 'OPENAI_API_KEY',
-  OPENAI_BASE_URL: 'OPENAI_BASE_URL',
-  CLAUDE_CODE_OAUTH_TOKEN: 'CLAUDE_CODE_OAUTH_TOKEN'
+  OPENAI_BASE_URL: 'OPENAI_BASE_URL'
 };
 
 module.exports = {
@@ -211,7 +200,6 @@ module.exports = {
   AUTH_MODE_DISPLAY,
   AUTH_MODE_DISPLAY_DETAILED,
   AUTH_MODES,
-  TOKEN_TYPE_DISPLAY,
 
   // ESC 提示
   ESC_HINTS,

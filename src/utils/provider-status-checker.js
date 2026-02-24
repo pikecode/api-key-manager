@@ -102,10 +102,6 @@ class ProviderStatusChecker {
       return result;
     }
 
-    if (provider.authMode === 'oauth_token') {
-      return this._result('unknown', '暂不支持 OAuth 令牌检测', null);
-    }
-
     // auth_token 模式可留空 baseUrl（使用官方默认 API）
     // api_key 模式需要 baseUrl（用于自定义端点/代理）
     if (provider.authMode === 'auth_token' && !provider.baseUrl) {

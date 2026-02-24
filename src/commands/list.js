@@ -9,7 +9,7 @@ const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
 const { maybeMaskToken } = require('../utils/secrets');
-const { AUTH_MODE_DISPLAY, TOKEN_TYPE_DISPLAY, BASE_URL } = require('../constants');
+const { AUTH_MODE_DISPLAY, BASE_URL } = require('../constants');
 
 /**
  * 供应商列表显示类
@@ -93,30 +93,20 @@ class ProviderLister {
           console.log(chalk.gray(`   认证模式: ${AUTH_MODE_DISPLAY[provider.authMode] || provider.authMode}`));
 
           // 根据不同模式显示对应的环境变量名称
-          if (provider.authMode === 'oauth_token') {
-            // OAuth 模式
-            if (provider.authToken) {
-              console.log(chalk.gray(`   CLAUDE_CODE_OAUTH_TOKEN: ${maybeMaskToken(provider.authToken, showToken)}`));
-            }
-            if (provider.baseUrl) {
-              console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
-            }
-          } else if (provider.authMode === 'api_key') {
-            // API Key 模式
-            if (provider.baseUrl) {
-              console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
-            }
-            if (provider.authToken) {
-              const tokenEnvName = TOKEN_TYPE_DISPLAY[provider.tokenType] || 'ANTHROPIC_API_KEY';
-              console.log(chalk.gray(`   ${tokenEnvName}: ${maybeMaskToken(provider.authToken, showToken)}`));
-            }
-          } else {
-            // auth_token 模式
+          if (provider.authMode === 'auth_token') {
             if (provider.baseUrl) {
               console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
             }
             if (provider.authToken) {
               console.log(chalk.gray(`   ANTHROPIC_AUTH_TOKEN: ${maybeMaskToken(provider.authToken, showToken)}`));
+            }
+          } else {
+            // API Key 模式（默认）
+            if (provider.baseUrl) {
+              console.log(chalk.gray(`   ANTHROPIC_BASE_URL: ${provider.baseUrl}`));
+            }
+            if (provider.authToken) {
+              console.log(chalk.gray(`   ANTHROPIC_API_KEY: ${maybeMaskToken(provider.authToken, showToken)}`));
             }
           }
         }
