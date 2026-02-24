@@ -121,4 +121,9 @@ registry.registerLazy('claude-clean', async () => {
   return claudeCleanCommand;
 });
 
+registry.registerLazy('mcp', async () => {
+  const { mcpCommand } = require('./commands/mcp');
+  return mcpCommand;
+});
+
 module.exports = { CommandRegistry, registry };

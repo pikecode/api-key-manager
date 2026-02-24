@@ -7,11 +7,87 @@ const { registry } = require('../src/CommandRegistry');
 const pkg = require('../package.json');
 const { checkForUpdates } = require('../src/utils/update-checker');
 
+// 命令分组定义
+const COMMAND_GROUPS = {
+  '核心命令': ['add', 'switch', 'remove', 'list', 'current', 'edit'],
+  '运维命令': ['export', 'import', 'backup', 'validate', 'clone'],
+  '工具命令': ['stats', 'health', 'batch', 'benchmark', 'claude', 'mcp']
+};
+
 // Set up CLI
 program
   .name('akm')
   .description('API密钥管理工具 - Manage and switch multiple API provider configurations')
   .version(pkg.version, '-V, --version', '显示版本号');
+
+// 自定义 help 输出，按分组显示命令
+program.configureHelp({
+  formatHelp(cmd, helper) {
+    const termWidth = helper.padWidth(cmd, helper);
+    const helpWidth = helper.helpWidth || 80;
+
+    let output = '';
+
+    // 标题
+    output += `${chalk.bold('用法:')} ${helper.commandUsage(cmd)}\n\n`;
+
+    // 描述
+    const desc = helper.commandDescription(cmd);
+    if (desc) {
+      output += `${desc}\n\n`;
+    }
+
+    // 参数
+    const argList = helper.visibleArguments(cmd).map(arg => {
+      return helper.formatHelp ? `  ${helper.argumentTerm(arg).padEnd(termWidth)}  ${helper.argumentDescription(arg)}` : '';
+    });
+    if (argList.length > 0) {
+      output += `${chalk.bold('参数:')}\n${argList.join('\n')}\n\n`;
+    }
+
+    // 选项
+    const optList = helper.visibleOptions(cmd).map(opt => {
+      return `  ${helper.optionTerm(opt).padEnd(termWidth)}  ${helper.optionDescription(opt)}`;
+    });
+    if (optList.length > 0) {
+      output += `${chalk.bold('选项:')}\n${optList.join('\n')}\n\n`;
+    }
+
+    // 分组命令
+    const commands = helper.visibleCommands(cmd);
+    if (commands.length > 0) {
+      const commandMap = {};
+      commands.forEach(sub => {
+        commandMap[sub.name()] = sub;
+      });
+
+      Object.entries(COMMAND_GROUPS).forEach(([groupName, cmdNames]) => {
+        const groupCmds = cmdNames
+          .filter(name => commandMap[name])
+          .map(name => {
+            const sub = commandMap[name];
+            return `  ${chalk.cyan(helper.subcommandTerm(sub).padEnd(termWidth))}  ${helper.subcommandDescription(sub)}`;
+          });
+
+        if (groupCmds.length > 0) {
+          output += `${chalk.bold.yellow(groupName + ':')}\n${groupCmds.join('\n')}\n\n`;
+        }
+      });
+
+      // 未分组的命令
+      const groupedNames = Object.values(COMMAND_GROUPS).flat();
+      const ungrouped = commands
+        .filter(sub => !groupedNames.includes(sub.name()))
+        .map(sub => `  ${chalk.cyan(helper.subcommandTerm(sub).padEnd(termWidth))}  ${helper.subcommandDescription(sub)}`);
+
+      if (ungrouped.length > 0) {
+        output += `${chalk.bold.yellow('其他命令:')}\n${ungrouped.join('\n')}\n\n`;
+      }
+    }
+
+    return output;
+  }
+});
 
 // Check for updates before any command runs
 program.hook('preAction', async () => {
@@ -193,6 +269,20 @@ program
     }
   });
 
+// Clone command
+program
+  .command('clone')
+  .argument('[source]', '要克隆的源供应商名称')
+  .description('克隆现有供应商配置')
+  .action(async (source) => {
+    try {
+      await registry.executeCommand('clone', source);
+    } catch (error) {
+      console.error(chalk.red('❌ 克隆失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
 // Stats command
 program
   .command('stats')
@@ -285,11 +375,11 @@ program
     }
   });
 
-// Claude clean command
+// Claude command
 program
   .command('claude')
   .argument('<subcommand>', '子命令: clean (清理) | analyze (分析)')
-  .description('Claude Code 工具管理 (clean: 清理 ~/.claude.json)')
+  .description('Claude Code 配置管理 (clean/analyze)')
   .action(async (subcommand) => {
     try {
       if (subcommand !== 'clean' && subcommand !== 'analyze') {
@@ -304,16 +394,16 @@ program
     }
   });
 
-// Clone command
+// MCP command
 program
-  .command('clone')
-  .argument('[source]', '要克隆的源供应商名称')
-  .description('克隆现有供应商配置')
-  .action(async (source) => {
+  .command('mcp')
+  .argument('<subcommand>', '子命令: list | add | edit | remove')
+  .description('MCP 服务器管理 (list/add/edit/remove)')
+  .action(async (subcommand) => {
     try {
-      await registry.executeCommand('clone', source);
+      await registry.executeCommand('mcp', subcommand);
     } catch (error) {
-      console.error(chalk.red('❌ 克隆失败:'), error.message);
+      console.error(chalk.red('❌ MCP 操作失败:'), error.message);
       process.exit(1);
     }
   });
