@@ -29,12 +29,14 @@ class ProviderLister {
    * @param {string|null} filter - 过滤器 ('codex', 'claude', 或 null 表示全部)
    * @param {Object} options - 显示选项
    * @param {boolean} [options.showToken=true] - 是否显示完整 token
+   * @param {boolean} [options.checkStatus=false] - 是否检测在线状态
    * @returns {Promise<void>}
    */
   async list(filter = null, options = {}) {
     try {
       // 默认显示完整 token，不再加密
       const showToken = options.showToken !== false;
+      const checkStatus = options.checkStatus === true;
       await this.configManager.ensureLoaded();
       let providers = this.configManager.listProviders();
       const currentProvider = this.configManager.getCurrentProvider();
@@ -46,7 +48,7 @@ class ProviderLister {
         providers = providers.filter(p => p.ideName !== 'codex');
       }
 
-      const statusMap = await this.statusChecker.checkAll(providers);
+      const statusMap = checkStatus ? await this.statusChecker.checkAll(providers) : {};
 
       if (providers.length === 0) {
         if (filter) {
@@ -66,9 +68,6 @@ class ProviderLister {
       providers.forEach((provider, index) => {
         const isCurrent = provider.name === currentProvider?.name;
         const status = isCurrent ? '✅' : '🔹';
-        const availability = statusMap[provider.name] || { state: 'unknown', label: '未知', latency: null };
-        const availabilityIcon = this._iconForState(availability.state);
-        const availabilityText = this._formatAvailability(availability);
         const nameColor = isCurrent ? chalk.green : chalk.white;
 
         // IDE 类型标签
@@ -78,7 +77,15 @@ class ProviderLister {
 
         // 如果有别名，显示别名
         const aliasText = provider.alias ? chalk.yellow(` [别名: ${provider.alias}]`) : '';
-        console.log(`${status} ${availabilityIcon} ${ideTag} ${nameColor(provider.name)} (${provider.displayName})${aliasText} - ${availabilityText}`);
+
+        if (checkStatus) {
+          const availability = statusMap[provider.name] || { state: 'unknown', label: '未知', latency: null };
+          const availabilityIcon = this._iconForState(availability.state);
+          const availabilityText = this._formatAvailability(availability);
+          console.log(`${status} ${availabilityIcon} ${ideTag} ${nameColor(provider.name)} (${provider.displayName})${aliasText} - ${availabilityText}`);
+        } else {
+          console.log(`${status} ${ideTag} ${nameColor(provider.name)} (${provider.displayName})${aliasText}`);
+        }
 
         if (provider.ideName === 'codex') {
           console.log(chalk.gray('   IDE: Codex CLI'));

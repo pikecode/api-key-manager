@@ -167,11 +167,12 @@ program
   .description('列出所有API密钥配置')
   .option('--codex', '仅显示 Codex CLI 供应商')
   .option('--claude', '仅显示 Claude Code 供应商')
+  .option('--status', '检测供应商在线状态')
   .option('--show-token', '显示完整 Token（默认脱敏）')
   .action(async (options) => {
     try {
       const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
-      await registry.executeCommand('list', filter, { showToken: options.showToken });
+      await registry.executeCommand('list', filter, { showToken: options.showToken, checkStatus: options.status });
     } catch (error) {
       console.error(chalk.red('❌ 列表失败:'), error.message);
       process.exit(1);
