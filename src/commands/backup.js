@@ -98,6 +98,9 @@ class BackupManager {
 
       await this.configManager.ensureLoaded();
 
+      // 导入前自动备份当前配置
+      await this.backup();
+
       const importedCount = Object.keys(importData.providers).length;
       let addedCount = 0;
       let skippedCount = 0;

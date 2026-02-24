@@ -285,6 +285,25 @@ program
     }
   });
 
+// Claude clean command
+program
+  .command('claude')
+  .argument('<subcommand>', '子命令: clean (清理) | analyze (分析)')
+  .description('Claude Code 工具管理 (clean: 清理 ~/.claude.json)')
+  .action(async (subcommand) => {
+    try {
+      if (subcommand !== 'clean' && subcommand !== 'analyze') {
+        console.error(chalk.red(`❌ 未知子命令: ${subcommand}`));
+        console.error(chalk.gray('  可用子命令: clean, analyze'));
+        process.exit(1);
+      }
+      await registry.executeCommand('claude-clean', subcommand);
+    } catch (error) {
+      console.error(chalk.red('❌ 操作失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
 // Clone command
 program
   .command('clone')

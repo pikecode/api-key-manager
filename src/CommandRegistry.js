@@ -116,4 +116,9 @@ registry.registerLazy('clone', async () => {
   return cloneCommand;
 });
 
+registry.registerLazy('claude-clean', async () => {
+  const { claudeCleanCommand } = require('./commands/claude-clean');
+  return claudeCleanCommand;
+});
+
 module.exports = { CommandRegistry, registry };
