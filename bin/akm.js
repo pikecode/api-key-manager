@@ -285,5 +285,19 @@ program
     }
   });
 
+// Clone command
+program
+  .command('clone')
+  .argument('[source]', '要克隆的源供应商名称')
+  .description('克隆现有供应商配置')
+  .action(async (source) => {
+    try {
+      await registry.executeCommand('clone', source);
+    } catch (error) {
+      console.error(chalk.red('❌ 克隆失败:'), error.message);
+      process.exit(1);
+    }
+  });
+
 // Parse arguments
 program.parse();

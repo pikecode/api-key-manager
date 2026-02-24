@@ -111,4 +111,9 @@ registry.registerLazy('benchmark', async () => {
   return benchmarkCommand;
 });
 
+registry.registerLazy('clone', async () => {
+  const { cloneCommand } = require('./commands/clone');
+  return cloneCommand;
+});
+
 module.exports = { CommandRegistry, registry };
