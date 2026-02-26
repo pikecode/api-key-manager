@@ -207,32 +207,15 @@ async function applyCodexConfig(config, options = {}) {
   }
 
   const codexHome = await ensureCodexHome(options.codexHome);
-  const { configTomlPath, authJsonPath } = buildCodexPaths(codexHome);
+  const { authJsonPath } = buildCodexPaths(codexHome);
 
-  // 备份现有配置
-  const backupDir = await backupCodexFiles(codexHome);
-
-  // 读取现有 config.toml
-  let existingConfigToml = null;
-  if (await fs.pathExists(configTomlPath)) {
-    existingConfigToml = await fs.readFile(configTomlPath, 'utf8');
-  }
-
-  // 确保设置了 preferred_auth_method = "apikey"
-  let updatedConfigToml = ensureApiKeyAuthMethod(existingConfigToml);
-
-  // 更新 api_base_url（如果有则设置，没有则移除）
-  updatedConfigToml = updateApiBaseUrl(updatedConfigToml, config.baseUrl || null);
-
-  await fs.writeFile(configTomlPath, updatedConfigToml, 'utf8');
-  await setSecurePermissions(configTomlPath);
-
-  // 写入 auth.json
+  // 只写入 auth.json，不修改 config.toml
+  // config.toml 由用户自己管理，akm 不应覆盖其中的 model_provider、features 等配置
   const authJsonContent = buildAuthJson(config.authToken);
   await fs.writeFile(authJsonPath, authJsonContent, 'utf8');
   await setSecurePermissions(authJsonPath);
 
-  return { codexHome, backupDir };
+  return { codexHome, backupDir: null };
 }
 
 module.exports = {
