@@ -214,13 +214,13 @@ async function applyCodexConfig(config, options = {}) {
   await fs.writeFile(authJsonPath, authJsonContent, 'utf8');
   await setSecurePermissions(authJsonPath);
 
-  // 只精准更新 config.toml 中的 api_base_url，其他配置保持不变
-  // （model_provider、features 等由用户自己管理）
+  // 清理 config.toml 中 akm 之前错误写入的顶层 api_base_url 字段
+  // Codex 的 base_url 在 [model_providers.<key>] section 里，akm 不应修改
   if (await fs.pathExists(configTomlPath)) {
     const existingToml = await fs.readFile(configTomlPath, 'utf8');
-    const updatedToml = updateApiBaseUrl(existingToml, config.baseUrl || null);
-    if (updatedToml !== existingToml) {
-      await fs.writeFile(configTomlPath, updatedToml, 'utf8');
+    const cleanedToml = updateApiBaseUrl(existingToml, null); // 移除顶层 api_base_url
+    if (cleanedToml !== existingToml) {
+      await fs.writeFile(configTomlPath, cleanedToml, 'utf8');
       await setSecurePermissions(configTomlPath);
     }
   }
