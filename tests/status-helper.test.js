@@ -17,25 +17,25 @@ const chalk = require('chalk');
 describe('StatusHelper', () => {
   describe('getIconForState', () => {
     it('应该返回在线状态图标', () => {
-      expect(StatusHelper.getIconForState('online')).toBe('🟢');
+      expect(StatusHelper.getIconForState('online')).toBe('●');
     });
 
     it('应该返回降级状态图标', () => {
-      expect(StatusHelper.getIconForState('degraded')).toBe('🟡');
+      expect(StatusHelper.getIconForState('degraded')).toBe('◐');
     });
 
     it('应该返回离线状态图标', () => {
-      expect(StatusHelper.getIconForState('offline')).toBe('🔴');
+      expect(StatusHelper.getIconForState('offline')).toBe('○');
     });
 
     it('应该返回等待状态图标', () => {
-      expect(StatusHelper.getIconForState('pending')).toBe('⏳');
+      expect(StatusHelper.getIconForState('pending')).toBe('…');
     });
 
     it('应该返回未知状态的默认图标', () => {
-      expect(StatusHelper.getIconForState('unknown')).toBe('⚪');
-      expect(StatusHelper.getIconForState(null)).toBe('⚪');
-      expect(StatusHelper.getIconForState(undefined)).toBe('⚪');
+      expect(StatusHelper.getIconForState('unknown')).toBe('·');
+      expect(StatusHelper.getIconForState(null)).toBe('·');
+      expect(StatusHelper.getIconForState(undefined)).toBe('·');
     });
   });
 

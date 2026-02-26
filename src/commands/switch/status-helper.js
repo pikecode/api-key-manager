@@ -13,12 +13,12 @@ class StatusHelper {
    */
   static getIconForState(state) {
     const iconMap = {
-      online: '🟢',
-      degraded: '🟡',
-      offline: '🔴',
-      pending: '⏳'
+      online: chalk.green('●'),
+      degraded: chalk.yellow('◐'),
+      offline: chalk.red('○'),
+      pending: chalk.gray('…')
     };
-    return iconMap[state] || '⚪';
+    return iconMap[state] || chalk.gray('·');
   }
 
   /**

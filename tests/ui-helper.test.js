@@ -19,10 +19,10 @@ describe('UIHelper', () => {
   describe('icons', () => {
     it('应该定义所有图标', () => {
       expect(UIHelper.icons).toBeDefined();
-      expect(UIHelper.icons.success).toBe('✅');
-      expect(UIHelper.icons.error).toBe('❌');
-      expect(UIHelper.icons.warning).toBe('⚠️');
-      expect(UIHelper.icons.launch).toBe('🚀');
+      expect(UIHelper.icons.success).toBe('✓');
+      expect(UIHelper.icons.error).toBe('✗');
+      expect(UIHelper.icons.warning).toBe('!');
+      expect(UIHelper.icons.launch).toBe('▶');
     });
   });
 
@@ -65,7 +65,7 @@ describe('UIHelper', () => {
       const item = UIHelper.createItem('标签', '值', true);
 
       expect(item).toContain('标签');
-      expect(item).toContain('🎯');
+      expect(item).toContain('›');
     });
   });
 

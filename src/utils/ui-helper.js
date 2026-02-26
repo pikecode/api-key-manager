@@ -31,8 +31,8 @@ class UIHelper {
   static createStatus(status, label) {
     const statusConfig = {
       current: { icon: UIHelper.icons.current, color: UIHelper.colors.success },
-      active: { icon: '🟢', color: UIHelper.colors.success },
-      inactive: { icon: '⚫', color: UIHelper.colors.muted },
+      active: { icon: chalk.green('●'), color: UIHelper.colors.success },
+      inactive: { icon: chalk.gray('·'), color: UIHelper.colors.muted },
       loading: { icon: UIHelper.icons.loading, color: UIHelper.colors.warning },
       error: { icon: UIHelper.icons.error, color: UIHelper.colors.error }
     };
@@ -208,23 +208,23 @@ UIHelper.colors = {
 
 // 图标
 UIHelper.icons = {
-  success: '✅',
-  error: '❌',
-  warning: '⚠️',
-  info: 'ℹ️',
-  loading: '⏳',
+  success: '✓',
+  error: '✗',
+  warning: '!',
+  info: 'i',
+  loading: '…',
   arrow: '→',
-  back: '🔙',
-  home: '🏠',
-  settings: '⚙️',
-  add: '➕',
-  edit: '✏️',
-  delete: '🗑️',
-  launch: '🚀',
-  list: '📋',
-  config: '🛠️',
-  current: '🎯',
-  search: '🔍'
+  back: '←',
+  home: '~',
+  settings: '*',
+  add: '+',
+  edit: '~',
+  delete: '-',
+  launch: '▶',
+  list: '≡',
+  config: '#',
+  current: '›',
+  search: '?'
 };
 
 module.exports = { UIHelper };
