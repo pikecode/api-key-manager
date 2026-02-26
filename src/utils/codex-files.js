@@ -87,102 +87,45 @@ async function backupCodexFiles(codexHome = resolveCodexHome()) {
   return backupDir;
 }
 
-async function applyCodexProfile(profile, options = {}) {
-  if (!profile || (profile.configToml == null && profile.authJson == null)) {
-    throw new Error('Codex 配置为空，无法切换');
-  }
-
-  const codexHome = await ensureCodexHome(profile.codexHome || options.codexHome);
-  const { configTomlPath, authJsonPath } = buildCodexPaths(codexHome);
-
-  const backupDir = await backupCodexFiles(codexHome);
-
-  if (profile.configToml != null) {
-    await fs.writeFile(configTomlPath, profile.configToml, 'utf8');
-    await setSecurePermissions(configTomlPath);
-  }
-
-  if (profile.authJson != null) {
-    await fs.writeFile(authJsonPath, profile.authJson, 'utf8');
-    await setSecurePermissions(authJsonPath);
-  }
-
-  return { codexHome, backupDir };
-}
-
 /**
- * 确保 config.toml 中设置了 preferred_auth_method = "apikey"
+ * 移除 config.toml 顶层（第一个 [section] 之前）的 api_base_url 字段
+ * 只清理顶层，不影响 [model_providers.xxx] section 内的 base_url
  * @param {string} configToml - 现有的 config.toml 内容
  * @returns {string} 更新后的 config.toml 内容
  */
-function ensureApiKeyAuthMethod(configToml) {
-  if (!configToml) {
-    // 如果没有 config.toml，创建一个最小配置
-    return 'preferred_auth_method = "apikey"\n';
-  }
+function removeTopLevelApiBaseUrl(configToml) {
+  if (!configToml) return configToml;
 
-  // 移除所有已存在的 preferred_auth_method 行（防止重复）
-  const authMethodRegex = /^preferred_auth_method\s*=\s*["']?[^"'\n]*["']?\s*\n?/gm;
-  let cleanedConfig = configToml.replace(authMethodRegex, '');
+  const sectionStart = configToml.search(/^\[/m);
+  const topLevel = sectionStart === -1 ? configToml : configToml.slice(0, sectionStart);
+  const rest = sectionStart === -1 ? '' : configToml.slice(sectionStart);
 
-  // 清理可能存在的损坏字符（如孤立的 { 或空行堆积）
-  cleanedConfig = cleanedConfig.replace(/^[{}]+\s*\n?/gm, '');
-  cleanedConfig = cleanedConfig.replace(/^\n{3,}/gm, '\n\n');
-
-  // 在文件开头添加 preferred_auth_method
-  const newLine = 'preferred_auth_method = "apikey"\n';
-
-  // 如果清理后为空，直接返回新配置
-  if (!cleanedConfig.trim()) {
-    return newLine;
-  }
-
-  return newLine + cleanedConfig;
+  const cleaned = topLevel.replace(/^api_base_url\s*=\s*["']?[^"'\n]*["']?\s*\n?/m, '');
+  return cleaned + rest;
 }
 
 /**
- * 更新 config.toml 中的 api_base_url
- * @param {string} configToml - 现有的 config.toml 内容
- * @param {string|null} baseUrl - API base URL，null 时移除该配置
- * @returns {string} 更新后的 config.toml 内容
+ * 从 config.toml 中提取当前激活的 model_provider 的 base_url
+ * 读取 model_provider 字段，再从对应的 [model_providers.<key>] section 中取 base_url
+ * @param {string} configToml - config.toml 内容
+ * @returns {string|null} base_url 或 null
  */
-function updateApiBaseUrl(configToml, baseUrl) {
-  if (!configToml) {
-    configToml = '';
-  }
+function extractBaseUrlFromConfigToml(configToml) {
+  if (!configToml) return null;
 
-  // 匹配 api_base_url 配置行
-  const baseUrlRegex = /^api_base_url\s*=\s*["']?[^"'\n]*["']?\s*\n?/m;
+  // 读取 model_provider = "xxx"
+  const providerMatch = configToml.match(/^model_provider\s*=\s*["']([^"']+)["']/m);
+  if (!providerMatch) return null;
 
-  if (baseUrl) {
-    // 需要设置 api_base_url
-    const newLine = `api_base_url = "${baseUrl}"`;
+  const providerKey = providerMatch[1];
 
-    if (configToml.match(baseUrlRegex)) {
-      // 替换现有的
-      return configToml.replace(baseUrlRegex, newLine + '\n');
-    }
-    // 空配置，直接返回新行
-    if (configToml.length === 0) {
-      return newLine + '\n';
-    }
-    // 找到第一个 section [xxx]，在它之前插入
-    const sectionMatch = configToml.match(/^\[/m);
-    if (sectionMatch) {
-      const insertPos = configToml.indexOf(sectionMatch[0]);
-      const before = configToml.slice(0, insertPos);
-      const after = configToml.slice(insertPos);
-      // 确保前面有换行分隔
-      const separator = before.endsWith('\n') ? '' : '\n';
-      return before + separator + newLine + '\n\n' + after;
-    }
-    // 没有 section，在文件末尾添加
-    const separator = configToml.endsWith('\n') ? '' : '\n';
-    return configToml + separator + newLine + '\n';
-  } else {
-    // 移除 api_base_url（使用官方 API）
-    return configToml.replace(baseUrlRegex, '');
-  }
+  // 在对应 section 中找 base_url
+  const sectionRegex = new RegExp(
+    `\\[model_providers\\.${providerKey}\\][^\\[]*base_url\\s*=\\s*["']([^"']+)["']`,
+    's'
+  );
+  const urlMatch = configToml.match(sectionRegex);
+  return urlMatch ? urlMatch[1] : null;
 }
 
 /**
@@ -195,11 +138,14 @@ function buildAuthJson(apiKey) {
 }
 
 /**
- * 应用 Codex 配置（写入 config.toml 和 auth.json）
- * 用于切换供应商时确保配置文件正确
+ * 应用 Codex 配置（写入 auth.json，清理 config.toml 中的无效字段）
+ * config.toml 由用户自己管理，akm 只负责：
+ *   1. 写入 auth.json（API Key）
+ *   2. 清理之前错误写入的顶层 api_base_url 字段
+ * base_url 通过环境变量 OPENAI_BASE_URL 传递给 Codex 进程
  * @param {object} config - 供应商配置
  * @param {object} options - 选项
- * @returns {Promise<{codexHome: string, backupDir: string|null}>}
+ * @returns {Promise<{codexHome: string}>}
  */
 async function applyCodexConfig(config, options = {}) {
   if (!config || !config.authToken) {
@@ -215,28 +161,25 @@ async function applyCodexConfig(config, options = {}) {
   await setSecurePermissions(authJsonPath);
 
   // 清理 config.toml 中 akm 之前错误写入的顶层 api_base_url 字段
-  // Codex 的 base_url 在 [model_providers.<key>] section 里，akm 不应修改
   if (await fs.pathExists(configTomlPath)) {
     const existingToml = await fs.readFile(configTomlPath, 'utf8');
-    const cleanedToml = updateApiBaseUrl(existingToml, null); // 移除顶层 api_base_url
+    const cleanedToml = removeTopLevelApiBaseUrl(existingToml);
     if (cleanedToml !== existingToml) {
       await fs.writeFile(configTomlPath, cleanedToml, 'utf8');
       await setSecurePermissions(configTomlPath);
     }
   }
 
-  return { codexHome, backupDir: null };
+  return { codexHome };
 }
 
 module.exports = {
   resolveCodexHome,
   buildCodexPaths,
   readCodexFiles,
-  applyCodexProfile,
   applyCodexConfig,
   backupCodexFiles,
-  ensureApiKeyAuthMethod,
-  updateApiBaseUrl,
+  removeTopLevelApiBaseUrl,
+  extractBaseUrlFromConfigToml,
   buildAuthJson
 };
-

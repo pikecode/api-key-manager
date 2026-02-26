@@ -390,7 +390,7 @@ class ProviderAdder extends BaseCommand {
 
   async importCodexConfig() {
     try {
-      const { readCodexFiles } = require('../utils/codex-files');
+      const { readCodexFiles, extractBaseUrlFromConfigToml } = require('../utils/codex-files');
       const codexFiles = await readCodexFiles();
 
       if (!codexFiles.authJson) {
@@ -405,19 +405,15 @@ class ProviderAdder extends BaseCommand {
         return null;
       }
 
-      // 尝试从 config.toml 获取 base URL
-      // 支持 api_base_url（akm 写入的格式）和 api_base（某些旧配置可能使用）
+      // 从 config.toml 中读取当前激活 provider 的 base_url
+      // 优先从 [model_providers.<key>] section 读取，兼容旧的顶层 api_base_url 格式
       let baseUrl = null;
       if (codexFiles.configToml) {
-        const baseUrlMatch = codexFiles.configToml.match(/api_base_url\s*=\s*["']([^"']+)["']/);
-        if (baseUrlMatch) {
-          baseUrl = baseUrlMatch[1];
-        } else {
-          // 兼容旧格式
-          const legacyMatch = codexFiles.configToml.match(/api_base\s*=\s*["']([^"']+)["']/);
-          if (legacyMatch) {
-            baseUrl = legacyMatch[1];
-          }
+        baseUrl = extractBaseUrlFromConfigToml(codexFiles.configToml);
+        if (!baseUrl) {
+          // 兼容旧格式（akm 之前错误写入的顶层字段）
+          const legacyMatch = codexFiles.configToml.match(/^api_base_url\s*=\s*["']([^"']+)["']/m);
+          if (legacyMatch) baseUrl = legacyMatch[1];
         }
       }
 

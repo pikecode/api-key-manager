@@ -2,10 +2,11 @@ const fs = require('fs-extra');
 const path = require('path');
 const {
   readCodexFiles,
-  applyCodexProfile,
+  applyCodexConfig,
   buildCodexPaths,
-  ensureApiKeyAuthMethod,
-  updateApiBaseUrl
+  removeTopLevelApiBaseUrl,
+  extractBaseUrlFromConfigToml,
+  buildAuthJson
 } = require('../src/utils/codex-files');
 
 describe('codex-files', () => {
@@ -28,88 +29,99 @@ describe('codex-files', () => {
     expect(result.authJson).toBeNull();
   });
 
-  test('applyCodexProfile backups existing and writes new files', async () => {
-    const { configTomlPath, authJsonPath } = buildCodexPaths(codexHome);
+  test('applyCodexConfig writes auth.json', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    await applyCodexConfig({ authToken: 'sk-test-key', name: 'test' });
+    const content = JSON.parse(await fs.readFile(authJsonPath, 'utf8'));
+    expect(content.OPENAI_API_KEY).toBe('sk-test-key');
+  });
+
+  test('applyCodexConfig cleans up top-level api_base_url from config.toml', async () => {
+    const { configTomlPath } = buildCodexPaths(codexHome);
     await fs.ensureDir(codexHome);
-    await fs.writeFile(configTomlPath, 'old-config', 'utf8');
-    await fs.writeFile(authJsonPath, '{"old":true}', 'utf8');
+    await fs.writeFile(configTomlPath,
+      'api_base_url = "https://old.com"\nmodel_provider = "88code"\n', 'utf8');
 
-    const profile = {
-      codexHome,
-      configToml: 'new-config',
-      authJson: '{"new":true}'
-    };
+    await applyCodexConfig({ authToken: 'sk-test', name: 'test' });
 
-    const { backupDir } = await applyCodexProfile(profile);
-    expect(backupDir).toBeTruthy();
-    expect(await fs.pathExists(backupDir)).toBe(true);
+    const content = await fs.readFile(configTomlPath, 'utf8');
+    expect(content).not.toContain('api_base_url');
+    expect(content).toContain('model_provider = "88code"');
+  });
 
-    expect(await fs.readFile(configTomlPath, 'utf8')).toBe('new-config');
-    expect(await fs.readFile(authJsonPath, 'utf8')).toBe('{"new":true}');
+  test('applyCodexConfig does not touch config.toml if no api_base_url present', async () => {
+    const { configTomlPath } = buildCodexPaths(codexHome);
+    const original = 'model_provider = "88code"\n[model_providers.88code]\nbase_url = "https://88code.ai"\n';
+    await fs.ensureDir(codexHome);
+    await fs.writeFile(configTomlPath, original, 'utf8');
 
-    expect(await fs.readFile(path.join(backupDir, 'config.toml'), 'utf8')).toBe('old-config');
-    expect(await fs.readFile(path.join(backupDir, 'auth.json'), 'utf8')).toBe('{"old":true}');
+    await applyCodexConfig({ authToken: 'sk-test', name: 'test' });
+
+    const content = await fs.readFile(configTomlPath, 'utf8');
+    expect(content).toBe(original);
+  });
+
+  test('applyCodexConfig throws when authToken missing', async () => {
+    await expect(applyCodexConfig({ name: 'test' })).rejects.toThrow('Codex 配置缺少 API Key');
   });
 });
 
-describe('ensureApiKeyAuthMethod', () => {
-  test('creates minimal config when input is null', () => {
-    const result = ensureApiKeyAuthMethod(null);
-    expect(result).toBe('preferred_auth_method = "apikey"\n');
-  });
-
-  test('adds auth method to existing config without it', () => {
-    const input = 'some_other_setting = "value"\n';
-    const result = ensureApiKeyAuthMethod(input);
-    expect(result).toContain('preferred_auth_method = "apikey"');
-    expect(result).toContain('some_other_setting = "value"');
-  });
-
-  test('replaces non-apikey auth method', () => {
-    const input = 'preferred_auth_method = "oauth"\nother = "value"\n';
-    const result = ensureApiKeyAuthMethod(input);
-    expect(result).toContain('preferred_auth_method = "apikey"');
-    expect(result).not.toContain('oauth');
-  });
-
-  test('keeps existing apikey auth method unchanged', () => {
-    const input = 'preferred_auth_method = "apikey"\nother = "value"\n';
-    const result = ensureApiKeyAuthMethod(input);
-    expect(result).toBe(input);
-  });
-});
-
-describe('updateApiBaseUrl', () => {
-  test('adds base_url to empty config', () => {
-    const result = updateApiBaseUrl('', 'https://example.com/api');
-    expect(result).toBe('api_base_url = "https://example.com/api"\n');
-  });
-
-  test('adds base_url to existing config', () => {
-    const input = 'preferred_auth_method = "apikey"\n';
-    const result = updateApiBaseUrl(input, 'https://example.com/api');
-    expect(result).toContain('preferred_auth_method = "apikey"');
-    expect(result).toContain('api_base_url = "https://example.com/api"');
-  });
-
-  test('replaces existing base_url', () => {
-    const input = 'api_base_url = "https://old.com"\nother = "value"\n';
-    const result = updateApiBaseUrl(input, 'https://new.com/api');
-    expect(result).toContain('api_base_url = "https://new.com/api"');
-    expect(result).not.toContain('old.com');
-    expect(result).toContain('other = "value"');
-  });
-
-  test('removes base_url when null', () => {
+describe('removeTopLevelApiBaseUrl', () => {
+  test('removes top-level api_base_url', () => {
     const input = 'api_base_url = "https://example.com"\nother = "value"\n';
-    const result = updateApiBaseUrl(input, null);
+    const result = removeTopLevelApiBaseUrl(input);
     expect(result).not.toContain('api_base_url');
     expect(result).toContain('other = "value"');
   });
 
-  test('handles null input config', () => {
-    const result = updateApiBaseUrl(null, 'https://example.com/api');
-    expect(result).toBe('api_base_url = "https://example.com/api"\n');
+  test('does not remove api_base_url inside a section', () => {
+    const input = 'model = "gpt-4"\n\n[sandbox_workspace_write]\napi_base_url = "https://example.com"\n';
+    const result = removeTopLevelApiBaseUrl(input);
+    expect(result).toContain('api_base_url = "https://example.com"');
+    expect(result).toContain('model = "gpt-4"');
+  });
+
+  test('handles null input', () => {
+    expect(removeTopLevelApiBaseUrl(null)).toBeNull();
+  });
+
+  test('no-op when api_base_url not present', () => {
+    const input = 'model_provider = "88code"\n';
+    expect(removeTopLevelApiBaseUrl(input)).toBe(input);
   });
 });
 
+describe('extractBaseUrlFromConfigToml', () => {
+  test('extracts base_url from active model_provider section', () => {
+    const input = [
+      'model_provider = "88code"',
+      '',
+      '[model_providers.88code]',
+      'base_url = "https://www.88code.ai/openai/v1"',
+      'name = "88code"',
+    ].join('\n');
+    expect(extractBaseUrlFromConfigToml(input)).toBe('https://www.88code.ai/openai/v1');
+  });
+
+  test('returns null when model_provider not set', () => {
+    const input = '[model_providers.88code]\nbase_url = "https://example.com"\n';
+    expect(extractBaseUrlFromConfigToml(input)).toBeNull();
+  });
+
+  test('returns null when matching section has no base_url', () => {
+    const input = 'model_provider = "88code"\n\n[model_providers.88code]\nname = "88code"\n';
+    expect(extractBaseUrlFromConfigToml(input)).toBeNull();
+  });
+
+  test('returns null for empty input', () => {
+    expect(extractBaseUrlFromConfigToml(null)).toBeNull();
+    expect(extractBaseUrlFromConfigToml('')).toBeNull();
+  });
+});
+
+describe('buildAuthJson', () => {
+  test('builds correct auth.json format', () => {
+    const result = JSON.parse(buildAuthJson('sk-test-key'));
+    expect(result).toEqual({ OPENAI_API_KEY: 'sk-test-key' });
+  });
+});
