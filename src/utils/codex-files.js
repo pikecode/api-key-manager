@@ -207,13 +207,23 @@ async function applyCodexConfig(config, options = {}) {
   }
 
   const codexHome = await ensureCodexHome(options.codexHome);
-  const { authJsonPath } = buildCodexPaths(codexHome);
+  const { configTomlPath, authJsonPath } = buildCodexPaths(codexHome);
 
-  // 只写入 auth.json，不修改 config.toml
-  // config.toml 由用户自己管理，akm 不应覆盖其中的 model_provider、features 等配置
+  // 写入 auth.json（API Key）
   const authJsonContent = buildAuthJson(config.authToken);
   await fs.writeFile(authJsonPath, authJsonContent, 'utf8');
   await setSecurePermissions(authJsonPath);
+
+  // 只精准更新 config.toml 中的 api_base_url，其他配置保持不变
+  // （model_provider、features 等由用户自己管理）
+  if (await fs.pathExists(configTomlPath)) {
+    const existingToml = await fs.readFile(configTomlPath, 'utf8');
+    const updatedToml = updateApiBaseUrl(existingToml, config.baseUrl || null);
+    if (updatedToml !== existingToml) {
+      await fs.writeFile(configTomlPath, updatedToml, 'utf8');
+      await setSecurePermissions(configTomlPath);
+    }
+  }
 
   return { codexHome, backupDir: null };
 }
