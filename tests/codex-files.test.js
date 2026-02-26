@@ -150,7 +150,7 @@ describe('updateModelProvider', () => {
       '',
       '[model_providers.akm]',
       'base_url = "https://old.api.com/v1"',
-      'wire_api = "chat_completions"',
+      'wire_api = "responses"',
     ].join('\n') + '\n';
     const result = updateModelProvider(input, 'https://new.api.com/v1');
     expect(result).toContain('base_url = "https://new.api.com/v1"');

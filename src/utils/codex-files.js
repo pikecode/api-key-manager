@@ -143,7 +143,7 @@ function updateModelProvider(configToml, baseUrl) {
     `[model_providers.${providerKey}]`,
     `name = "${providerKey}"`,
     `base_url = "${baseUrl}"`,
-    'wire_api = "chat_completions"',
+    'wire_api = "responses"',
     'requires_openai_auth = true'
   ].join('\n');
 
