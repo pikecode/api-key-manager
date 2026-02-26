@@ -129,7 +129,41 @@ function extractBaseUrlFromConfigToml(configToml) {
 }
 
 /**
- * 构建 auth.json 内容
+ * 更新 config.toml 中的 model_provider 和对应的 [model_providers.akm] section
+ * 使用固定 key "akm" 管理 akm 切换的供应商，不影响用户其他自定义配置
+ * @param {string} configToml - 现有的 config.toml 内容
+ * @param {string} baseUrl - 新供应商的 base_url
+ * @returns {string} 更新后的 config.toml 内容
+ */
+function updateModelProvider(configToml, baseUrl) {
+  if (!configToml) configToml = '';
+
+  const providerKey = 'akm';
+  const newSection = [
+    `[model_providers.${providerKey}]`,
+    `name = "${providerKey}"`,
+    `base_url = "${baseUrl}"`,
+    'wire_api = "responses"',
+    'requires_openai_auth = true'
+  ].join('\n');
+
+  // 更新顶层 model_provider 字段
+  let result = configToml.match(/^model_provider\s*=/m)
+    ? configToml.replace(/^model_provider\s*=\s*["'][^"'\n]*["']/m, `model_provider = "${providerKey}"`)
+    : `model_provider = "${providerKey}"\n` + configToml;
+
+  // 替换或追加 [model_providers.akm] section
+  const sectionRegex = /\[model_providers\.akm\](?:\n(?!\[)[^\n]*)*\n?/;
+  if (result.match(sectionRegex)) {
+    result = result.replace(sectionRegex, newSection + '\n');
+  } else {
+    result = result.trimEnd() + '\n\n' + newSection + '\n';
+  }
+
+  return result;
+}
+
+/**
  * @param {string} apiKey - API Key
  * @returns {string} auth.json 内容
  */
@@ -138,11 +172,11 @@ function buildAuthJson(apiKey) {
 }
 
 /**
- * 应用 Codex 配置（写入 auth.json，清理 config.toml 中的无效字段）
- * config.toml 由用户自己管理，akm 只负责：
+ * 应用 Codex 配置（写入 auth.json，更新 config.toml 中的 provider 路由）
+ * akm 负责：
  *   1. 写入 auth.json（API Key）
- *   2. 清理之前错误写入的顶层 api_base_url 字段
- * base_url 通过环境变量 OPENAI_BASE_URL 传递给 Codex 进程
+ *   2. 更新 config.toml 中的 model_provider 和 [model_providers.akm] section
+ *   3. 清理之前错误写入的顶层 api_base_url 字段
  * @param {object} config - 供应商配置
  * @param {object} options - 选项
  * @returns {Promise<{codexHome: string}>}
@@ -160,8 +194,17 @@ async function applyCodexConfig(config, options = {}) {
   await fs.writeFile(authJsonPath, authJsonContent, 'utf8');
   await setSecurePermissions(authJsonPath);
 
-  // 清理 config.toml 中 akm 之前错误写入的顶层 api_base_url 字段
-  if (await fs.pathExists(configTomlPath)) {
+  // 更新 config.toml：设置 model_provider + [model_providers.akm]，清理旧的顶层 api_base_url
+  if (config.baseUrl) {
+    const existingToml = await fs.pathExists(configTomlPath)
+      ? await fs.readFile(configTomlPath, 'utf8')
+      : '';
+    let updatedToml = removeTopLevelApiBaseUrl(existingToml);
+    updatedToml = updateModelProvider(updatedToml, config.baseUrl);
+    await fs.writeFile(configTomlPath, updatedToml, 'utf8');
+    await setSecurePermissions(configTomlPath);
+  } else if (await fs.pathExists(configTomlPath)) {
+    // 没有 baseUrl，只清理旧的顶层 api_base_url
     const existingToml = await fs.readFile(configTomlPath, 'utf8');
     const cleanedToml = removeTopLevelApiBaseUrl(existingToml);
     if (cleanedToml !== existingToml) {
@@ -181,5 +224,6 @@ module.exports = {
   backupCodexFiles,
   removeTopLevelApiBaseUrl,
   extractBaseUrlFromConfigToml,
+  updateModelProvider,
   buildAuthJson
 };

@@ -6,6 +6,7 @@ const {
   buildCodexPaths,
   removeTopLevelApiBaseUrl,
   extractBaseUrlFromConfigToml,
+  updateModelProvider,
   buildAuthJson
 } = require('../src/utils/codex-files');
 
@@ -123,5 +124,83 @@ describe('buildAuthJson', () => {
   test('builds correct auth.json format', () => {
     const result = JSON.parse(buildAuthJson('sk-test-key'));
     expect(result).toEqual({ OPENAI_API_KEY: 'sk-test-key' });
+  });
+});
+
+describe('updateModelProvider', () => {
+  test('sets model_provider and adds [model_providers.akm] section to empty config', () => {
+    const result = updateModelProvider('', 'https://api.example.com/v1');
+    expect(result).toContain('model_provider = "akm"');
+    expect(result).toContain('[model_providers.akm]');
+    expect(result).toContain('base_url = "https://api.example.com/v1"');
+  });
+
+  test('replaces existing model_provider value', () => {
+    const input = 'model_provider = "88code"\n\n[model_providers.88code]\nbase_url = "https://88code.ai"\n';
+    const result = updateModelProvider(input, 'https://new.api.com/v1');
+    expect(result).toContain('model_provider = "akm"');
+    expect(result).not.toContain('model_provider = "88code"');
+    // preserves user's 88code section
+    expect(result).toContain('[model_providers.88code]');
+  });
+
+  test('replaces existing [model_providers.akm] section', () => {
+    const input = [
+      'model_provider = "akm"',
+      '',
+      '[model_providers.akm]',
+      'base_url = "https://old.api.com/v1"',
+      'wire_api = "responses"',
+    ].join('\n') + '\n';
+    const result = updateModelProvider(input, 'https://new.api.com/v1');
+    expect(result).toContain('base_url = "https://new.api.com/v1"');
+    expect(result).not.toContain('https://old.api.com/v1');
+  });
+
+  test('appends [model_providers.akm] section when not present', () => {
+    const input = 'model_provider = "akm"\n';
+    const result = updateModelProvider(input, 'https://api.example.com/v1');
+    expect(result).toContain('[model_providers.akm]');
+    expect(result).toContain('base_url = "https://api.example.com/v1"');
+  });
+});
+
+describe('applyCodexConfig with baseUrl', () => {
+  const codexHome = path.join(__dirname, '..', 'test-codex-home-2');
+
+  beforeEach(async () => {
+    process.env.CODEX_HOME = codexHome;
+    await fs.remove(codexHome);
+  });
+
+  afterEach(async () => {
+    await fs.remove(codexHome);
+    delete process.env.CODEX_HOME;
+  });
+
+  test('writes auth.json and updates config.toml with model_provider when baseUrl provided', async () => {
+    const { configTomlPath, authJsonPath } = buildCodexPaths(codexHome);
+    await applyCodexConfig({ authToken: 'sk-gmn1', baseUrl: 'https://gmn1.api.com/v1' });
+
+    const auth = JSON.parse(await fs.readFile(authJsonPath, 'utf8'));
+    expect(auth.OPENAI_API_KEY).toBe('sk-gmn1');
+
+    const toml = await fs.readFile(configTomlPath, 'utf8');
+    expect(toml).toContain('model_provider = "akm"');
+    expect(toml).toContain('base_url = "https://gmn1.api.com/v1"');
+  });
+
+  test('preserves user custom sections when switching provider', async () => {
+    const { configTomlPath } = buildCodexPaths(codexHome);
+    await fs.ensureDir(codexHome);
+    await fs.writeFile(configTomlPath,
+      'model_provider = "88code"\n\n[model_providers.88code]\nbase_url = "https://88code.ai"\n', 'utf8');
+
+    await applyCodexConfig({ authToken: 'sk-new', baseUrl: 'https://new.api.com/v1' });
+
+    const toml = await fs.readFile(configTomlPath, 'utf8');
+    expect(toml).toContain('model_provider = "akm"');
+    expect(toml).toContain('[model_providers.88code]');
+    expect(toml).toContain('[model_providers.akm]');
   });
 });
