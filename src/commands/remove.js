@@ -90,23 +90,14 @@ class ProviderRemover extends BaseCommand {
 
     console.log(UIHelper.createTitle('删除供应商', UIHelper.icons.delete));
     console.log();
-    console.log(UIHelper.createTooltip('选择要删除的供应商'));
+    console.log(UIHelper.createTooltip('选择要删除的供应商（可多选）'));
     console.log();
 
     const choices = providers.map(provider => ({
       name: `${provider.current ? '✅' : '🔹'} ${provider.name} (${provider.displayName})${provider.current ? ' - 当前使用中' : ''}`,
       value: provider.name,
-      short: provider.name
+      checked: false
     }));
-
-    choices.push(
-      new inquirer.Separator(),
-      { name: '❌ 取消删除', value: '__CANCEL__' }
-    );
-
-    // 对于删除操作，不默认选中当前供应商，而是选中第一个非当前的供应商
-    const nonCurrentProvider = providers.find(p => !p.current);
-    const defaultChoice = nonCurrentProvider ? nonCurrentProvider.name : providers[0]?.name;
 
     // 设置 ESC 键监听
     const escListener = this.createESCListener(() => {
@@ -121,12 +112,17 @@ class ProviderRemover extends BaseCommand {
       try {
         answer = await this.prompt([
           {
-            type: 'list',
-            name: 'provider',
-            message: '选择要删除的供应商:',
+            type: 'checkbox',
+            name: 'providers',
+            message: '选择要删除的供应商（空格选择，Enter确认）:',
             choices,
-            default: defaultChoice,
-            pageSize: 10
+            pageSize: 10,
+            validate: (selected) => {
+              if (selected.length === 0) {
+                return '请至少选择一个供应商';
+              }
+              return true;
+            }
           }
         ]);
       } catch (error) {
@@ -139,12 +135,61 @@ class ProviderRemover extends BaseCommand {
 
       this.removeESCListener(escListener);
 
-      if (answer.provider === '__CANCEL__') {
+      if (!answer.providers || answer.providers.length === 0) {
         Logger.info('删除操作已取消');
         return;
       }
 
-      await this.remove(answer.provider);
+      // 显示将要删除的供应商列表
+      console.log();
+      console.log(UIHelper.createTitle(`即将删除 ${answer.providers.length} 个供应商`, '⚠️'));
+      answer.providers.forEach(name => {
+        const provider = this.configManager.getProvider(name);
+        console.log(`  • ${provider.displayName} (${name})`);
+      });
+      console.log();
+
+      // 最终确认
+      let finalConfirm;
+      try {
+        finalConfirm = await this.prompt([
+          {
+            type: 'confirm',
+            name: 'confirm',
+            message: `确定要删除这 ${answer.providers.length} 个供应商吗？`,
+            default: false
+          }
+        ]);
+      } catch (error) {
+        if (this.isEscCancelled(error)) {
+          return;
+        }
+        throw error;
+      }
+
+      if (!finalConfirm.confirm) {
+        Logger.warning('删除操作已取消');
+        return;
+      }
+
+      // 批量删除
+      let successCount = 0;
+      let failCount = 0;
+      for (const providerName of answer.providers) {
+        try {
+          const provider = this.configManager.getProvider(providerName);
+          await this.configManager.removeProvider(providerName);
+          Logger.success(`✓ 已删除: ${provider.displayName}`);
+          successCount++;
+        } catch (error) {
+          Logger.error(`✗ 删除失败: ${providerName} - ${error.message}`);
+          failCount++;
+        }
+      }
+
+      console.log();
+      Logger.success(`删除完成: 成功 ${successCount} 个${failCount > 0 ? `, 失败 ${failCount} 个` : ''}`);
+
     } catch (error) {
       this.removeESCListener(escListener);
       throw error;
