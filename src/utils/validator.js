@@ -10,22 +10,12 @@ const validator = {
       return '供应商名称不能为空或只包含空格';
     }
 
-    // 禁止文件系统特殊字符
-    if (/[<>:"/\\|?*\x00-\x1F]/.test(name)) {
-      return '供应商名称包含非法字符 (不能包含: < > : " / \\ | ? *)';
-    }
-
     // 禁止使用保留名称 (Windows)
     const reserved = ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4',
       'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2',
       'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'];
     if (reserved.includes(name.toUpperCase())) {
       return '供应商名称不能使用系统保留名称';
-    }
-
-    // 禁止以点或空格开头/结尾 (Windows 限制)
-    if (/^[. ]|[. ]$/.test(name)) {
-      return '供应商名称不能以点或空格开头/结尾';
     }
 
     if (name.length > 100) {
