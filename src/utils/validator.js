@@ -1,3 +1,5 @@
+const { getClaudeLaunchArgs } = require('./launch-args');
+
 const validator = {
   validateName(name) {
     if (!name || typeof name !== 'string') {
@@ -118,7 +120,6 @@ const validator = {
   },
 
   getAvailableLaunchArgs() {
-    const { getClaudeLaunchArgs } = require('./launch-args');
     return getClaudeLaunchArgs();
   }
 };

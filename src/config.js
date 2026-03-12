@@ -264,16 +264,30 @@ class ConfigManager {
     const providers = this.config.providers;
     const keys = Object.keys(providers);
 
+    // 创建新的 providers 对象，不直接修改原对象
+    const updatedProviders = {};
+
     if (current && providers[current]) {
       keys.forEach((key) => {
-        providers[key].current = key === current;
+        updatedProviders[key] = {
+          ...providers[key],
+          current: key === current
+        };
       });
-      return;
+    } else {
+      keys.forEach((key) => {
+        updatedProviders[key] = {
+          ...providers[key],
+          current: false
+        };
+      });
     }
 
-    keys.forEach((key) => {
-      providers[key].current = false;
-    });
+    // 只在最外层更新 config
+    this.config = {
+      ...this.config,
+      providers: updatedProviders
+    };
   }
 
   async addProvider(name, providerConfig) {
@@ -300,8 +314,8 @@ class ConfigManager {
       ? this._normalizeOptionalString(providerConfig.alias)
       : (existing?.alias || null);
 
-    // 基础字段
-    this.config.providers[name] = {
+    // 创建新的 provider 对象
+    const newProvider = {
       name,
       displayName: providerConfig.displayName || existing?.displayName || name,
       alias,
@@ -326,23 +340,35 @@ class ConfigManager {
         ? providerConfig.smallFastModel
         : (existing?.models?.smallFast ?? null);
 
-      this.config.providers[name].authMode = authMode;
-      this.config.providers[name].models = {
+      newProvider.authMode = authMode;
+      newProvider.models = {
         primary: primaryModel,
         smallFast: smallFastModel
       };
     } else {
       // Codex 不需要这些字段，设置为 null 以保持向后兼容
-      this.config.providers[name].authMode = null;
-      this.config.providers[name].models = null;
+      newProvider.authMode = null;
+      newProvider.models = null;
     }
 
     // 如果是第一个供应商或设置为默认，则设为当前供应商
-    const shouldSetCurrent = (!existing && Object.keys(this.config.providers).length === 1) || providerConfig.setAsDefault;
+    const shouldSetCurrent = (!existing && Object.keys(this.config.providers).length === 0) || providerConfig.setAsDefault;
+
+    let newCurrentProvider = this.config.currentProvider;
     if (shouldSetCurrent) {
-      this.config.currentProvider = name;
-      this.config.providers[name].lastUsed = now;
+      newCurrentProvider = name;
+      newProvider.lastUsed = now;
     }
+
+    // 使用不可变方式更新 config
+    this.config = {
+      ...this.config,
+      currentProvider: newCurrentProvider,
+      providers: {
+        ...this.config.providers,
+        [name]: newProvider
+      }
+    };
 
     // 保证 current 标记与 currentProvider 一致，避免出现多个 current 或丢失 current 的情况
     this._syncCurrentFlags();
@@ -357,12 +383,18 @@ class ConfigManager {
       throw new Error(`供应商 '${name}' 不存在\n使用 'akm list' 查看所有已配置的供应商`);
     }
 
-    delete this.config.providers[name];
+    // 创建新的 providers 对象，排除要删除的供应商
+    const { [name]: removed, ...remainingProviders } = this.config.providers;
 
     // 如果删除的是当前供应商，清空当前供应商
-    if (this.config.currentProvider === name) {
-      this.config.currentProvider = null;
-    }
+    const newCurrentProvider = this.config.currentProvider === name ? null : this.config.currentProvider;
+
+    // 使用不可变方式更新 config
+    this.config = {
+      ...this.config,
+      currentProvider: newCurrentProvider,
+      providers: remainingProviders
+    };
 
     return await this.save();
   }
@@ -374,15 +406,24 @@ class ConfigManager {
       throw new Error(`供应商 '${name}' 不存在\n使用 'akm list' 查看所有已配置的供应商`);
     }
 
-    // 重置所有供应商的current状态
+    const now = new Date().toISOString();
+
+    // 创建新的 providers 对象，重置所有 current 状态
+    const updatedProviders = {};
     Object.keys(this.config.providers).forEach(key => {
-      this.config.providers[key].current = false;
+      updatedProviders[key] = {
+        ...this.config.providers[key],
+        current: key === name,
+        lastUsed: key === name ? now : this.config.providers[key].lastUsed
+      };
     });
 
-    // 设置新的当前供应商
-    this.config.providers[name].current = true;
-    this.config.providers[name].lastUsed = new Date().toISOString();
-    this.config.currentProvider = name;
+    // 使用不可变方式更新 config
+    this.config = {
+      ...this.config,
+      currentProvider: name,
+      providers: updatedProviders
+    };
 
     return await this.save();
   }
@@ -400,12 +441,25 @@ class ConfigManager {
       throw new Error(`供应商 '${name}' 不存在`);
     }
 
-    // 更新上次使用的启动参数
-    this.config.providers[name].lastUsedArgs = args;
-    this.config.providers[name].lastUsed = new Date().toISOString();
+    const now = new Date().toISOString();
+    const provider = this.config.providers[name];
 
-    // 增加使用次数
-    this.config.providers[name].usageCount = (this.config.providers[name].usageCount || 0) + 1;
+    // 创建更新后的 provider 对象
+    const updatedProvider = {
+      ...provider,
+      lastUsedArgs: args,
+      lastUsed: now,
+      usageCount: (provider.usageCount || 0) + 1
+    };
+
+    // 使用不可变方式更新 config
+    this.config = {
+      ...this.config,
+      providers: {
+        ...this.config.providers,
+        [name]: updatedProvider
+      }
+    };
 
     return await this.save();
   }
@@ -423,28 +477,43 @@ class ConfigManager {
     }
 
     const provider = this.config.providers[name];
+    const now = new Date().toISOString();
 
-    // 初始化统计数据
-    if (!provider.stats) {
-      provider.stats = {
-        totalSessions: 0,
-        totalDurationMs: 0,
-        averageDurationMs: 0,
-        lastSessionDuration: 0,
-        firstUsed: new Date().toISOString()
-      };
-    }
+    // 初始化或更新统计数据
+    const existingStats = provider.stats || {
+      totalSessions: 0,
+      totalDurationMs: 0,
+      averageDurationMs: 0,
+      lastSessionDuration: 0,
+      firstUsed: now
+    };
 
-    // 更新统计
-    provider.stats.totalSessions = (provider.stats.totalSessions || 0) + 1;
-    provider.stats.totalDurationMs = (provider.stats.totalDurationMs || 0) + durationMs;
-    provider.stats.lastSessionDuration = durationMs;
-    provider.stats.averageDurationMs = Math.round(
-      provider.stats.totalDurationMs / provider.stats.totalSessions
-    );
+    const newTotalSessions = (existingStats.totalSessions || 0) + 1;
+    const newTotalDurationMs = (existingStats.totalDurationMs || 0) + durationMs;
 
-    // 更新最后使用时间
-    provider.lastUsed = new Date().toISOString();
+    const updatedStats = {
+      ...existingStats,
+      totalSessions: newTotalSessions,
+      totalDurationMs: newTotalDurationMs,
+      lastSessionDuration: durationMs,
+      averageDurationMs: Math.round(newTotalDurationMs / newTotalSessions)
+    };
+
+    // 创建更新后的 provider 对象
+    const updatedProvider = {
+      ...provider,
+      stats: updatedStats,
+      lastUsed: now
+    };
+
+    // 使用不可变方式更新 config
+    this.config = {
+      ...this.config,
+      providers: {
+        ...this.config.providers,
+        [name]: updatedProvider
+      }
+    };
 
     return await this.save();
   }
