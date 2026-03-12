@@ -11,7 +11,6 @@
 - 🔄 **快速切换** — 一键切换不同的 API 供应商
 - ⚡ **快速启动** — `-q` 跳过参数选择，秒级启动
 - 🧠 **智能记忆** — 自动记住上次使用的启动参数
-- 🏷️ **别名系统** — 为供应商设置简短别名，快速切换
 - 🗑️ **批量删除** — 支持一次选择多个供应商批量删除
 - 🔌 **MCP 管理** — 管理 Claude Code 的 MCP 服务器配置
 - 🧹 **配置清理** — 清理 Claude Code 配置文件中的冗余数据
@@ -57,7 +56,7 @@ akm current
 | `akm remove [provider]` | 删除供应商配置（支持批量删除） |
 | `akm list` | 列出所有供应商 |
 | `akm current` | 显示当前激活的配置 |
-| `akm edit [provider]` | 编辑供应商配置（可设置别名） |
+| `akm edit [provider]` | 编辑供应商配置 |
 
 ### 运维命令
 
@@ -128,9 +127,6 @@ akm
 
 # 直接切换到指定供应商
 akm my-provider
-
-# 通过别名切换
-akm prod
 
 # 仅显示 Claude Code 供应商
 akm switch --claude
@@ -213,22 +209,11 @@ akm edit my-provider
 ```
 
 **可编辑内容：**
-- 显示名称
-- 别名（用于快速切换）
+- 供应商名称
 - 认证模式
 - API 基础 URL
 - Token
 - 启动参数
-
-**设置别名后的使用：**
-```bash
-# 编辑时设置别名为 "prod"
-akm edit my-provider
-# 别名: prod
-
-# 之后可以通过别名快速切换
-akm prod
-```
 
 ### MCP 服务器管理
 
@@ -441,7 +426,6 @@ Codex CLI:
     "my-claude": {
       "name": "my-claude",
       "displayName": "My Claude",
-      "alias": "prod",
       "ideName": "claude",
       "authMode": "api_key",
       "authToken": "sk-ant-api03-xxx",
