@@ -102,6 +102,16 @@ class ProviderEditor extends BaseCommand {
             message: '供应商显示名称:',
             default: providerToEdit.displayName,
             validate: (input) => validator.validateDisplayName(input) || true
+          },
+          {
+            type: 'input',
+            name: 'alias',
+            message: '别名 (用于快速切换，可留空):',
+            default: providerToEdit.alias || '',
+            validate: (input) => {
+              if (!input) return true; // 允许空值
+              return validator.validateDisplayName(input) || true;
+            }
           }
         ];
 
@@ -235,6 +245,7 @@ class ProviderEditor extends BaseCommand {
       if (ideName === 'codex') {
         await this.configManager.addProvider(name, {
           displayName: answers.displayName,
+          alias: answers.alias || null,
           ideName: 'codex',
           baseUrl: answers.baseUrl || null,
           authToken: answers.authToken,
@@ -245,6 +256,7 @@ class ProviderEditor extends BaseCommand {
         // Re-use addProvider which can overwrite existing providers
         await this.configManager.addProvider(name, {
           displayName: answers.displayName,
+          alias: answers.alias || null,
           ideName,
           baseUrl: answers.baseUrl,
           authToken: answers.authToken,
