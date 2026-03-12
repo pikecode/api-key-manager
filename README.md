@@ -11,7 +11,8 @@
 - 🔄 **快速切换** — 一键切换不同的 API 供应商
 - ⚡ **快速启动** — `-q` 跳过参数选择，秒级启动
 - 🧠 **智能记忆** — 自动记住上次使用的启动参数
-- 🏷️ **别名系统** — 为供应商设置简短别名
+- 🏷️ **别名系统** — 为供应商设置简短别名，快速切换
+- 🗑️ **批量删除** — 支持一次选择多个供应商批量删除
 - 🔌 **MCP 管理** — 管理 Claude Code 的 MCP 服务器配置
 - 🧹 **配置清理** — 清理 Claude Code 配置文件中的冗余数据
 - 📋 **克隆配置** — 快速克隆现有供应商配置
@@ -53,10 +54,10 @@ akm current
 |------|------|
 | `akm` / `akm switch` | 交互式选择和切换供应商 |
 | `akm add` | 添加新的供应商配置 |
-| `akm remove [provider]` | 删除供应商配置 |
+| `akm remove [provider]` | 删除供应商配置（支持批量删除） |
 | `akm list` | 列出所有供应商 |
 | `akm current` | 显示当前激活的配置 |
-| `akm edit [provider]` | 编辑供应商配置 |
+| `akm edit [provider]` | 编辑供应商配置（可设置别名） |
 
 ### 运维命令
 
@@ -184,6 +185,50 @@ akm clone my-provider
 ```
 
 克隆时可以修改名称、认证模式、Token、基础 URL 等。
+
+### 删除供应商
+
+```bash
+# 交互式删除（支持批量选择）
+akm remove
+
+# 直接删除指定供应商
+akm remove my-provider
+```
+
+**批量删除流程：**
+1. 使用空格键选择多个要删除的供应商
+2. 按 Enter 确认选择
+3. 预览将要删除的供应商列表
+4. 最终确认后批量删除
+
+### 编辑供应商
+
+```bash
+# 交互式选择要编辑的供应商
+akm edit
+
+# 直接编辑指定供应商
+akm edit my-provider
+```
+
+**可编辑内容：**
+- 显示名称
+- 别名（用于快速切换）
+- 认证模式
+- API 基础 URL
+- Token
+- 启动参数
+
+**设置别名后的使用：**
+```bash
+# 编辑时设置别名为 "prod"
+akm edit my-provider
+# 别名: prod
+
+# 之后可以通过别名快速切换
+akm prod
+```
 
 ### MCP 服务器管理
 
@@ -396,6 +441,7 @@ Codex CLI:
     "my-claude": {
       "name": "my-claude",
       "displayName": "My Claude",
+      "alias": "prod",
       "ideName": "claude",
       "authMode": "api_key",
       "authToken": "sk-ant-api03-xxx",
