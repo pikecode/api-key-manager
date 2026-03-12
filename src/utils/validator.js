@@ -69,10 +69,6 @@ const validator = {
       return 'Token不能只包含空格';
     }
 
-    if (token.trim().length < 10) {
-      return 'Token长度不能少于10个字符';
-    }
-
     // 检测常见的占位符文本
     const placeholders = [
       'your-key-here', 'your-token', 'your_key', 'your_token',

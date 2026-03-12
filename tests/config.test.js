@@ -218,7 +218,6 @@ describe('validator', () => {
 
     test('should reject invalid tokens', () => {
       expect(validator.validateToken('')).toBe('Token不能为空');
-      expect(validator.validateToken('short')).toBe('Token长度不能少于10个字符');
       expect(validator.validateToken('your-key-here')).toContain('占位符');
       expect(validator.validateToken('test-key-123456')).toContain('占位符');
       expect(validator.validateToken('api-key-here')).toContain('占位符');
