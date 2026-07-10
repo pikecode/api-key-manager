@@ -99,7 +99,7 @@ describe('extractBaseUrlFromConfigToml', () => {
       '',
       '[model_providers.88code]',
       'base_url = "https://www.88code.ai/openai/v1"',
-      'name = "88code"',
+      'name = "88code"'
     ].join('\n');
     expect(extractBaseUrlFromConfigToml(input)).toBe('https://www.88code.ai/openai/v1');
   });
@@ -150,7 +150,7 @@ describe('updateModelProvider', () => {
       '',
       '[model_providers.akm]',
       'base_url = "https://old.api.com/v1"',
-      'wire_api = "responses"',
+      'wire_api = "responses"'
     ].join('\n') + '\n';
     const result = updateModelProvider(input, 'https://new.api.com/v1');
     expect(result).toContain('base_url = "https://new.api.com/v1"');

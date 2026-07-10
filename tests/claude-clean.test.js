@@ -2,8 +2,6 @@
  * Claude Clean Command Tests
  */
 
-const path = require('path');
-
 jest.mock('fs-extra', () => ({
   pathExists: jest.fn(),
   pathExistsSync: jest.fn().mockReturnValue(true),

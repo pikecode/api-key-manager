@@ -18,6 +18,9 @@ function buildCodexEnvVariables(config) {
 
     if (config.baseUrl) {
       env.OPENAI_BASE_URL = sanitizeEnvValue(config.baseUrl);
+    } else {
+      // 未配置基础地址时必须清理父进程遗留值，避免切换到官方默认时仍走旧代理。
+      delete env.OPENAI_BASE_URL;
     }
 
     // 支持自定义模型

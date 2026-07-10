@@ -8,7 +8,7 @@ const chalk = require('chalk');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { maybeMaskToken } = require('../utils/secrets');
-const { AUTH_MODE_DISPLAY, BASE_URL, CURRENT_STATUS } = require('../constants');
+const { AUTH_MODE_DISPLAY } = require('../constants');
 
 /**
  * 当前配置显示类

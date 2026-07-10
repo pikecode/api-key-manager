@@ -104,7 +104,7 @@ describe('Usage Statistics', () => {
       await configManager.ensureLoaded();
       await expect(
         configManager.recordUsageSession('non-existent', 1000)
-      ).rejects.toThrow(`供应商 'non-existent' 不存在`);
+      ).rejects.toThrow('供应商 \'non-existent\' 不存在');
     });
   });
 

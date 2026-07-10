@@ -134,7 +134,7 @@ class EscNavigationManager {
       setTimeout(() => {
         try {
           handler.onTrigger();
-        } catch (error) {
+        } catch {
           // 在ESC回调中抛出的错误不应终止进程
           // 交由调用方自行处理记录
         }
@@ -155,7 +155,7 @@ class EscNavigationManager {
         if (currentMax !== 0 && currentMax < 50) {
           this.input.setMaxListeners(50);
         }
-      } catch (error) {
+      } catch {
         // 某些输入流可能不支持获取/设置监听器上限
       }
     }
@@ -165,7 +165,7 @@ class EscNavigationManager {
         this.previousRawMode = typeof this.input.isRaw === 'boolean' ? this.input.isRaw : null;
         this.input.setRawMode(true);
         this.rawModeEnabled = true;
-      } catch (error) {
+      } catch {
         this.supported = false;
         this.handlers = [];
         return;
@@ -175,7 +175,7 @@ class EscNavigationManager {
     if (typeof this.input.resume === 'function') {
       try {
         this.input.resume();
-      } catch (error) {
+      } catch {
         // 某些输入流不支持 resume，忽略即可
       }
     }
@@ -201,7 +201,7 @@ class EscNavigationManager {
       try {
         const restoreRaw = typeof this.previousRawMode === 'boolean' ? this.previousRawMode : false;
         this.input.setRawMode(restoreRaw);
-      } catch (error) {
+      } catch {
         // 忽略还原失败
       }
 

@@ -7,7 +7,6 @@
 const chalk = require('chalk');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
-const { UIHelper } = require('../utils/ui-helper');
 
 /**
  * 格式化时长
@@ -171,7 +170,7 @@ async function showAllStats(options = {}) {
     const currentProvider = configManager.getCurrentProvider();
 
     // 显示表格
-    allStats.forEach((stats, index) => {
+    allStats.forEach((stats) => {
       const provider = configManager.getProvider(stats.name);
       const isCurrent = provider.name === currentProvider?.name;
       const statusIcon = isCurrent ? '✅' : '🔹';

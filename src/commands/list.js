@@ -9,7 +9,7 @@ const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
 const { maybeMaskToken } = require('../utils/secrets');
-const { AUTH_MODE_DISPLAY, BASE_URL } = require('../constants');
+const { AUTH_MODE_DISPLAY } = require('../constants');
 
 /**
  * 供应商列表显示类

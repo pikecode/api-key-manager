@@ -1,4 +1,3 @@
-const chalk = require('chalk');
 const { formatMessage } = require('./terminal-format');
 
 class Logger {

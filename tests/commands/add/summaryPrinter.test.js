@@ -2,7 +2,6 @@
  * Tests for summary printer
  */
 
-const chalk = require('chalk');
 const { printProviderSummary } = require('../../../src/commands/add/summaryPrinter');
 
 // Mock logger

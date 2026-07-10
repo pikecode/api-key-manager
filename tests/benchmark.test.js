@@ -95,12 +95,6 @@ describe('Benchmark Logic', () => {
 
   describe('统计计算', () => {
     it('应该正确计算平均值', async () => {
-      const mockProvider = {
-        name: 'test',
-        displayName: 'Test',
-        ideName: 'claude'
-      };
-
       const result = {
         provider: 'test',
         displayName: 'Test',

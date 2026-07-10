@@ -7,7 +7,6 @@
 const chalk = require('chalk');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
-const { UIHelper } = require('../utils/ui-helper');
 const inquirer = require('inquirer');
 
 /**
@@ -31,7 +30,7 @@ async function batchUpdate(options = {}) {
       return;
     }
 
-    console.log(chalk.blue(`\n📦 批量更新供应商配置`));
+    console.log(chalk.blue('\n📦 批量更新供应商配置'));
     console.log(chalk.gray('═'.repeat(60)));
     console.log();
 
@@ -67,62 +66,62 @@ async function batchUpdate(options = {}) {
     for (const field of fields) {
       let answer;
       switch (field) {
-        case 'baseUrl':
-          answer = await inquirer.prompt([
-            {
-              type: 'input',
-              name: 'value',
-              message: '输入新的 Base URL (留空表示清除):',
-              validate: (input) => {
-                if (input && !input.startsWith('http://') && !input.startsWith('https://')) {
-                  return 'Base URL 必须以 http:// 或 https:// 开头';
-                }
-                return true;
+      case 'baseUrl':
+        answer = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'value',
+            message: '输入新的 Base URL (留空表示清除):',
+            validate: (input) => {
+              if (input && !input.startsWith('http://') && !input.startsWith('https://')) {
+                return 'Base URL 必须以 http:// 或 https:// 开头';
               }
+              return true;
             }
-          ]);
-          updates.baseUrl = answer.value || null;
-          break;
+          }
+        ]);
+        updates.baseUrl = answer.value || null;
+        break;
 
-        case 'tokenExpiry':
-          answer = await inquirer.prompt([
-            {
-              type: 'input',
-              name: 'value',
-              message: '输入 Token 过期时间 (YYYY-MM-DD 格式, 留空表示清除):',
-              validate: (input) => {
-                if (input && !/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-                  return '请使用 YYYY-MM-DD 格式';
-                }
-                return true;
+      case 'tokenExpiry':
+        answer = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'value',
+            message: '输入 Token 过期时间 (YYYY-MM-DD 格式, 留空表示清除):',
+            validate: (input) => {
+              if (input && !/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+                return '请使用 YYYY-MM-DD 格式';
               }
+              return true;
             }
-          ]);
-          updates.tokenExpiry = answer.value ? new Date(answer.value).toISOString() : null;
-          break;
+          }
+        ]);
+        updates.tokenExpiry = answer.value ? new Date(answer.value).toISOString() : null;
+        break;
 
-        case 'quotaLimit':
-          answer = await inquirer.prompt([
-            {
-              type: 'number',
-              name: 'value',
-              message: '输入配额限制 (数字, 0 表示清除):',
-              default: 0
-            }
-          ]);
-          updates.quota = answer.value > 0 ? { limit: answer.value } : null;
-          break;
+      case 'quotaLimit':
+        answer = await inquirer.prompt([
+          {
+            type: 'number',
+            name: 'value',
+            message: '输入配额限制 (数字, 0 表示清除):',
+            default: 0
+          }
+        ]);
+        updates.quota = answer.value > 0 ? { limit: answer.value } : null;
+        break;
 
-        case 'launchArgs':
-          answer = await inquirer.prompt([
-            {
-              type: 'input',
-              name: 'value',
-              message: '输入启动参数 (空格分隔, 留空表示清除):',
-            }
-          ]);
-          updates.launchArgs = answer.value ? answer.value.split(/\s+/).filter(Boolean) : [];
-          break;
+      case 'launchArgs':
+        answer = await inquirer.prompt([
+          {
+            type: 'input',
+            name: 'value',
+            message: '输入启动参数 (空格分隔, 留空表示清除):'
+          }
+        ]);
+        updates.launchArgs = answer.value ? answer.value.split(/\s+/).filter(Boolean) : [];
+        break;
       }
     }
 
@@ -218,7 +217,7 @@ async function batchDelete(options = {}) {
       return;
     }
 
-    console.log(chalk.blue(`\n🗑️  批量删除供应商`));
+    console.log(chalk.blue('\n🗑️  批量删除供应商'));
     console.log(chalk.gray('═'.repeat(60)));
     console.log();
 
@@ -247,11 +246,11 @@ async function batchDelete(options = {}) {
     }
 
     // 再次确认
-    const { confirmAgain } = await inquirer.prompt([
+    await inquirer.prompt([
       {
         type: 'input',
         name: 'confirmAgain',
-        message: `请输入 "DELETE" 以确认删除:`,
+        message: '请输入 "DELETE" 以确认删除:',
         validate: (input) => {
           if (input !== 'DELETE') {
             return '请输入 "DELETE" 以确认';
@@ -295,15 +294,15 @@ async function batchDelete(options = {}) {
 async function batchCommand(operation, options = {}) {
   try {
     switch (operation) {
-      case 'update':
-        await batchUpdate(options);
-        break;
-      case 'delete':
-        await batchDelete(options);
-        break;
-      default:
-        Logger.error(`未知的批量操作: ${operation}`);
-        Logger.info('支持的操作: update, delete');
+    case 'update':
+      await batchUpdate(options);
+      break;
+    case 'delete':
+      await batchDelete(options);
+      break;
+    default:
+      Logger.error(`未知的批量操作: ${operation}`);
+      Logger.info('支持的操作: update, delete');
     }
   } catch (error) {
     Logger.error(`批量操作失败: ${error.message}`);

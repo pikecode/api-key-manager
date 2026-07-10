@@ -107,7 +107,7 @@ class ProviderValidator {
 
       try {
         // 使用流式检查，实时显示结果
-        const results = await this.statusChecker.checkAllStreaming(providers, (providerName, status) => {
+        const results = await this.statusChecker.checkAllStreaming(providers, (_providerName, _status) => {
           completedCount++;
         });
 
@@ -164,7 +164,7 @@ class ProviderValidator {
         console.log(chalk.gray(`   OPENAI_BASE_URL: ${provider.baseUrl}`));
       }
     } else {
-      console.log(chalk.gray(`   IDE: Claude Code`));
+      console.log(chalk.gray('   IDE: Claude Code'));
       console.log(chalk.gray(`   认证模式: ${provider.authMode}`));
       if (provider.baseUrl) {
         console.log(chalk.gray(`   基础URL: ${provider.baseUrl}`));
@@ -244,11 +244,11 @@ class ProviderValidator {
    */
   _getStateIcon(state) {
     switch (state) {
-      case 'online': return '✓';
-      case 'offline': return '✗';
-      case 'degraded': return '⚠';
-      case 'pending': return '⋯';
-      default: return '?';
+    case 'online': return '✓';
+    case 'offline': return '✗';
+    case 'degraded': return '⚠';
+    case 'pending': return '⋯';
+    default: return '?';
     }
   }
 
@@ -260,11 +260,11 @@ class ProviderValidator {
    */
   _getStateLabel(state) {
     switch (state) {
-      case 'online': return '可用';
-      case 'offline': return '不可用';
-      case 'degraded': return '降级';
-      case 'pending': return '检测中';
-      default: return '未知';
+    case 'online': return '可用';
+    case 'offline': return '不可用';
+    case 'degraded': return '降级';
+    case 'pending': return '检测中';
+    default: return '未知';
     }
   }
 
@@ -276,11 +276,11 @@ class ProviderValidator {
    */
   _getStateColor(state) {
     switch (state) {
-      case 'online': return chalk.green;
-      case 'offline': return chalk.red;
-      case 'degraded': return chalk.yellow;
-      case 'pending': return chalk.blue;
-      default: return chalk.gray;
+    case 'online': return chalk.green;
+    case 'offline': return chalk.red;
+    case 'degraded': return chalk.yellow;
+    case 'pending': return chalk.blue;
+    default: return chalk.gray;
     }
   }
 }

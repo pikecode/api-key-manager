@@ -54,21 +54,21 @@ describe('StatusHelper', () => {
 
     it('应该格式化降级状态', () => {
       const availability = { state: 'degraded', label: '部分可用', latency: 200 };
-      const result = StatusHelper.formatAvailability(availability);
+      StatusHelper.formatAvailability(availability);
 
       expect(chalk.yellow).toHaveBeenCalledWith('部分可用');
     });
 
     it('应该格式化离线状态', () => {
       const availability = { state: 'offline', label: '不可用', latency: null };
-      const result = StatusHelper.formatAvailability(availability);
+      StatusHelper.formatAvailability(availability);
 
       expect(chalk.red).toHaveBeenCalledWith('不可用');
     });
 
     it('应该格式化等待状态', () => {
       const availability = { state: 'pending', label: '检测中', latency: null };
-      const result = StatusHelper.formatAvailability(availability);
+      StatusHelper.formatAvailability(availability);
 
       expect(chalk.gray).toHaveBeenCalledWith('检测中');
     });
@@ -185,17 +185,17 @@ describe('StatusHelper', () => {
 
   describe('formatLatency', () => {
     it('应该格式化低延迟为绿色', () => {
-      const result = StatusHelper.formatLatency(50);
+      StatusHelper.formatLatency(50);
       expect(chalk.green).toHaveBeenCalledWith('50ms');
     });
 
     it('应该格式化中等延迟为黄色', () => {
-      const result = StatusHelper.formatLatency(150);
+      StatusHelper.formatLatency(150);
       expect(chalk.yellow).toHaveBeenCalledWith('150ms');
     });
 
     it('应该格式化高延迟为红色', () => {
-      const result = StatusHelper.formatLatency(500);
+      StatusHelper.formatLatency(500);
       expect(chalk.red).toHaveBeenCalledWith('500ms');
     });
 

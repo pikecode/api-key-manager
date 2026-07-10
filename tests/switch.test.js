@@ -5,9 +5,7 @@
 
 // 不直接导入命令类，而是测试相关逻辑
 
-const { configManager } = require('../src/config');
 const { AUTH_MODE_DISPLAY, BASE_URL } = require('../src/constants');
-const { validator } = require('../src/utils/validator');
 
 // Mock modules
 jest.mock('../src/config');

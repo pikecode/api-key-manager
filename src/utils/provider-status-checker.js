@@ -1,7 +1,7 @@
 const { Anthropic, APIConnectionTimeoutError, APIConnectionError, APIError } = require('@anthropic-ai/sdk');
-const { API_CONFIG, ENV_VARS } = require('../constants');
+const { API_CONFIG } = require('../constants');
 
-let authTokenEnvLock = Promise.resolve();
+const STATUS_CACHE_MAX = 100;
 
 // 状态缓存
 const statusCache = new Map();
@@ -35,8 +35,7 @@ class ProviderStatusChecker {
   }
 
   _getCacheKey(provider) {
-    // 基于关键配置生成缓存键
-    return `${provider.name}:${provider.authToken}:${provider.baseUrl}:${provider.authMode}`;
+    return `${provider.name}:${provider.authMode}:${provider.baseUrl || ''}`;
   }
 
   _getCachedStatus(provider) {
@@ -50,37 +49,15 @@ class ProviderStatusChecker {
 
   _setCachedStatus(provider, status) {
     const key = this._getCacheKey(provider);
-    statusCache.set(key, {
-      status,
-      timestamp: Date.now()
-    });
+    if (statusCache.size >= STATUS_CACHE_MAX) {
+      const oldest = [...statusCache.keys()].slice(0, 20);
+      oldest.forEach(k => statusCache.delete(k));
+    }
+    statusCache.set(key, { status, timestamp: Date.now() });
   }
 
   clearCache() {
     statusCache.clear();
-  }
-
-  async _withAuthTokenEnv(authToken, operation) {
-    const previous = authTokenEnvLock;
-    let release;
-    authTokenEnvLock = new Promise((resolve) => {
-      release = resolve;
-    });
-
-    await previous;
-
-    const original = process.env[ENV_VARS.ANTHROPIC_AUTH_TOKEN];
-    try {
-      process.env[ENV_VARS.ANTHROPIC_AUTH_TOKEN] = authToken;
-      return await operation();
-    } finally {
-      if (original !== undefined) {
-        process.env[ENV_VARS.ANTHROPIC_AUTH_TOKEN] = original;
-      } else {
-        delete process.env[ENV_VARS.ANTHROPIC_AUTH_TOKEN];
-      }
-      release();
-    }
   }
 
   async check(provider, options = {}) {
@@ -144,12 +121,7 @@ class ProviderStatusChecker {
         return this._result('online', `可用 ${latency.toFixed(0)}ms`, latency);
       };
 
-      let result;
-      if (provider.authMode === 'auth_token') {
-        result = await this._withAuthTokenEnv(provider.authToken, performCheck);
-      } else {
-        result = await performCheck();
-      }
+      const result = await performCheck();
       this._setCachedStatus(provider, result);
       return result;
     } catch (error) {
@@ -200,13 +172,10 @@ class ProviderStatusChecker {
       }
       clientOptions.apiKey = provider.authToken;
     } else if (provider.authMode === 'auth_token') {
-      // auth_token 模式：通过环境变量 ANTHROPIC_AUTH_TOKEN 传递
-      // SDK 会自动从环境变量中读取认证信息
-      // 注意：check() 方法已经设置了环境变量
+      clientOptions.authToken = provider.authToken;
       if (provider.baseUrl) {
         clientOptions.baseURL = provider.baseUrl;
       }
-      // 不设置 apiKey，让 SDK 从环境变量读取
     } else {
       return null;
     }

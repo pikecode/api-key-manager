@@ -15,7 +15,7 @@ const resolveInputPrompt = () => {
   }
   try {
     return require('inquirer/lib/prompts/input');
-  } catch (error) {
+  } catch {
     return null;
   }
 };

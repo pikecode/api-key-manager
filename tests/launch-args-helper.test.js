@@ -76,6 +76,17 @@ describe('LaunchArgsHelper', () => {
       expect(merged.length).toBe(1);
       expect(merged[0].checked).toBe(false);
     });
+
+    it('应该保留参数定义中的默认选中状态', () => {
+      const availableArgs = [
+        { name: '--arg1', label: '参数1', checked: true }
+      ];
+      const defaultLaunchArgs = [];
+
+      const merged = LaunchArgsHelper.mergeArgsWithDefaults(availableArgs, defaultLaunchArgs);
+
+      expect(merged[0].checked).toBe(true);
+    });
   });
 
   describe('validateArgsConflict', () => {

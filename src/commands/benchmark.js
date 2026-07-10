@@ -11,7 +11,6 @@ const os = require('os');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
-const { UIHelper } = require('../utils/ui-helper');
 
 /**
  * 性能测试器
@@ -290,28 +289,11 @@ async function benchmarkCommand(options = {}) {
 
     const runner = new BenchmarkRunner();
 
-    let completedCount = 0;
-    const total = providers.length * rounds;
-
-    // 创建进度显示（仅在串行模式）
-    let progressInterval;
-    if (!parallel) {
-      progressInterval = setInterval(() => {
-        const percent = Math.round((completedCount / total) * 100);
-        process.stdout.write(`\r测试中... ${completedCount}/${total} (${percent}%)`);
-      }, 100);
-    }
-
     try {
       const results = await runner.runBenchmark(providers, {
         rounds,
         parallel
       });
-
-      if (progressInterval) {
-        clearInterval(progressInterval);
-        process.stdout.write('\r' + ' '.repeat(50) + '\r');
-      }
 
       // 显示结果
       runner.displayResults(results);
@@ -329,9 +311,6 @@ async function benchmarkCommand(options = {}) {
       }
 
     } catch (error) {
-      if (progressInterval) {
-        clearInterval(progressInterval);
-      }
       Logger.error(`性能测试失败: ${error.message}`);
     }
 

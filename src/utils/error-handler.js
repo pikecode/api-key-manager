@@ -1,4 +1,3 @@
-const chalk = require('chalk');
 const { Logger } = require('./logger');
 
 class ErrorHandler {

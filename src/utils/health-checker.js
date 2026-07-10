@@ -268,15 +268,15 @@ class HealthChecker {
    */
   _getStatusIcon(status) {
     switch (status) {
-      case 'ok':
-      case 'info':
-        return '✓';
-      case 'warning':
-        return '⚠';
-      case 'error':
-        return '✗';
-      default:
-        return '?';
+    case 'ok':
+    case 'info':
+      return '✓';
+    case 'warning':
+      return '⚠';
+    case 'error':
+      return '✗';
+    default:
+      return '?';
     }
   }
 
@@ -286,15 +286,15 @@ class HealthChecker {
    */
   _getStatusColor(status) {
     switch (status) {
-      case 'ok':
-      case 'info':
-        return chalk.green;
-      case 'warning':
-        return chalk.yellow;
-      case 'error':
-        return chalk.red;
-      default:
-        return chalk.gray;
+    case 'ok':
+    case 'info':
+      return chalk.green;
+    case 'warning':
+      return chalk.yellow;
+    case 'error':
+      return chalk.red;
+    default:
+      return chalk.gray;
     }
   }
 
@@ -304,14 +304,14 @@ class HealthChecker {
    */
   _getLevelIcon(level) {
     switch (level) {
-      case 'info':
-        return 'ℹ';
-      case 'warning':
-        return '⚠';
-      case 'error':
-        return '✗';
-      default:
-        return '·';
+    case 'info':
+      return 'ℹ';
+    case 'warning':
+      return '⚠';
+    case 'error':
+      return '✗';
+    default:
+      return '·';
     }
   }
 
@@ -321,14 +321,14 @@ class HealthChecker {
    */
   _getLevelColor(level) {
     switch (level) {
-      case 'info':
-        return chalk.blue;
-      case 'warning':
-        return chalk.yellow;
-      case 'error':
-        return chalk.red;
-      default:
-        return chalk.gray;
+    case 'info':
+      return chalk.blue;
+    case 'warning':
+      return chalk.yellow;
+    case 'error':
+      return chalk.red;
+    default:
+      return chalk.gray;
     }
   }
 

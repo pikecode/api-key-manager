@@ -113,7 +113,7 @@ describe('ProviderCloner', () => {
     cloner.prompt
       .mockResolvedValueOnce({ name: 'my-claude-copy', displayName: 'My Claude (副本)' })
       .mockResolvedValueOnce({ fields: [] }) // 不修改任何字段
-      ;
+    ;
 
     await cloner.interactive('my-claude');
 

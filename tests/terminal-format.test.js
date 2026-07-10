@@ -11,7 +11,6 @@ jest.mock('supports-color', () => ({
 const { formatMessage } = require('../src/utils/terminal-format');
 
 describe('Terminal Format', () => {
-  const originalStdout = process.stdout;
   const originalEnv = process.env;
 
   beforeEach(() => {

@@ -47,7 +47,11 @@ function getLatestVersion(pkgName, timeoutMs = 4000) {
     const t = setTimeout(() => {
       if (done) return;
       done = true;
-      try { child.kill(); } catch {}
+      try {
+        child.kill();
+      } catch {
+        // npm view 超时后终止进程失败不影响更新检查结果。
+      }
       resolve(null);
     }, timeoutMs);
 
@@ -139,6 +143,7 @@ async function checkForUpdates({ packageName, currentVersion }) {
       });
     }
   } catch {
+    // 更新检查必须静默失败，避免影响主命令执行。
   }
 }
 

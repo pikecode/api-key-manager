@@ -33,17 +33,6 @@ async function promptProviderInfo(adder) {
       when: () => !adder.presetIdeName
     },
     {
-      type: 'list',
-      name: 'importFromExisting',
-      message: UI_MESSAGES.IMPORT_FROM_CODEX,
-      choices: [
-        { name: UI_MESSAGES.IMPORT_FROM_CODEX_EXISTING, value: 'import' },
-        { name: UI_MESSAGES.IMPORT_FROM_CODEX_MANUAL, value: 'manual' }
-      ],
-      default: 'import',
-      when: (answers) => (answers.ideName || adder.presetIdeName) === 'codex'
-    },
-    {
       type: 'input',
       name: 'name',
       message: UI_MESSAGES.INPUT_PROVIDER_NAME,
@@ -98,7 +87,7 @@ async function promptProviderInfo(adder) {
         const err = validator.validateUrl(input);
         return err || true;
       },
-      when: (answers) => (answers.ideName || adder.presetIdeName) === 'codex' && answers.importFromExisting === 'manual'
+      when: (answers) => (answers.ideName || adder.presetIdeName) === 'codex'
     },
     {
       type: 'input',
@@ -109,7 +98,7 @@ async function promptProviderInfo(adder) {
         const err = validator.validateToken(input);
         return err || true;
       },
-      when: (answers) => (answers.ideName || adder.presetIdeName) === 'codex' && answers.importFromExisting === 'manual'
+      when: (answers) => (answers.ideName || adder.presetIdeName) === 'codex'
     },
     {
       type: 'confirm',

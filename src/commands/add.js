@@ -4,17 +4,12 @@
  * @module commands/add
  */
 
-const inquirer = require('inquirer');
-const chalk = require('chalk');
 const { configManager } = require('../config');
-const { validator } = require('../utils/validator');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
 const { BaseCommand } = require('./BaseCommand');
-const { promptProviderInfo, promptLaunchArgs, promptModelConfig, promptCodexLaunchArgs } = require('./add/prompts');
-const { importCodexConfig } = require('./add/codexImporter');
+const { promptProviderInfo, promptCodexLaunchArgs } = require('./add/prompts');
 const { saveProvider } = require('./add/providerSaver');
-const { printProviderSummary } = require('./add/summaryPrinter');
 
 /**
  * 供应商添加器类
@@ -72,33 +67,6 @@ class ProviderAdder extends BaseCommand {
       if (answers.ideName === 'codex') {
         answers.authMode = 'openai_api_key';
         answers.codexFiles = null;
-
-        // 从现有配置导入
-        if (answers.importFromExisting === 'import') {
-          const importedConfig = await importCodexConfig();
-          if (importedConfig) {
-            answers.authToken = importedConfig.apiKey;
-            answers.baseUrl = importedConfig.baseUrl;
-          } else {
-            Logger.warning('未能导入现有配置，请手动输入');
-            const manualAnswers = await this.prompt([
-              {
-                type: 'input',
-                name: 'baseUrl',
-                message: '请输入 OpenAI API 基础URL (如使用官方API可留空):',
-                default: ''
-              },
-              {
-                type: 'input',
-                name: 'authToken',
-                message: '请输入 OpenAI API Key (OPENAI_API_KEY):',
-                validate: (input) => input ? true : 'API Key 不能为空'
-              }
-            ]);
-            answers.authToken = manualAnswers.authToken;
-            answers.baseUrl = manualAnswers.baseUrl;
-          }
-        }
 
         // Codex 启动参数配置
         if (answers.configureCodexLaunchArgs) {

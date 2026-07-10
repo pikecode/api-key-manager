@@ -49,7 +49,7 @@ const validator = {
 
     try {
       new URL(url);
-    } catch (error) {
+    } catch {
       return '请输入有效的URL';
     }
 

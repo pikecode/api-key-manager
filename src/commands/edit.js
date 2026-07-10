@@ -11,7 +11,6 @@ const { validator } = require('../utils/validator');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
 const { BaseCommand } = require('./BaseCommand');
-const { AUTH_MODE_DISPLAY, IDE_NAMES } = require('../constants');
 
 /**
  * 供应商编辑器类

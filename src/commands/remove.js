@@ -4,7 +4,6 @@
  * @module commands/remove
  */
 
-const inquirer = require('inquirer');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');

@@ -35,7 +35,7 @@ function clearTerminal() {
 
   try {
     process.stdout.write('\x1bc');
-  } catch (error) {
+  } catch {
     // 某些终端可能不支持 RIS 序列，忽略即可
   }
 
@@ -44,7 +44,7 @@ function clearTerminal() {
     : '\x1b[3J\x1b[2J\x1b[H';
   try {
     process.stdout.write(sequence);
-  } catch (error) {
+  } catch {
     // 忽略清屏失败
   }
 }

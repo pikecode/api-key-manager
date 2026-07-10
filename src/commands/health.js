@@ -147,8 +147,6 @@ async function showAllHealth(options = {}) {
       results.forEach((result, index) => {
         const provider = providers[index];
         const isCurrent = provider.name === currentProvider?.name;
-        const statusIcon = isCurrent ? '✅' : '🔹';
-
         console.log(checker.formatHealthReport(result));
         if (isCurrent) {
           console.log(chalk.green('  (当前活跃)'));

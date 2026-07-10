@@ -4,22 +4,23 @@
  * @module commands/switch
  */
 
-const path = require('path');
 const inquirer = require('inquirer');
 const chalk = require('chalk');
 const Choices = require('inquirer/lib/objects/choices');
 const { configManager } = require('../config');
-const { executeWithEnv } = require('../utils/env-launcher');
-const { executeCodexWithEnv } = require('../utils/codex-launcher');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
-const { findSettingsConflict, backupSettingsFile, clearConflictKeys, saveSettingsFile } = require('../utils/claude-settings');
 const { BaseCommand } = require('./BaseCommand');
 const { validator } = require('../utils/validator');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
 const { AUTH_MODE_DISPLAY, BASE_URL } = require('../constants');
-const { LaunchArgsHelper } = require('./switch/launch-args-helper');
 const { StatusHelper } = require('./switch/status-helper');
+const { LaunchArgsHelper } = require('./switch/launch-args-helper');
+const { ProviderChoicesHelper } = require('./switch/provider-choices-helper');
+const { ProviderDetailsHelper } = require('./switch/provider-details-helper');
+const { ProviderEditQuestionsHelper } = require('./switch/provider-edit-questions-helper');
+const { ensureClaudeSettingsCompatibility } = require('./switch/claude-settings-compatibility');
+const { launchProviderProcess, markProviderAsCurrent } = require('./switch/provider-launcher');
 
 /**
  * 环境切换器类
@@ -35,22 +36,29 @@ class EnvSwitcher extends BaseCommand {
     this.currentPromptContext = null;
     this.activeStatusRefresh = null;
     this.filter = null;
-    this.filteredProviders = null; // 保存过滤后的供应商列表用于状态更新
+    this.filteredProviders = null;
+    this._refreshTimer = null;
+  }
+
+  _getPageSize(itemCount) {
+    const rows = process.stdout.rows || 24;
+    const reserved = 8;
+    return Math.min(itemCount, Math.max(5, rows - reserved));
   }
 
   async validateProvider(providerName) {
     await this.configManager.load();
-    
+
     // 先尝试按名称查找，再尝试按别名查找
     let provider = this.configManager.getProvider(providerName);
     if (!provider) {
       provider = this.configManager.getProviderByNameOrAlias(providerName);
     }
-    
+
     if (!provider) {
       throw new Error(`供应商 '${providerName}' 不存在\n使用 'akm list' 查看所有已配置的供应商`);
     }
-    
+
     return provider;
   }
 
@@ -59,36 +67,15 @@ class EnvSwitcher extends BaseCommand {
       this.clearScreen();
       const provider = await this.validateProvider(providerName);
       const isCodex = provider.ideName === 'codex';
-      const availableArgs = isCodex ? this.getCodexLaunchArgs() : this.getAvailableLaunchArgs();
+      const availableArgs = LaunchArgsHelper.getAvailableLaunchArgs(isCodex);
 
       // 优先使用上次使用的参数，如果没有则使用默认的 launchArgs
       const defaultLaunchArgs = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0
         ? provider.lastUsedArgs
         : (Array.isArray(provider.launchArgs) ? provider.launchArgs : []);
 
-      const knownArgNames = new Set(availableArgs.map(arg => arg.name));
-      const customLaunchArgs = defaultLaunchArgs
-        .filter(arg => typeof arg === 'string' && !knownArgNames.has(arg));
-      const mergedArgs = [
-        ...availableArgs.map(arg => ({
-          ...arg,
-          checked: defaultLaunchArgs.includes(arg.name) || Boolean(arg.checked)
-        })),
-        ...customLaunchArgs.map(name => ({
-          name,
-          label: name,
-          description: '自定义启动参数',
-          checked: true
-        }))
-      ];
-      const ideDisplayName = isCodex ? 'Codex CLI' : 'Claude Code';
-
-      // 显示提示：是否使用上次的参数
-      const isUsingLastUsed = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0;
-      if (isUsingLastUsed) {
-        console.log(UIHelper.colors.muted('💡 正在使用上次的启动参数'));
-        console.log();
-      }
+      const mergedArgs = LaunchArgsHelper.mergeArgsWithDefaults(availableArgs, defaultLaunchArgs);
+      const ideDisplayName = LaunchArgsHelper.getIDEDisplayName(isCodex);
 
       console.log(UIHelper.createTitle('启动配置', UIHelper.icons.launch));
       console.log();
@@ -115,18 +102,7 @@ class EnvSwitcher extends BaseCommand {
           type: 'checkbox',
           name: 'selectedArgs',
           message: '选择启动参数:',
-          choices: mergedArgs.map(arg => {
-            const commandText = UIHelper.colors.muted(`(${arg.name})`);
-            const descriptionText = arg.description
-              ? ` ${UIHelper.colors.muted(arg.description)}`
-              : '';
-
-            return {
-              name: `${UIHelper.colors.accent(arg.label || arg.name)} ${commandText}${descriptionText}`,
-              value: arg.name,
-              checked: Boolean(arg.checked)
-            };
-          })
+          choices: LaunchArgsHelper.formatArgsForDisplay(mergedArgs, UIHelper)
         }
       ];
 
@@ -144,119 +120,16 @@ class EnvSwitcher extends BaseCommand {
       this.removeESCListener(escListener);
 
       // 检查互斥参数
-      const conflictError = this.checkExclusiveArgs(answers.selectedArgs, availableArgs);
+      const conflictError = LaunchArgsHelper.validateArgsConflict(answers.selectedArgs, availableArgs);
       if (conflictError) {
         Logger.warning(conflictError);
         return await this.showLaunchArgsSelection(providerName);
       }
 
-      // 保存上次使用的启动参数
-      await this.configManager.updateLastUsedArgs(providerName, answers.selectedArgs);
-
-      // 选择参数后直接启动
       await this.launchProvider(provider, answers.selectedArgs);
 
     } catch (error) {
       await this.handleError(error, '选择启动参数');
-    }
-  }
-
-  async ensureClaudeSettingsCompatibility(provider) {
-    try {
-      const conflict = await findSettingsConflict();
-      if (!conflict) {
-        return true;
-      }
-
-      const keyList = conflict.keys.map((key) => `• ${key}`).join('\n');
-
-      const backupDir = path.dirname(conflict.filePath);
-
-      this.clearScreen();
-      console.log(UIHelper.createTitle('检测到环境变量冲突', UIHelper.icons.warning));
-      console.log();
-      console.log(UIHelper.createCard('冲突文件', conflict.filePath, UIHelper.icons.info));
-      console.log();
-      console.log(UIHelper.createCard('备份目录', `${backupDir}\n备份文件将命名为 settings.backup-YYYYMMDD_HHmmss.json`, UIHelper.icons.info));
-      console.log();
-      console.log(UIHelper.createCard('可能覆盖的变量', keyList, UIHelper.icons.warning));
-      console.log();
-      console.log(UIHelper.createTooltip('Claude 会优先读取该设置文件中的 env 配置，可能覆盖本次为供应商设置的变量。'));
-      console.log();
-
-      let answer;
-      try {
-        answer = await this.prompt([
-          {
-            type: 'list',
-            name: 'action',
-            message: `在 ${conflict.filePath} 中发现 env 配置会覆盖供应商 '${provider.displayName || provider.name}' 的变量，选择处理方式:`,
-            choices: [
-              { name: '🔧 备份并清空这些变量', value: 'fix' },
-              { name: '⚠️ 忽略并继续（可能导致切换失败）', value: 'ignore' },
-              { name: '❌ 取消启动', value: 'cancel' }
-            ],
-            default: 'fix'
-          }
-        ]);
-      } catch (error) {
-        if (this.isEscCancelled(error)) {
-          Logger.info('已取消启动');
-          return false;
-        }
-        throw error;
-      }
-
-      if (answer.action === 'fix') {
-        let confirmBackup;
-        try {
-          confirmBackup = await this.prompt([
-            {
-              type: 'confirm',
-              name: 'confirmed',
-              message: `将在 ${backupDir} 中创建备份文件 (settings.backup-YYYYMMDD_HHmmss.json)，并清空冲突变量。是否继续?`,
-              default: true
-            }
-          ]);
-        } catch (error) {
-          if (this.isEscCancelled(error)) {
-            Logger.info('已取消启动');
-            return false;
-          }
-          throw error;
-        }
-
-        if (!confirmBackup.confirmed) {
-          Logger.info('已取消启动');
-          return false;
-        }
-
-        try {
-          const backupPath = await backupSettingsFile(conflict.filePath);
-          const updatedSettings = clearConflictKeys(
-            {
-              ...conflict.settings,
-              env: conflict.settings.env ? { ...conflict.settings.env } : undefined
-            },
-            conflict.keys
-          );
-          await saveSettingsFile(conflict.filePath, updatedSettings);
-          Logger.success(`已将 ${conflict.filePath} 备份至 '${backupPath}' 并清空冲突变量。`);
-        } catch (error) {
-          throw new Error(`清理 Claude 设置文件失败: ${error.message}`);
-        }
-        return true;
-      }
-
-      if (answer.action === 'ignore') {
-        Logger.warning(`已忽略 ${conflict.filePath} 中的冲突，Claude 可能仍会使用该文件里的旧变量。`);
-        return true;
-      }
-
-      Logger.info('已取消启动');
-      return false;
-    } catch (error) {
-      throw error;
     }
   }
 
@@ -266,7 +139,7 @@ class EnvSwitcher extends BaseCommand {
 
       // Claude Code 才需要检测设置冲突
       if (!isCodex) {
-        const shouldContinue = await this.ensureClaudeSettingsCompatibility(provider);
+        const shouldContinue = await ensureClaudeSettingsCompatibility(this, provider);
         if (!shouldContinue) {
           return;
         }
@@ -287,25 +160,12 @@ class EnvSwitcher extends BaseCommand {
       const loadingInterval = UIHelper.createLoadingAnimation('正在设置环境...');
 
       try {
-        // 设置为当前供应商
-        await this.configManager.setCurrentProvider(provider.name);
-
-        // 更新使用统计
-        provider.usageCount = (provider.usageCount || 0) + 1;
-        provider.lastUsed = new Date().toISOString();
-        await this.configManager.save();
-
+        await markProviderAsCurrent(this.configManager, provider, selectedLaunchArgs);
         UIHelper.clearLoadingAnimation(loadingInterval);
 
         console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}...`, UIHelper.icons.success));
         console.log();
-
-        if (isCodex) {
-          await executeCodexWithEnv(provider, selectedLaunchArgs);
-        } else {
-          // 设置环境变量并启动 Claude Code
-          await executeWithEnv(provider, selectedLaunchArgs);
-        }
+        await launchProviderProcess(provider, selectedLaunchArgs);
 
       } catch (error) {
         UIHelper.clearLoadingAnimation(loadingInterval);
@@ -334,7 +194,7 @@ class EnvSwitcher extends BaseCommand {
   async quickLaunchProvider(providerName, options) {
     try {
       await this.configManager.ensureLoaded();
-      
+
       // 支持别名查找
       let provider = this.configManager.getProvider(providerName);
       if (!provider) {
@@ -356,7 +216,7 @@ class EnvSwitcher extends BaseCommand {
         selectedArgs = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0
           ? provider.lastUsedArgs
           : (Array.isArray(provider.launchArgs) ? provider.launchArgs : []);
-        
+
         if (Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0) {
           console.log(UIHelper.colors.muted('💡 使用上次的启动参数: ' + selectedArgs.join(' ')));
         } else {
@@ -364,30 +224,12 @@ class EnvSwitcher extends BaseCommand {
         }
       }
 
-      // 更新上次使用的参数（使用真实的 provider.name 而不是别名）
-      await this.configManager.updateLastUsedArgs(provider.name, selectedArgs);
-
       // 直接启动供应商
       await this.launchProvider(provider, selectedArgs);
 
     } catch (error) {
       await this.handleError(error, '快速启动供应商');
     }
-  }
-
-  getAvailableLaunchArgs() {
-    const { getClaudeLaunchArgs } = require('../utils/launch-args');
-    return getClaudeLaunchArgs();
-  }
-
-  checkExclusiveArgs(selectedArgs, availableArgs) {
-    const { checkExclusiveArgs } = require('../utils/launch-args');
-    return checkExclusiveArgs(selectedArgs, availableArgs);
-  }
-
-  getCodexLaunchArgs() {
-    const { getCodexLaunchArgs } = require('../utils/launch-args');
-    return getCodexLaunchArgs();
   }
 
   async showProviderSelection() {
@@ -461,14 +303,7 @@ class EnvSwitcher extends BaseCommand {
           message: promptMessage,
           choices,
           default: defaultChoice,
-          pageSize: 12
-        }
-      ]);
-
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
-
-      this._cancelStatusRefresh();
+          pageSize: this._getPageSize(choices.length)
 
       if (answer.provider === '__OPEN_CONFIG__') {
         await this.openConfigFile();
@@ -499,7 +334,7 @@ class EnvSwitcher extends BaseCommand {
     }
   }
 
-  showWelcomeScreen(providers, statusMap = {}, statusError = null) {
+  showWelcomeScreen(providers, _statusMap = {}, statusError = null) {
     this.clearScreen();
 
     if (providers.length > 0) {
@@ -549,8 +384,6 @@ class EnvSwitcher extends BaseCommand {
     console.log();
     const choices = [
       { name: `${UIHelper.icons.search} 搜索供应商`, value: 'search' },
-      { name: `${UIHelper.icons.edit} 批量编辑`, value: 'batch' },
-      { name: `${UIHelper.icons.settings} 全局设置`, value: 'global' },
       { name: `${UIHelper.icons.info} 查看统计`, value: 'stats' },
       { name: `${UIHelper.icons.back} 返回主菜单`, value: 'back' }
     ];
@@ -716,14 +549,17 @@ class EnvSwitcher extends BaseCommand {
     );
 
     if (searchResults.length === 0) {
-      Logger.warning('未找到匹配的供应商');
-      return await this.showQuickSettings();
+      Logger.warning(`未找到匹配"${answer.search}"的供应商，请重新搜索`);
+      return await this.showSearchProvider();
     }
 
-    const choices = searchResults.map(p => ({
-      name: UIHelper.formatProvider(p),
-      value: p.name
-    }));
+    const choices = ProviderChoicesHelper.buildProviderChoices(searchResults, {
+      statusMap: this._buildInitialStatusMap(searchResults),
+      UIHelper,
+      StatusHelper,
+      chalk,
+      Separator: inquirer.Separator
+    });
 
     choices.push(
       new inquirer.Separator(),
@@ -799,12 +635,6 @@ class EnvSwitcher extends BaseCommand {
 
     console.log(UIHelper.createTable(['项目', '数据'], stats));
     console.log();
-    console.log(UIHelper.createHintLine([
-      ['Enter', '返回快速设置'],
-      ['ESC', '返回快速设置']
-    ]));
-    console.log();
-
     // 设置 ESC 键监听
     const escListener = this.createESCListener(() => {
       Logger.info('返回快速设置');
@@ -814,9 +644,10 @@ class EnvSwitcher extends BaseCommand {
     try {
       await this.prompt([
         {
-          type: 'input',
-          name: 'continue',
-          message: '按回车键继续...'
+          type: 'list',
+          name: 'action',
+          message: '操作:',
+          choices: [{ name: `${UIHelper.icons.back} 返回`, value: 'back' }]
         }
       ]);
     } catch (error) {
@@ -828,7 +659,6 @@ class EnvSwitcher extends BaseCommand {
     }
 
     this.removeESCListener(escListener);
-
     return await this.showQuickSettings();
   }
 
@@ -891,9 +721,10 @@ class EnvSwitcher extends BaseCommand {
     try {
       await this.prompt([
         {
-          type: 'input',
-          name: 'continue',
-          message: '按回车键返回主菜单'
+          type: 'list',
+          name: 'action',
+          message: '操作:',
+          choices: [{ name: `${UIHelper.icons.back} 返回主菜单`, value: 'back' }]
         }
       ]);
     } catch (error) {
@@ -954,12 +785,7 @@ class EnvSwitcher extends BaseCommand {
             name: 'action',
             message: `选择供应商或操作 (总计 ${providers.length} 个):`,
             choices,
-            pageSize: 12
-          }
-        ]);
-      } catch (error) {
-        this.removeESCListener(escListener);
-        if (this.isEscCancelled(error)) {
+            pageSize: this._getPageSize(choices.length)
           return;
         }
         throw error;
@@ -984,44 +810,14 @@ class EnvSwitcher extends BaseCommand {
   }
 
   createProviderChoices(providers, includeActions = false, statusMap = {}) {
-    const lastUsedProvider = providers.reduce((latest, current) => {
-      if (!current || !current.lastUsed) {
-        return latest;
-      }
-      if (!latest || !latest.lastUsed) {
-        return current;
-      }
-      return new Date(current.lastUsed) > new Date(latest.lastUsed) ? current : latest;
-    }, null);
-
-    const choices = providers.map(provider => {
-      const isLastUsed = lastUsedProvider && lastUsedProvider.name === provider.name;
-      const availability = statusMap[provider.name];
-      const icon = this._iconForState(availability?.state);
-      const statusText = this._formatAvailability(availability);
-      const statusLabel = chalk.gray('-') + ' ' + statusText;
-      // IDE 类型标签
-      const ideTag = provider.ideName === 'codex'
-        ? chalk.cyan('[Codex]')
-        : chalk.magenta('[Claude]');
-      const label = `${icon} ${ideTag} ${UIHelper.formatProvider(provider)}${isLastUsed ? UIHelper.colors.muted(' --- 上次使用') : ''} ${statusLabel}`;
-
-      return {
-        name: label,
-        value: provider.name,
-        short: provider.name
-      };
+    return ProviderChoicesHelper.buildProviderChoices(providers, {
+      includeActions,
+      statusMap,
+      UIHelper,
+      StatusHelper,
+      chalk,
+      Separator: inquirer.Separator
     });
-
-    if (includeActions) {
-      choices.push(
-        new inquirer.Separator(),
-        { name: `${UIHelper.icons.back} 返回供应商选择`, value: 'back' },
-        { name: `${UIHelper.icons.error} 退出`, value: 'exit' }
-      );
-    }
-
-    return choices;
   }
 
   _iconForState(state) {
@@ -1076,6 +872,10 @@ class EnvSwitcher extends BaseCommand {
 
   _cancelStatusRefresh() {
     this.activeStatusRefresh = null;
+    if (this._refreshTimer) {
+      clearTimeout(this._refreshTimer);
+      this._refreshTimer = null;
+    }
   }
 
   _applyStatusUpdate(providers, statusMap, error, refreshToken = null) {
@@ -1091,56 +891,7 @@ class EnvSwitcher extends BaseCommand {
       return;
     }
 
-    const includeActions = this.currentPromptContext === 'manage';
-    const updatedChoicesBase = this.createProviderChoices(providers, includeActions, statusMap);
-    const updatedChoices = [...updatedChoicesBase];
-
-    if (!includeActions) {
-      updatedChoices.push(
-        new inquirer.Separator(),
-        { name: `${UIHelper.icons.add} 添加新供应商`, value: '__ADD__' },
-        { name: `${UIHelper.icons.list} 供应商管理 (编辑/删除)`, value: '__MANAGE__' },
-        { name: `${UIHelper.icons.config} 打开配置文件`, value: '__OPEN_CONFIG__' },
-        { name: `${UIHelper.icons.error} 退出`, value: '__EXIT__' }
-      );
-    }
-
-    const previousValue = (() => {
-      try {
-        return activePrompt.opt.choices?.getChoice(activePrompt.selected)?.value ?? null;
-      } catch (err) {
-        return null;
-      }
-    })();
-
-    activePrompt.opt.choices = new Choices(updatedChoices, activePrompt.answers);
-
-    if (previousValue != null) {
-      const newIndex = activePrompt.opt.choices.realChoices.findIndex(choice => choice.value === previousValue);
-      if (newIndex >= 0) {
-        activePrompt.selected = newIndex;
-      } else if (activePrompt.selected >= activePrompt.opt.choices.realLength) {
-        activePrompt.selected = Math.max(activePrompt.opt.choices.realLength - 1, 0);
-      }
-    } else if (activePrompt.selected >= activePrompt.opt.choices.realLength) {
-      activePrompt.selected = Math.max(activePrompt.opt.choices.realLength - 1, 0);
-    }
-
-    if (error) {
-      if (this.currentPromptContext === 'selection') {
-        activePrompt.opt.message = `请选择要切换的供应商 (总计 ${providers.length} 个，状态检测失败，使用默认配置):`;
-      } else if (this.currentPromptContext === 'manage') {
-        activePrompt.opt.message = `选择供应商或操作 (总计 ${providers.length} 个，状态检测失败，使用默认配置):`;
-      }
-    } else {
-      if (this.currentPromptContext === 'selection') {
-        activePrompt.opt.message = `请选择要切换的供应商 (总计 ${providers.length} 个):`;
-      } else if (this.currentPromptContext === 'manage') {
-        activePrompt.opt.message = `选择供应商或操作 (总计 ${providers.length} 个):`;
-      }
-    }
-
-    activePrompt.render();
+    this._refreshPromptChoices(activePrompt, providers, statusMap, { hasError: Boolean(error) });
   }
 
   _applyIncrementalStatus(providerName, status, refreshToken) {
@@ -1156,10 +907,23 @@ class EnvSwitcher extends BaseCommand {
       return;
     }
 
+    // 节流：80ms 内的多次回调合并为一次 render，避免高频刷新导致 ANSI 光标错位
+    if (this._refreshTimer) {
+      clearTimeout(this._refreshTimer);
+    }
+    this._refreshTimer = setTimeout(() => {
+      this._refreshTimer = null;
+      if (this.activeStatusRefresh !== refreshToken) return;
+      const activeP = this.activePrompt?.promise?.ui?.activePrompt;
+      if (!activeP || activeP.status === 'answered') return;
+      const providers = this.filteredProviders || this.configManager.listProviders();
+      const statusMap = this.latestStatusMap || {};
+      this._refreshPromptChoices(activeP, providers, statusMap);
+    }, 80);
+  }
+
+  _refreshPromptChoices(activePrompt, providers, statusMap, options = {}) {
     const includeActions = this.currentPromptContext === 'manage';
-    // 使用保存的过滤后供应商列表，而不是重新获取全部
-    const providers = this.filteredProviders || this.configManager.listProviders();
-    const statusMap = this.latestStatusMap || {};
     const updatedChoicesBase = this.createProviderChoices(providers, includeActions, statusMap);
     const updatedChoices = [...updatedChoicesBase];
 
@@ -1173,16 +937,25 @@ class EnvSwitcher extends BaseCommand {
       );
     }
 
-    const previousValue = (() => {
-      try {
-        return activePrompt.opt.choices?.getChoice(activePrompt.selected)?.value ?? null;
-      } catch (err) {
-        return null;
-      }
-    })();
+    const previousValue = this._getActivePromptPreviousValue(activePrompt);
 
     activePrompt.opt.choices = new Choices(updatedChoices, activePrompt.answers);
 
+    this._restorePromptSelection(activePrompt, previousValue);
+    activePrompt.opt.message = this._buildStatusPromptMessage(providers.length, options.hasError);
+
+    activePrompt.render();
+  }
+
+  _getActivePromptPreviousValue(activePrompt) {
+    try {
+      return activePrompt.opt.choices?.getChoice(activePrompt.selected)?.value ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  _restorePromptSelection(activePrompt, previousValue) {
     if (previousValue != null) {
       const newIndex = activePrompt.opt.choices.realChoices.findIndex(choice => choice.value === previousValue);
       if (newIndex >= 0) {
@@ -1193,14 +966,17 @@ class EnvSwitcher extends BaseCommand {
     } else if (activePrompt.selected >= activePrompt.opt.choices.realLength) {
       activePrompt.selected = Math.max(activePrompt.opt.choices.realLength - 1, 0);
     }
+  }
 
+  _buildStatusPromptMessage(providerCount, hasError = false) {
+    const errorSuffix = hasError ? '，状态检测失败，使用默认配置' : '';
     if (this.currentPromptContext === 'selection') {
-      activePrompt.opt.message = `请选择要切换的供应商 (总计 ${providers.length} 个):`;
-    } else if (this.currentPromptContext === 'manage') {
-      activePrompt.opt.message = `选择供应商或操作 (总计 ${providers.length} 个):`;
+      return `请选择要切换的供应商 (总计 ${providerCount} 个${errorSuffix}):`;
     }
-
-    activePrompt.render();
+    if (this.currentPromptContext === 'manage') {
+      return `选择供应商或操作 (总计 ${providerCount} 个${errorSuffix}):`;
+    }
+    return '';
   }
 
   async handleManageAction(action) {
@@ -1232,33 +1008,18 @@ class EnvSwitcher extends BaseCommand {
       ]));
       console.log();
 
-      const details = [
-        ['供应商名称', provider.name],
-        ['显示名称', provider.displayName],
-        ['认证模式', AUTH_MODE_DISPLAY[provider.authMode] || provider.authMode]
-      ];
-
-      // 继续添加其他信息
-      const baseUrlDisplay = provider.baseUrl
-        || (provider.authMode === 'auth_token'
-          ? BASE_URL.OFFICIAL_DEFAULT
-          : '⚠️ 未设置');
-      details.push(
-        ['基础URL', baseUrlDisplay],
-        ['认证令牌', provider.authToken || '未设置'],
-        ['主模型', provider.models?.primary || '未设置'],
-        ['快速模型', provider.models?.smallFast || '未设置'],
-        ['创建时间', UIHelper.formatTime(provider.createdAt)],
-        ['最后使用', UIHelper.formatTime(provider.lastUsed)],
-        ['当前状态', provider.current ? '✅ 使用中' : '⚫ 未使用'],
-        ['使用次数', provider.usageCount || 0]
-      );
+      const details = ProviderDetailsHelper.buildDetailsRows(provider, {
+        authModeDisplay: AUTH_MODE_DISPLAY,
+        baseUrl: BASE_URL,
+        formatTime: UIHelper.formatTime
+      });
 
       console.log(UIHelper.createTable(['项目', '信息'], details));
       console.log();
 
-      if (provider.launchArgs && provider.launchArgs.length > 0) {
-        console.log(UIHelper.createCard('默认启动参数', provider.launchArgs.join(', '), UIHelper.icons.settings));
+      const launchArgsText = ProviderDetailsHelper.formatLaunchArgs(provider);
+      if (launchArgsText) {
+        console.log(UIHelper.createCard('默认启动参数', launchArgsText, UIHelper.icons.settings));
         console.log();
       }
 
@@ -1275,12 +1036,7 @@ class EnvSwitcher extends BaseCommand {
             type: 'list',
             name: 'action',
             message: '选择操作:',
-            choices: [
-              { name: `${UIHelper.icons.launch} 立即启动`, value: 'launch' },
-              { name: `${UIHelper.icons.edit} 编辑供应商`, value: 'edit' },
-              { name: `${UIHelper.icons.delete} 删除供应商`, value: 'remove' },
-              { name: `${UIHelper.icons.back} 返回管理列表`, value: 'back' }
-            ]
+            choices: ProviderDetailsHelper.buildActionChoices(UIHelper.icons)
           }
         ]);
       } catch (error) {
@@ -1337,104 +1093,7 @@ class EnvSwitcher extends BaseCommand {
 
       // 根据 IDE 类型构建不同的问卷
       const isCodex = provider.ideName === 'codex';
-      const questions = [
-        {
-          type: 'input',
-          name: 'name',
-          message: '请输入供应商名称 (用于命令行):',
-          default: provider.name,
-          validate: (input) => {
-            const error = validator.validateName(input);
-            if (error) return error;
-            return true;
-          }
-        },
-        {
-          type: 'input',
-          name: 'displayName',
-          message: '显示名称:',
-          default: provider.displayName,
-          prefillDefault: true
-        },
-        {
-          type: 'input',
-          name: 'alias',
-          message: '别名 (用于快速切换):',
-          default: provider.alias,
-          prefillDefault: true,
-          validate: (input) => {
-            if (!input) return true; // 别名是可选的
-            const error = validator.validateName(input);
-            if (error) return error;
-            return true;
-          }
-        }
-      ];
-
-      // Claude Code 特定的字段
-      if (!isCodex) {
-        questions.push(
-          {
-            type: 'list',
-            name: 'authMode',
-            message: '认证模式:',
-            choices: [
-              { name: '🔑 ANTHROPIC_API_KEY - 大多数第三方代理使用', value: 'api_key' },
-              { name: '🔐 ANTHROPIC_AUTH_TOKEN - 部分服务商使用', value: 'auth_token' }
-            ],
-            default: provider.authMode || 'api_key'
-          },
-          {
-            type: 'input',
-            name: 'primaryModel',
-            message: '主模型 (ANTHROPIC_MODEL):',
-            default: provider.models?.primary || '',
-            prefillDefault: true,
-            allowEmpty: true,
-            validate: (input) => {
-              const error = validator.validateModel(input);
-              if (error) return error;
-              return true;
-            }
-          },
-          {
-            type: 'input',
-            name: 'smallFastModel',
-            message: '快速模型 (ANTHROPIC_SMALL_FAST_MODEL):',
-            default: provider.models?.smallFast || '',
-            prefillDefault: true,
-            allowEmpty: true,
-            validate: (input) => {
-              const error = validator.validateModel(input);
-              if (error) return error;
-              return true;
-            }
-          }
-        );
-      }
-
-      // 通用字段（Claude 和 Codex 都需要）
-      questions.push({
-        type: 'input',
-        name: 'baseUrl',
-        message: isCodex ? '基础URL (OPENAI_BASE_URL):' : '基础URL:',
-        default: provider.baseUrl,
-        prefillDefault: true
-      });
-
-      questions.push({
-        type: 'input',
-        name: 'authToken',
-        message: (answers) => {
-          if (isCodex) {
-            return 'API Key (OPENAI_API_KEY):';
-          }
-          const envVar = answers.authMode === 'auth_token' ? 'ANTHROPIC_AUTH_TOKEN' : 'ANTHROPIC_API_KEY';
-          return `Token (${envVar}):`;
-        },
-        default: provider.authToken,
-        prefillDefault: true
-      });
+      const questions = ProviderEditQuestionsHelper.buildQuestions(provider, validator);
 
       let answers;
       try {
@@ -1477,8 +1136,7 @@ class EnvSwitcher extends BaseCommand {
       }
 
       // 更新供应商配置
-      provider.displayName = answers.displayName || newName;
-      provider.alias = answers.alias || null;
+      provider.displayName = newName;
       provider.baseUrl = answers.baseUrl;
       provider.authToken = answers.authToken;
 

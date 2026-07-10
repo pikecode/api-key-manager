@@ -399,6 +399,34 @@ class ConfigManager {
     return await this.save();
   }
 
+  async activateProvider(name, lastUsedArgs = []) {
+    await this.ensureLoaded();
+
+    if (!this.config.providers[name]) {
+      throw new Error(`供应商 '${name}' 不存在\n使用 'akm list' 查看所有已配置的供应商`);
+    }
+
+    const now = new Date().toISOString();
+    const updatedProviders = {};
+    Object.keys(this.config.providers).forEach(key => {
+      const p = this.config.providers[key];
+      if (key === name) {
+        updatedProviders[key] = {
+          ...p,
+          current: true,
+          lastUsed: now,
+          lastUsedArgs,
+          usageCount: (p.usageCount || 0) + 1
+        };
+      } else {
+        updatedProviders[key] = { ...p, current: false };
+      }
+    });
+
+    this.config = { ...this.config, currentProvider: name, providers: updatedProviders };
+    return await this.save();
+  }
+
   async setCurrentProvider(name) {
     await this.ensureLoaded();
 
