@@ -304,6 +304,8 @@ class EnvSwitcher extends BaseCommand {
           choices,
           default: defaultChoice,
           pageSize: this._getPageSize(choices.length)
+        }
+      ]);
 
       if (answer.provider === '__OPEN_CONFIG__') {
         await this.openConfigFile();
