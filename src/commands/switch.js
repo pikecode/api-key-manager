@@ -918,8 +918,17 @@ class EnvSwitcher extends BaseCommand {
       this.showExitScreen();
       this.destroy();
       process.exit(0);
+    case 'batch-delete': {
+      const { ProviderRemover } = require('./remove');
+      const remover = new ProviderRemover();
+      try {
+        await remover.remove();
+      } finally {
+        remover.destroy();
+      }
+      return await this.showManageMenu();
+    }
     default:
-      // 如果选择的是供应商名称，显示该供应商的详细信息
       return await this.showProviderDetails(action);
     }
   }

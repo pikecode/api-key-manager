@@ -22,6 +22,7 @@ class ProviderChoicesHelper {
     if (includeActions) {
       choices.push(
         new Separator(),
+        { name: `${icons.delete} 批量删除`, value: 'batch-delete' },
         { name: `${icons.back} 返回供应商选择`, value: 'back' },
         { name: `${icons.error} 退出`, value: 'exit' }
       );

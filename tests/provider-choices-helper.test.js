@@ -121,10 +121,11 @@ describe('ProviderChoicesHelper', () => {
         Separator
       });
 
-      expect(choices).toHaveLength(4);
+      expect(choices).toHaveLength(5);
       expect(choices[1]).toBeInstanceOf(Separator);
-      expect(choices[2]).toEqual({ name: '← 返回供应商选择', value: 'back' });
-      expect(choices[3]).toEqual({ name: '✗ 退出', value: 'exit' });
+      expect(choices[2]).toEqual({ name: `${UIHelper.icons.delete} 批量删除`, value: 'batch-delete' });
+      expect(choices[3]).toEqual({ name: '← 返回供应商选择', value: 'back' });
+      expect(choices[4]).toEqual({ name: '✗ 退出', value: 'exit' });
     });
   });
 });
