@@ -3,13 +3,13 @@
  * 供应商管理功能（详情、编辑、删除）
  */
 
-const { configManager } = require('../config');
-const { Logger } = require('../utils/logger');
-const { UIHelper } = require('../utils/ui-helper');
-const { AUTH_MODE_DISPLAY, BASE_URL } = require('../constants');
-const { ProviderDetailsHelper } = require('./switch/provider-details-helper');
-const { ProviderEditQuestionsHelper } = require('./switch/provider-edit-questions-helper');
-const { validator } = require('../utils/validator');
+const { configManager } = require('../../config');
+const { Logger } = require('../../utils/logger');
+const { UIHelper } = require('../../utils/ui-helper');
+const { AUTH_MODE_DISPLAY, BASE_URL } = require('../../constants');
+const { ProviderDetailsHelper } = require('./provider-details-helper');
+const { ProviderEditQuestionsHelper } = require('./provider-edit-questions-helper');
+const { validator } = require('../../utils/validator');
 
 class ProviderManager {
   constructor(baseCommand) {
