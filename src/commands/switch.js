@@ -21,6 +21,7 @@ const { ProviderDetailsHelper } = require('./switch/provider-details-helper');
 const { ProviderEditQuestionsHelper } = require('./switch/provider-edit-questions-helper');
 const { ensureClaudeSettingsCompatibility } = require('./switch/claude-settings-compatibility');
 const { launchProviderProcess, markProviderAsCurrent } = require('./switch/provider-launcher');
+const { ProviderManager } = require('./switch/provider-manager');
 
 /**
  * 环境切换器类
@@ -38,6 +39,7 @@ class EnvSwitcher extends BaseCommand {
     this.filter = null;
     this.filteredProviders = null;
     this._refreshTimer = null;
+    this.providerManager = new ProviderManager(this);
   }
 
   _getPageSize(itemCount) {
@@ -606,23 +608,13 @@ class EnvSwitcher extends BaseCommand {
   }
 
   async showManageMenu() {
-    let escListener;
     try {
       await this.configManager.load();
       const providers = this.configManager.listProviders();
-      this.clearScreen();
-      console.log(UIHelper.createHintLine([
-        ['↑ / ↓', '选择供应商或操作'],
-        ['Enter', '确认'],
-        ['ESC', '返回主菜单']
-      ]));
-      console.log();
-
-      console.log(UIHelper.createTitle('供应商管理', UIHelper.icons.list));
-      console.log();
 
       if (providers.length === 0) {
-        console.log(UIHelper.createCard('提示', '暂无配置的供应商\n请先运行 "akm add" 添加供应商配置', UIHelper.icons.warning));
+        Logger.warning('暂无配置的供应商');
+        Logger.info('请先运行 "akm add" 添加供应商配置');
         return await this.showProviderSelection();
       }
 
@@ -630,33 +622,23 @@ class EnvSwitcher extends BaseCommand {
       const choices = this.createProviderChoices(providers, true, statusMap);
 
       this.currentPromptContext = 'manage';
-      // 管理界面显示所有供应商，更新 filteredProviders 以保持一致
       this.filteredProviders = providers;
 
       if (providers.length > 0) {
         this._startStatusRefresh(providers);
       }
 
-      // 设置 ESC 键监听
-      let answer;
-      try {
-        answer = await this.promptWithESC([
-          {
-            type: 'list',
-            name: 'action',
-            message: `选择供应商或操作 (总计 ${providers.length} 个):`,
-            choices,
-            pageSize: this._getPageSize(choices.length)
-          }
-        ], '返回供应商选择', () => {
-          Logger.info('返回供应商选择');
-        });
-      } catch (error) {
-        if (this.isEscCancelled(error)) {
-          return await this.showProviderSelection();
+      const answer = await this.promptWithESC([
+        {
+          type: 'list',
+          name: 'action',
+          message: `选择供应商或操作 (总计 ${providers.length} 个):`,
+          choices,
+          pageSize: this._getPageSize(choices.length)
         }
-        throw error;
-      }
+      ], '返回供应商选择', () => {
+        Logger.info('返回供应商选择');
+      });
 
       this._cancelStatusRefresh();
 
@@ -665,6 +647,9 @@ class EnvSwitcher extends BaseCommand {
       return result;
 
     } catch (error) {
+      if (this.isEscCancelled(error)) {
+        return await this.showProviderSelection();
+      }
       await this.handleError(error, '显示供应商管理');
     } finally {
       if (this.currentPromptContext === 'manage') {
@@ -859,204 +844,21 @@ class EnvSwitcher extends BaseCommand {
   }
 
   async showProviderDetails(providerName) {
-    let escListener;
-    try {
-      const provider = await this.validateProvider(providerName);
-      this.clearScreen();
-
-      console.log(UIHelper.createTitle('供应商详情', UIHelper.icons.info));
-      console.log();
-      console.log(UIHelper.createHintLine([
-        ['↑ / ↓', '选择操作'],
-        ['Enter', '确认'],
-        ['ESC', '返回管理列表']
-      ]));
-      console.log();
-
-      const details = ProviderDetailsHelper.buildDetailsRows(provider, {
-        authModeDisplay: AUTH_MODE_DISPLAY,
-        baseUrl: BASE_URL,
-        formatTime: UIHelper.formatTime
-      });
-
-      console.log(UIHelper.createTable(['项目', '信息'], details));
-      console.log();
-
-      const launchArgsText = ProviderDetailsHelper.formatLaunchArgs(provider);
-      if (launchArgsText) {
-        console.log(UIHelper.createCard('默认启动参数', launchArgsText, UIHelper.icons.settings));
-        console.log();
-      }
-
-      let answer;
-      try {
-        answer = await this.promptWithESC([
-          {
-            type: 'list',
-            name: 'action',
-            message: '选择操作:',
-            choices: ProviderDetailsHelper.buildActionChoices(UIHelper.icons)
-          }
-        ], '返回管理列表', () => {
-          Logger.info('返回管理列表');
-        });
-      } catch (error) {
-        if (this.isEscCancelled(error)) {
-          return await this.showManageMenu();
-        }
-        throw error;
-      }
-
-      switch (answer.action) {
-      case 'back':
-        return await this.showManageMenu();
-      case 'edit':
-        return await this.editProvider(providerName);
-      case 'remove':
-        return await this.removeProvider(providerName);
-      case 'launch':
-        return await this.showLaunchArgsSelection(providerName);
-      }
-
-    } catch (error) {
-      await this.handleError(error, '显示供应商详情');
-    }
+    return this.providerManager.showProviderDetails(
+      providerName,
+      () => this.showManageMenu(),
+      (name) => this.editProvider(name),
+      (name) => this.removeProvider(name),
+      (name) => this.showLaunchArgsSelection(name)
+    );
   }
 
   async editProvider(providerName) {
-    try {
-      await this.configManager.load();
-      let provider = this.configManager.getProvider(providerName);
-      this.clearScreen();
-
-      if (!provider) {
-        Logger.error(`供应商 '${providerName}' 不存在`);
-        return await this.showManageMenu();
-      }
-
-      // 根据 IDE 类型构建不同的问卷
-      const isCodex = provider.ideName === 'codex';
-      const questions = ProviderEditQuestionsHelper.buildQuestions(provider, validator);
-
-      let answers;
-      try {
-        answers = await this.promptWithESC(questions, '取消编辑', () => {
-          Logger.info('取消编辑供应商');
-        });
-      } catch (error) {
-        if (this.isEscCancelled(error)) {
-          return await this.showManageMenu();
-        }
-        throw error;
-      }
-
-      const originalName = provider.name;
-      const newName = answers.name;
-
-      // 处理重命名逻辑
-      if (newName !== originalName) {
-        await this.configManager.ensureLoaded();
-        const providersMap = this.configManager.config.providers;
-
-        // 如果新名称已存在且不是当前供应商，则报错
-        if (providersMap[newName]) {
-          Logger.error(`供应商名称 '${newName}' 已存在，请使用其他名称`);
-          return await this.showManageMenu();
-        }
-
-        providersMap[newName] = {
-          ...provider,
-          name: newName
-        };
-
-        delete providersMap[originalName];
-
-        if (this.configManager.config.currentProvider === originalName) {
-          this.configManager.config.currentProvider = newName;
-          providersMap[newName].current = true;
-        }
-
-        provider = providersMap[newName];
-      }
-
-      // 更新供应商配置
-      provider.displayName = newName;
-      provider.baseUrl = answers.baseUrl;
-      provider.authToken = answers.authToken;
-
-      // Claude Code 特定的更新
-      if (!isCodex) {
-        provider.authMode = answers.authMode;
-
-        // 更新模型配置
-        if (!provider.models) {
-          provider.models = {};
-        }
-        provider.models.primary = answers.primaryModel || null;
-        provider.models.smallFast = answers.smallFastModel || null;
-      } else {
-        // 确保 Codex 配置不包含 Claude 特定字段
-        provider.authMode = null;
-        provider.models = null;
-      }
-
-      // 确保 ideName 不被改变
-      provider.ideName = isCodex ? 'codex' : 'claude';
-
-      await this.configManager.save();
-      Logger.success(`供应商 '${newName}' 已更新`);
-
-      return await this.showManageMenu();
-
-    } catch (error) {
-      Logger.error(`编辑供应商失败: ${error.message}`);
-      throw error;
-    }
+    return this.providerManager.editProvider(providerName, () => this.showManageMenu());
   }
 
   async removeProvider(providerName) {
-    try {
-      await this.configManager.load();
-      const provider = this.configManager.getProvider(providerName);
-      this.clearScreen();
-
-      if (!provider) {
-        Logger.error(`供应商 '${providerName}' 不存在`);
-        return await this.showManageMenu();
-      }
-
-      let confirm;
-      try {
-        confirm = await this.promptWithESC([
-          {
-            type: 'confirm',
-            name: 'confirmed',
-            message: `确定要删除供应商 '${providerName}' 吗?`,
-            default: false
-          }
-        ], '取消删除', () => {
-          Logger.info('取消删除供应商');
-        });
-      } catch (error) {
-        if (this.isEscCancelled(error)) {
-          return await this.showManageMenu();
-        }
-        throw error;
-      }
-
-      if (confirm.confirmed) {
-        await this.configManager.removeProvider(providerName);
-        Logger.success(`供应商 '${providerName}' 已删除`);
-      } else {
-        Logger.info('删除操作已取消');
-      }
-
-      return await this.showManageMenu();
-
-    } catch (error) {
-      Logger.error(`删除供应商失败: ${error.message}`);
-      throw error;
-    }
+    return this.providerManager.removeProvider(providerName, () => this.showManageMenu());
   }
 }
 
