@@ -104,11 +104,10 @@ class EnvSwitcher extends BaseCommand {
       try {
         answers = await this.promptWithESC(choices, '返回供应商选择', () => {
           Logger.info('返回供应商选择');
-          this.showProviderSelection();
         });
       } catch (error) {
         if (this.isEscCancelled(error)) {
-          return;
+          return await this.showProviderSelection();
         }
         throw error;
       }
@@ -431,11 +430,10 @@ class EnvSwitcher extends BaseCommand {
         }
       ], '返回快速设置', () => {
         Logger.info('返回快速设置');
-        this.showQuickSettings();
       });
     } catch (error) {
       if (this.isEscCancelled(error)) {
-        return;
+        return await this.showQuickSettings();
       }
       throw error;
     }
@@ -482,11 +480,10 @@ class EnvSwitcher extends BaseCommand {
         }
       ], '返回快速设置', () => {
         Logger.info('返回快速设置');
-        this.showQuickSettings();
       });
     } catch (error) {
       if (this.isEscCancelled(error)) {
-        return;
+        return await this.showQuickSettings();
       }
       throw error;
     }
@@ -531,11 +528,10 @@ class EnvSwitcher extends BaseCommand {
         }
       ], '返回快速设置', () => {
         Logger.info('返回快速设置');
-        this.showQuickSettings();
       });
     } catch (error) {
       if (this.isEscCancelled(error)) {
-        return;
+        return await this.showQuickSettings();
       }
       throw error;
     }
@@ -598,11 +594,10 @@ class EnvSwitcher extends BaseCommand {
         }
       ], '返回主菜单', () => {
         Logger.info('返回主菜单');
-        this.showProviderSelection();
       });
     } catch (error) {
       if (this.isEscCancelled(error)) {
-        return;
+        return await this.showProviderSelection();
       }
       throw error;
     }
@@ -655,11 +650,10 @@ class EnvSwitcher extends BaseCommand {
           }
         ], '返回供应商选择', () => {
           Logger.info('返回供应商选择');
-          this.showProviderSelection();
         });
       } catch (error) {
         if (this.isEscCancelled(error)) {
-          return;
+          return await this.showProviderSelection();
         }
         throw error;
       }
@@ -905,11 +899,10 @@ class EnvSwitcher extends BaseCommand {
           }
         ], '返回管理列表', () => {
           Logger.info('返回管理列表');
-          this.showManageMenu();
         });
       } catch (error) {
         if (this.isEscCancelled(error)) {
-          return;
+          return await this.showManageMenu();
         }
         throw error;
       }
@@ -949,11 +942,10 @@ class EnvSwitcher extends BaseCommand {
       try {
         answers = await this.promptWithESC(questions, '取消编辑', () => {
           Logger.info('取消编辑供应商');
-          this.showManageMenu();
         });
       } catch (error) {
         if (this.isEscCancelled(error)) {
-          return;
+          return await this.showManageMenu();
         }
         throw error;
       }
@@ -1044,11 +1036,10 @@ class EnvSwitcher extends BaseCommand {
           }
         ], '取消删除', () => {
           Logger.info('取消删除供应商');
-          this.showManageMenu();
         });
       } catch (error) {
         if (this.isEscCancelled(error)) {
-          return;
+          return await this.showManageMenu();
         }
         throw error;
       }
