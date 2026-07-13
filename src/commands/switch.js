@@ -42,7 +42,30 @@ class EnvSwitcher extends BaseCommand {
     this.providerManager = new ProviderManager(this);
   }
 
-  _getPageSize(itemCount) {
+  _renderPage(options) {
+    const { title, icon, hints, content } = options;
+
+    this.clearScreen();
+
+    if (title) {
+      console.log(UIHelper.createTitle(title, icon || UIHelper.icons.info));
+      console.log();
+    }
+
+    if (hints) {
+      console.log(UIHelper.createHintLine(hints));
+      console.log();
+    }
+
+    if (content) {
+      if (typeof content === 'function') {
+        content();
+      } else {
+        console.log(content);
+      }
+      console.log();
+    }
+  }
     const rows = process.stdout.rows || 24;
     const reserved = 8;
     return Math.min(itemCount, Math.max(5, rows - reserved));
@@ -542,11 +565,11 @@ class EnvSwitcher extends BaseCommand {
   }
 
   showExitScreen() {
-    this.clearScreen();
-    console.log(UIHelper.createTitle('感谢使用', UIHelper.icons.home));
-    console.log();
-    console.log(UIHelper.colors.info('再见！期待下次使用 🎉'));
-    console.log();
+    this._renderPage({
+      title: '感谢使用',
+      icon: UIHelper.icons.home,
+      content: UIHelper.colors.info('再见！期待下次使用 🎉')
+    });
   }
 
   async showHelp() {
