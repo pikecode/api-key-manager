@@ -788,6 +788,10 @@ class EnvSwitcher extends BaseCommand {
             message: `选择供应商或操作 (总计 ${providers.length} 个):`,
             choices,
             pageSize: this._getPageSize(choices.length)
+          }
+        ]);
+      } catch (error) {
+        if (this.isEscCancelled(error)) {
           return;
         }
         throw error;
