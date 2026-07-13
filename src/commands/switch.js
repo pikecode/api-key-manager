@@ -321,8 +321,11 @@ class EnvSwitcher extends BaseCommand {
         return await this.showProviderSelection();
       }
 
-      const result = await this.handleSelection(answer.provider);
       this.currentPromptContext = null;
+      this._cancelStatusRefresh();
+      this.filteredProviders = null;
+
+      const result = await this.handleSelection(answer.provider);
       return result;
 
     } catch (error) {
@@ -707,9 +710,10 @@ class EnvSwitcher extends BaseCommand {
       });
 
       this._cancelStatusRefresh();
+      this.currentPromptContext = null;
+      this.filteredProviders = null;
 
       const result = await this.handleManageAction(answer.action);
-      this.currentPromptContext = null;
       return result;
 
     } catch (error) {
