@@ -204,36 +204,22 @@ class ProviderStatusChecker {
     }
 
     if (Array.isArray(response.content)) {
+      const textFields = ['text', 'thinking', 'output_text', 'argument', 'result'];
       const textParts = [];
+
       for (const block of response.content) {
-        if (!block) {
-          continue;
-        }
+        if (!block) continue;
         if (typeof block === 'string') {
           textParts.push(block);
           continue;
         }
-        if (typeof block.text === 'string' && block.text.trim()) {
-          textParts.push(block.text);
-          continue;
-        }
-        if (typeof block.thinking === 'string' && block.thinking.trim()) {
-          textParts.push(block.thinking);
-          continue;
-        }
-        if (typeof block.output_text === 'string' && block.output_text.trim()) {
-          textParts.push(block.output_text);
-          continue;
-        }
-        if (typeof block.argument === 'string' && block.argument.trim()) {
-          textParts.push(block.argument);
-          continue;
-        }
-        if (typeof block.result === 'string' && block.result.trim()) {
-          textParts.push(block.result);
-          continue;
+        for (const field of textFields) {
+          if (typeof block[field] === 'string' && block[field].trim()) {
+            textParts.push(block[field]);
+          }
         }
       }
+
       const combined = textParts
         .map(part => part.replace(/\s+/g, ' ').trim())
         .filter(Boolean)

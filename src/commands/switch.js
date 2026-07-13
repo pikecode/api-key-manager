@@ -90,12 +90,6 @@ class EnvSwitcher extends BaseCommand {
       ]));
       console.log();
 
-      // 设置 ESC 键监听
-      const escListener = this.createESCListener(() => {
-        Logger.info('返回供应商选择');
-        this.showProviderSelection();
-      }, '返回供应商选择');
-
       // 显示启动参数选择界面
       const choices = [
         {
@@ -108,16 +102,16 @@ class EnvSwitcher extends BaseCommand {
 
       let answers;
       try {
-        answers = await this.prompt(choices);
+        answers = await this.promptWithESC(choices, '返回供应商选择', () => {
+          Logger.info('返回供应商选择');
+          this.showProviderSelection();
+        });
       } catch (error) {
-        this.removeESCListener(escListener);
         if (this.isEscCancelled(error)) {
           return;
         }
         throw error;
       }
-
-      this.removeESCListener(escListener);
 
       // 检查互斥参数
       const conflictError = LaunchArgsHelper.validateArgsConflict(answers.selectedArgs, availableArgs);
@@ -288,15 +282,7 @@ class EnvSwitcher extends BaseCommand {
       const filterSuffix = this.filter === 'codex' ? ' (Codex CLI)' : (this.filter === 'claude' ? ' (Claude Code)' : '');
       const promptMessage = `请选择要切换的供应商${filterSuffix} (总计 ${providers.length} 个):`;
 
-      // 设置 ESC 键监听
-      const escListener = this.createESCListener(() => {
-        Logger.info('退出程序');
-        this.showExitScreen();
-        this.destroy();
-        process.exit(0);
-      }, '退出程序');
-
-      const answer = await this.prompt([
+      const answer = await this.promptWithESC([
         {
           type: 'list',
           name: 'provider',
@@ -305,7 +291,12 @@ class EnvSwitcher extends BaseCommand {
           default: defaultChoice,
           pageSize: this._getPageSize(choices.length)
         }
-      ]);
+      ], '退出程序', () => {
+        Logger.info('退出程序');
+        this.showExitScreen();
+        this.destroy();
+        process.exit(0);
+      });
 
       if (answer.provider === '__OPEN_CONFIG__') {
         await this.openConfigFile();
@@ -390,15 +381,9 @@ class EnvSwitcher extends BaseCommand {
       { name: `${UIHelper.icons.back} 返回主菜单`, value: 'back' }
     ];
 
-    // 设置 ESC 键监听
-    const escListener = this.createESCListener(() => {
-      Logger.info('返回供应商选择');
-      this.showProviderSelection();
-    }, '返回供应商选择');
-
     let answer;
     try {
-      answer = await this.prompt([
+      answer = await this.promptWithESC([
         {
           type: 'list',
           name: 'setting',
@@ -406,107 +391,25 @@ class EnvSwitcher extends BaseCommand {
           choices,
           pageSize: 8
         }
-      ]);
+      ], '返回供应商选择', () => {
+        Logger.info('返回供应商选择');
+        this.showProviderSelection();
+      });
     } catch (error) {
-      this.removeESCListener(escListener);
       if (this.isEscCancelled(error)) {
         return;
       }
       throw error;
     }
 
-    this.removeESCListener(escListener);
-
     switch (answer.setting) {
     case 'search':
       return await this.showSearchProvider();
-    case 'batch':
-      return await this.showBatchEdit();
-    case 'global':
-      return await this.showGlobalSettings();
     case 'stats':
       return await this.showStatistics();
     case 'back':
       return await this.showProviderSelection();
     }
-  }
-
-  async showBatchEdit() {
-    this.clearScreen();
-    console.log(UIHelper.createTitle('批量编辑', UIHelper.icons.edit));
-    console.log();
-    console.log(UIHelper.createTooltip('此功能正在开发中...'));
-    console.log();
-    console.log(UIHelper.createHintLine([
-      ['Enter', '返回上一页'],
-      ['ESC', '返回快速设置']
-    ]));
-    console.log();
-
-    // 设置 ESC 键监听
-    const escListener = this.createESCListener(() => {
-      Logger.info('返回快速设置');
-      this.showQuickSettings();
-    }, '返回快速设置');
-
-    try {
-      await this.prompt([
-        {
-          type: 'input',
-          name: 'continue',
-          message: '按回车键返回...'
-        }
-      ]);
-    } catch (error) {
-      this.removeESCListener(escListener);
-      if (this.isEscCancelled(error)) {
-        return;
-      }
-      throw error;
-    }
-
-    this.removeESCListener(escListener);
-
-    return await this.showQuickSettings();
-  }
-
-  async showGlobalSettings() {
-    this.clearScreen();
-    console.log(UIHelper.createTitle('全局设置', UIHelper.icons.settings));
-    console.log();
-    console.log(UIHelper.createTooltip('此功能正在开发中...'));
-    console.log();
-    console.log(UIHelper.createHintLine([
-      ['Enter', '返回上一页'],
-      ['ESC', '返回快速设置']
-    ]));
-    console.log();
-
-    // 设置 ESC 键监听
-    const escListener = this.createESCListener(() => {
-      Logger.info('返回快速设置');
-      this.showQuickSettings();
-    }, '返回快速设置');
-
-    try {
-      await this.prompt([
-        {
-          type: 'input',
-          name: 'continue',
-          message: '按回车键返回...'
-        }
-      ]);
-    } catch (error) {
-      this.removeESCListener(escListener);
-      if (this.isEscCancelled(error)) {
-        return;
-      }
-      throw error;
-    }
-
-    this.removeESCListener(escListener);
-
-    return await this.showQuickSettings();
   }
 
   async showSearchProvider() {
@@ -517,31 +420,25 @@ class EnvSwitcher extends BaseCommand {
     ]));
     console.log(UIHelper.createTooltip('示例: claude、demo 或供应商别名'));
     console.log();
-    // 设置 ESC 键监听
-    const escListener = this.createESCListener(() => {
-      Logger.info('返回快速设置');
-      this.showQuickSettings();
-    }, '返回快速设置');
-
     let answer;
     try {
-      answer = await this.prompt([
+      answer = await this.promptWithESC([
         {
           type: 'input',
           name: 'search',
           message: '输入供应商名称搜索:',
           validate: input => input.trim() !== '' || '请输入搜索内容'
         }
-      ]);
+      ], '返回快速设置', () => {
+        Logger.info('返回快速设置');
+        this.showQuickSettings();
+      });
     } catch (error) {
-      this.removeESCListener(escListener);
       if (this.isEscCancelled(error)) {
         return;
       }
       throw error;
     }
-
-    this.removeESCListener(escListener);
 
     await this.configManager.load();
     const providers = this.configManager.listProviders();
@@ -572,22 +469,9 @@ class EnvSwitcher extends BaseCommand {
     const currentProvider = searchResults.find(p => p.current);
     const defaultChoice = currentProvider ? currentProvider.name : searchResults[0]?.name;
 
-    // 设置 ESC 键监听
-    const escListener2 = this.createESCListener(() => {
-      Logger.info('返回快速设置');
-      this.showQuickSettings();
-    }, '返回快速设置');
-
-    console.log();
-    console.log(UIHelper.createHintLine([
-      ['↑ / ↓', '选择结果'],
-      ['Enter', '查看详情'],
-      ['ESC', '返回快速设置']
-    ]));
-
     let result;
     try {
-      result = await this.prompt([
+      result = await this.promptWithESC([
         {
           type: 'list',
           name: 'provider',
@@ -596,16 +480,16 @@ class EnvSwitcher extends BaseCommand {
           default: defaultChoice,
           pageSize: 10
         }
-      ]);
+      ], '返回快速设置', () => {
+        Logger.info('返回快速设置');
+        this.showQuickSettings();
+      });
     } catch (error) {
-      this.removeESCListener(escListener2);
       if (this.isEscCancelled(error)) {
         return;
       }
       throw error;
     }
-
-    this.removeESCListener(escListener2);
 
     if (result.provider === 'back') {
       return await this.showQuickSettings();
@@ -637,30 +521,25 @@ class EnvSwitcher extends BaseCommand {
 
     console.log(UIHelper.createTable(['项目', '数据'], stats));
     console.log();
-    // 设置 ESC 键监听
-    const escListener = this.createESCListener(() => {
-      Logger.info('返回快速设置');
-      this.showQuickSettings();
-    }, '返回快速设置');
-
     try {
-      await this.prompt([
+      await this.promptWithESC([
         {
           type: 'list',
           name: 'action',
           message: '操作:',
           choices: [{ name: `${UIHelper.icons.back} 返回`, value: 'back' }]
         }
-      ]);
+      ], '返回快速设置', () => {
+        Logger.info('返回快速设置');
+        this.showQuickSettings();
+      });
     } catch (error) {
-      this.removeESCListener(escListener);
       if (this.isEscCancelled(error)) {
         return;
       }
       throw error;
     }
 
-    this.removeESCListener(escListener);
     return await this.showQuickSettings();
   }
 
@@ -709,35 +588,25 @@ class EnvSwitcher extends BaseCommand {
       console.log();
     });
 
-    const escListener = this.createESCListener(() => {
-      Logger.info('返回主菜单');
-      this.showProviderSelection();
-    }, '返回主菜单');
-
-    console.log(UIHelper.createHintLine([
-      ['Enter', '返回主菜单'],
-      ['ESC', '返回主菜单']
-    ]));
-    console.log();
-
     try {
-      await this.prompt([
+      await this.promptWithESC([
         {
           type: 'list',
           name: 'action',
           message: '操作:',
           choices: [{ name: `${UIHelper.icons.back} 返回主菜单`, value: 'back' }]
         }
-      ]);
+      ], '返回主菜单', () => {
+        Logger.info('返回主菜单');
+        this.showProviderSelection();
+      });
     } catch (error) {
-      this.removeESCListener(escListener);
       if (this.isEscCancelled(error)) {
         return;
       }
       throw error;
     }
 
-    this.removeESCListener(escListener);
     return await this.showProviderSelection();
   }
 
@@ -774,14 +643,9 @@ class EnvSwitcher extends BaseCommand {
       }
 
       // 设置 ESC 键监听
-      escListener = this.createESCListener(() => {
-        Logger.info('返回供应商选择');
-        this.showProviderSelection();
-      }, '返回供应商选择');
-
       let answer;
       try {
-        answer = await this.prompt([
+        answer = await this.promptWithESC([
           {
             type: 'list',
             name: 'action',
@@ -789,15 +653,16 @@ class EnvSwitcher extends BaseCommand {
             choices,
             pageSize: this._getPageSize(choices.length)
           }
-        ]);
+        ], '返回供应商选择', () => {
+          Logger.info('返回供应商选择');
+          this.showProviderSelection();
+        });
       } catch (error) {
         if (this.isEscCancelled(error)) {
           return;
         }
         throw error;
       }
-
-      this.removeESCListener(escListener);
 
       this._cancelStatusRefresh();
 
@@ -1029,24 +894,20 @@ class EnvSwitcher extends BaseCommand {
         console.log();
       }
 
-      // 设置 ESC 键监听
-      escListener = this.createESCListener(() => {
-        Logger.info('返回管理列表');
-        this.showManageMenu();
-      }, '返回管理列表');
-
       let answer;
       try {
-        answer = await this.prompt([
+        answer = await this.promptWithESC([
           {
             type: 'list',
             name: 'action',
             message: '选择操作:',
             choices: ProviderDetailsHelper.buildActionChoices(UIHelper.icons)
           }
-        ]);
+        ], '返回管理列表', () => {
+          Logger.info('返回管理列表');
+          this.showManageMenu();
+        });
       } catch (error) {
-        this.removeESCListener(escListener);
         if (this.isEscCancelled(error)) {
           return;
         }
@@ -1055,32 +916,21 @@ class EnvSwitcher extends BaseCommand {
 
       switch (answer.action) {
       case 'back':
-        // 移除 ESC 键监听
-        this.removeESCListener(escListener);
         return await this.showManageMenu();
       case 'edit':
-        // 移除 ESC 键监听
-        this.removeESCListener(escListener);
         return await this.editProvider(providerName);
       case 'remove':
-        // 移除 ESC 键监听
-        this.removeESCListener(escListener);
         return await this.removeProvider(providerName);
       case 'launch':
-        // 移除 ESC 键监听
-        this.removeESCListener(escListener);
         return await this.showLaunchArgsSelection(providerName);
       }
 
     } catch (error) {
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
       await this.handleError(error, '显示供应商详情');
     }
   }
 
   async editProvider(providerName) {
-    let escListener;
     try {
       await this.configManager.load();
       let provider = this.configManager.getProvider(providerName);
@@ -1091,21 +941,17 @@ class EnvSwitcher extends BaseCommand {
         return await this.showManageMenu();
       }
 
-      // 设置 ESC 键监听
-      escListener = this.createESCListener(() => {
-        Logger.info('取消编辑供应商');
-        this.showManageMenu();
-      }, '取消编辑');
-
       // 根据 IDE 类型构建不同的问卷
       const isCodex = provider.ideName === 'codex';
       const questions = ProviderEditQuestionsHelper.buildQuestions(provider, validator);
 
       let answers;
       try {
-        answers = await this.prompt(questions);
+        answers = await this.promptWithESC(questions, '取消编辑', () => {
+          Logger.info('取消编辑供应商');
+          this.showManageMenu();
+        });
       } catch (error) {
-        this.removeESCListener(escListener);
         if (this.isEscCancelled(error)) {
           return;
         }
@@ -1168,20 +1014,15 @@ class EnvSwitcher extends BaseCommand {
       await this.configManager.save();
       Logger.success(`供应商 '${newName}' 已更新`);
 
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
       return await this.showManageMenu();
 
     } catch (error) {
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
       Logger.error(`编辑供应商失败: ${error.message}`);
       throw error;
     }
   }
 
   async removeProvider(providerName) {
-    let escListener;
     try {
       await this.configManager.load();
       const provider = this.configManager.getProvider(providerName);
@@ -1192,24 +1033,20 @@ class EnvSwitcher extends BaseCommand {
         return await this.showManageMenu();
       }
 
-      // 设置 ESC 键监听
-      escListener = this.createESCListener(() => {
-        Logger.info('取消删除供应商');
-        this.showManageMenu();
-      }, '取消删除');
-
       let confirm;
       try {
-        confirm = await this.prompt([
+        confirm = await this.promptWithESC([
           {
             type: 'confirm',
             name: 'confirmed',
             message: `确定要删除供应商 '${providerName}' 吗?`,
             default: false
           }
-        ]);
+        ], '取消删除', () => {
+          Logger.info('取消删除供应商');
+          this.showManageMenu();
+        });
       } catch (error) {
-        this.removeESCListener(escListener);
         if (this.isEscCancelled(error)) {
           return;
         }
@@ -1223,13 +1060,9 @@ class EnvSwitcher extends BaseCommand {
         Logger.info('删除操作已取消');
       }
 
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
       return await this.showManageMenu();
 
     } catch (error) {
-      // 移除 ESC 键监听
-      this.removeESCListener(escListener);
       Logger.error(`删除供应商失败: ${error.message}`);
       throw error;
     }
