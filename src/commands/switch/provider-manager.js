@@ -17,58 +17,6 @@ class ProviderManager {
     this.configManager = configManager;
   }
 
-  async showManageMenu(providers, statusMap, onBack, onSelect) {
-    try {
-      await this.configManager.load();
-      const allProviders = this.configManager.listProviders();
-
-      if (allProviders.length === 0) {
-        Logger.warning('暂无配置的供应商');
-        return await onBack();
-      }
-
-      const choices = this._buildManageChoices(allProviders, statusMap);
-
-      const answer = await this.baseCommand.promptWithESC([
-        {
-          type: 'list',
-          name: 'action',
-          message: `选择供应商或操作 (总计 ${allProviders.length} 个):`,
-          choices,
-          pageSize: this.baseCommand._getPageSize?.(choices.length) || 10
-        }
-      ], '返回供应商选择', () => {
-        Logger.info('返回供应商选择');
-      });
-
-      await onSelect(answer.action);
-    } catch (error) {
-      if (this.baseCommand.isEscCancelled(error)) {
-        return await onBack();
-      }
-      throw error;
-    }
-  }
-
-  _buildManageChoices(providers, statusMap) {
-    const choices = providers.map(provider => {
-      const status = statusMap?.[provider.name];
-      const statusIcon = status?.state === 'online' ? '🟢' : status?.state === 'offline' ? '🔴' : '⚪';
-      return {
-        name: `${statusIcon} ${provider.displayName || provider.name}`,
-        value: provider.name
-      };
-    });
-
-    choices.push(
-      new (require('inquirer').Separator)(),
-      { name: '🔙 返回', value: 'back' },
-      { name: '❌ 退出', value: 'exit' }
-    );
-
-    return choices;
-  }
-
   async showProviderDetails(providerName, onBack, onEdit, onRemove, onLaunch) {
     try {
       await this.configManager.load();
@@ -81,6 +29,12 @@ class ProviderManager {
 
       this.baseCommand.clearScreen();
       console.log(UIHelper.createTitle('供应商详情', UIHelper.icons.info));
+      console.log();
+      console.log(UIHelper.createHintLine([
+        ['↑ / ↓', '选择操作'],
+        ['Enter', '确认'],
+        ['ESC', '返回管理列表']
+      ]));
       console.log();
 
       const details = ProviderDetailsHelper.buildDetailsRows(provider, {
@@ -138,6 +92,8 @@ class ProviderManager {
       }
 
       this.baseCommand.clearScreen();
+      console.log(UIHelper.createTitle(`编辑供应商: ${provider.displayName || provider.name}`, UIHelper.icons.edit));
+      console.log();
 
       const isCodex = provider.ideName === 'codex';
       const questions = ProviderEditQuestionsHelper.buildQuestions(provider, validator);
@@ -228,7 +184,7 @@ class ProviderManager {
           {
             type: 'confirm',
             name: 'confirmed',
-            message: `确定要删除供应商 '${providerName}' 吗?`,
+            message: `确定要删除供应商 '${provider.displayName || providerName}' 吗?`,
             default: false
           }
         ], '取消删除', () => {

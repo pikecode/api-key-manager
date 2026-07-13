@@ -66,6 +66,8 @@ class EnvSwitcher extends BaseCommand {
       console.log();
     }
   }
+
+  _getPageSize(itemCount) {
     const rows = process.stdout.rows || 24;
     const reserved = 8;
     return Math.min(itemCount, Math.max(5, rows - reserved));
@@ -94,7 +96,6 @@ class EnvSwitcher extends BaseCommand {
       const isCodex = provider.ideName === 'codex';
       const availableArgs = LaunchArgsHelper.getAvailableLaunchArgs(isCodex);
 
-      // 优先使用上次使用的参数，如果没有则使用默认的 launchArgs
       const defaultLaunchArgs = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0
         ? provider.lastUsedArgs
         : (Array.isArray(provider.launchArgs) ? provider.launchArgs : []);
@@ -102,18 +103,18 @@ class EnvSwitcher extends BaseCommand {
       const mergedArgs = LaunchArgsHelper.mergeArgsWithDefaults(availableArgs, defaultLaunchArgs);
       const ideDisplayName = LaunchArgsHelper.getIDEDisplayName(isCodex);
 
-      console.log(UIHelper.createTitle('启动配置', UIHelper.icons.launch));
-      console.log();
-      console.log(UIHelper.createCard('供应商', UIHelper.formatProvider(provider), UIHelper.icons.info));
-      console.log();
-      console.log(UIHelper.createHintLine([
-        ['空格', '切换选中'],
-        ['A', '全选'],
-        ['I', '反选'],
-        ['Enter', `启动 ${ideDisplayName}`],
-        ['ESC', '返回供应商选择']
-      ]));
-      console.log();
+      this._renderPage({
+        title: '启动配置',
+        icon: UIHelper.icons.launch,
+        hints: [
+          ['空格', '切换选中'],
+          ['A', '全选'],
+          ['I', '反选'],
+          ['Enter', `启动 ${ideDisplayName}`],
+          ['ESC', '返回供应商选择']
+        ],
+        content: () => console.log(UIHelper.createCard('供应商', UIHelper.formatProvider(provider), UIHelper.icons.info))
+      });
 
       // 显示启动参数选择界面
       const choices = [
@@ -197,13 +198,6 @@ class EnvSwitcher extends BaseCommand {
 
   /**
    * 快速启动供应商（跳过参数选择）
-   * @param {string} providerName - 供应商名称
-   * @param {Object} options - 启动选项
-   * @param {boolean} options.quick - 使用上次的启动参数
-   * @param {boolean} options.noArgs - 不使用任何启动参数
-   */
-  /**
-   * 快速启动供应商（跳过参数选择）
    * @param {string} providerName - 供应商名称或别名
    * @param {Object} options - 启动选项
    * @param {boolean} options.quick - 使用上次的启动参数
@@ -226,19 +220,17 @@ class EnvSwitcher extends BaseCommand {
       // 确定使用的启动参数
       let selectedArgs;
       if (options.noArgs) {
-        // 使用空参数
         selectedArgs = [];
-        console.log(UIHelper.colors.muted('💡 使用空参数启动'));
+        Logger.info('使用空参数启动');
       } else if (options.quick) {
-        // 使用上次的启动参数或默认参数
         selectedArgs = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0
           ? provider.lastUsedArgs
           : (Array.isArray(provider.launchArgs) ? provider.launchArgs : []);
 
         if (Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0) {
-          console.log(UIHelper.colors.muted('💡 使用上次的启动参数: ' + selectedArgs.join(' ')));
+          Logger.info('使用上次的启动参数: ' + selectedArgs.join(' '));
         } else {
-          console.log(UIHelper.colors.muted('💡 使用默认启动参数: ' + (selectedArgs.length > 0 ? selectedArgs.join(' ') : '(无)')));
+          Logger.info('使用默认启动参数: ' + (selectedArgs.length > 0 ? selectedArgs.join(' ') : '(无)'));
         }
       }
 
@@ -295,6 +287,8 @@ class EnvSwitcher extends BaseCommand {
         { name: `${UIHelper.icons.add} 添加新供应商`, value: '__ADD__' },
         { name: `${UIHelper.icons.list} 供应商管理 (编辑/删除)`, value: '__MANAGE__' },
         { name: `${UIHelper.icons.config} 打开配置文件`, value: '__OPEN_CONFIG__' },
+        { name: `${UIHelper.icons.settings} 快速设置`, value: '__QUICK_SETTINGS__' },
+        { name: `${UIHelper.icons.info} 帮助`, value: '__HELP__' },
         { name: `${UIHelper.icons.error} 退出`, value: '__EXIT__' }
       );
 
@@ -376,12 +370,16 @@ class EnvSwitcher extends BaseCommand {
 
   async handleSelection(selection) {
     switch (selection) {
-    case '__ADD__':
-      // 使用CommandRegistry避免循环引用
+    case '__ADD__': {
       const { registry } = require('../CommandRegistry');
       return await registry.executeCommand('add');
+    }
     case '__MANAGE__':
       return await this.showManageMenu();
+    case '__QUICK_SETTINGS__':
+      return await this.showQuickSettings();
+    case '__HELP__':
+      return await this.showHelp();
     case '__EXIT__':
       this.showExitScreen();
       this.destroy();
@@ -392,13 +390,15 @@ class EnvSwitcher extends BaseCommand {
   }
 
   async showQuickSettings() {
-    this.clearScreen();
-    console.log(UIHelper.createHintLine([
-      ['↑ / ↓', '选择项目'],
-      ['Enter', '确认'],
-      ['ESC', '返回主菜单']
-    ]));
-    console.log();
+    this._renderPage({
+      title: '快速设置',
+      icon: UIHelper.icons.settings,
+      hints: [
+        ['↑ / ↓', '选择项目'],
+        ['Enter', '确认'],
+        ['ESC', '返回主菜单']
+      ]
+    });
     const choices = [
       { name: `${UIHelper.icons.search} 搜索供应商`, value: 'search' },
       { name: `${UIHelper.icons.info} 查看统计`, value: 'stats' },
@@ -415,13 +415,10 @@ class EnvSwitcher extends BaseCommand {
           choices,
           pageSize: 8
         }
-      ], '返回供应商选择', () => {
-        Logger.info('返回供应商选择');
-        this.showProviderSelection();
-      });
+      ], '返回主菜单', () => {});
     } catch (error) {
       if (this.isEscCancelled(error)) {
-        return;
+        return await this.showProviderSelection();
       }
       throw error;
     }
@@ -465,13 +462,37 @@ class EnvSwitcher extends BaseCommand {
 
     await this.configManager.load();
     const providers = this.configManager.listProviders();
-    const searchResults = providers.filter(p =>
-      p.name.toLowerCase().includes(answer.search.toLowerCase()) ||
-      p.displayName.toLowerCase().includes(answer.search.toLowerCase())
-    );
+    const searchResults = providers.filter(p => {
+      const q = answer.search.toLowerCase();
+      return p.name.toLowerCase().includes(q) ||
+        p.displayName.toLowerCase().includes(q) ||
+        (p.alias && p.alias.toLowerCase().includes(q));
+    });
 
     if (searchResults.length === 0) {
-      Logger.warning(`未找到匹配"${answer.search}"的供应商，请重新搜索`);
+      Logger.warning(`未找到匹配"${answer.search}"的供应商`);
+      let retry;
+      try {
+        retry = await this.promptWithESC([
+          {
+            type: 'list',
+            name: 'action',
+            message: '未找到匹配结果，请选择操作:',
+            choices: [
+              { name: `${UIHelper.icons.search} 重新搜索`, value: 'retry' },
+              { name: `${UIHelper.icons.back} 返回快速设置`, value: 'back' }
+            ]
+          }
+        ], '返回快速设置', () => {});
+      } catch (error) {
+        if (this.isEscCancelled(error)) {
+          return await this.showQuickSettings();
+        }
+        throw error;
+      }
+      if (retry.action === 'back') {
+        return await this.showQuickSettings();
+      }
       return await this.showSearchProvider();
     }
 
@@ -528,7 +549,9 @@ class EnvSwitcher extends BaseCommand {
     const totalProviders = providers.length;
     const currentProvider = providers.find(p => p.current);
     const totalUsage = providers.reduce((sum, p) => sum + (p.usageCount || 0), 0);
-    const mostUsed = providers.reduce((max, p) => (p.usageCount || 0) > (max.usageCount || 0) ? p : max, providers[0]);
+    const mostUsed = providers.length > 0
+      ? providers.reduce((max, p) => (p.usageCount || 0) > (max.usageCount || 0) ? p : max, providers[0])
+      : null;
 
     console.log(UIHelper.createTitle('使用统计', UIHelper.icons.info));
     console.log();
@@ -573,9 +596,10 @@ class EnvSwitcher extends BaseCommand {
   }
 
   async showHelp() {
-    this.clearScreen();
-    console.log(UIHelper.createTitle('快捷键帮助', UIHelper.icons.info));
-    console.log();
+    this._renderPage({
+      title: '快捷键帮助',
+      icon: UIHelper.icons.info
+    });
 
     const sections = [
       {
@@ -633,7 +657,7 @@ class EnvSwitcher extends BaseCommand {
   async showManageMenu() {
     try {
       await this.configManager.load();
-      const providers = this.configManager.listProviders();
+      let providers = this.configManager.listProviders();
 
       if (providers.length === 0) {
         Logger.warning('暂无配置的供应商');
@@ -642,6 +666,25 @@ class EnvSwitcher extends BaseCommand {
       }
 
       const statusMap = this._buildInitialStatusMap(providers);
+
+      // 按状态排序：在线 > 有限可用 > 测试中 > 不可用
+      const stateOrder = { online: 0, degraded: 1, pending: 2, offline: 3 };
+      providers = [...providers].sort((a, b) => {
+        const stateA = statusMap[a.name]?.state || 'pending';
+        const stateB = statusMap[b.name]?.state || 'pending';
+        return (stateOrder[stateA] || 2) - (stateOrder[stateB] || 2);
+      });
+
+      this._renderPage({
+        title: '供应商管理',
+        icon: UIHelper.icons.list,
+        hints: [
+          ['↑ / ↓', '选择供应商'],
+          ['Enter', '查看详情'],
+          ['ESC', '返回主菜单']
+        ]
+      });
+
       const choices = this.createProviderChoices(providers, true, statusMap);
 
       this.currentPromptContext = 'manage';
@@ -797,7 +840,19 @@ class EnvSwitcher extends BaseCommand {
 
   _refreshPromptChoices(activePrompt, providers, statusMap, options = {}) {
     const includeActions = this.currentPromptContext === 'manage';
-    const updatedChoicesBase = this.createProviderChoices(providers, includeActions, statusMap);
+
+    let sortedProviders = providers;
+    if (includeActions) {
+      const stateOrder = { online: 0, degraded: 1, pending: 2, offline: 3 };
+      sortedProviders = [...providers].sort((a, b) => {
+        const stateA = statusMap[a.name]?.state || 'pending';
+        const stateB = statusMap[b.name]?.state || 'pending';
+        return (stateOrder[stateA] ?? 2) - (stateOrder[stateB] ?? 2);
+      });
+      this.filteredProviders = sortedProviders;
+    }
+
+    const updatedChoicesBase = this.createProviderChoices(sortedProviders, includeActions, statusMap);
     const updatedChoices = [...updatedChoicesBase];
 
     if (!includeActions) {
@@ -806,6 +861,8 @@ class EnvSwitcher extends BaseCommand {
         { name: `${UIHelper.icons.add} 添加新供应商`, value: '__ADD__' },
         { name: `${UIHelper.icons.list} 供应商管理 (编辑/删除)`, value: '__MANAGE__' },
         { name: `${UIHelper.icons.config} 打开配置文件`, value: '__OPEN_CONFIG__' },
+        { name: `${UIHelper.icons.settings} 快速设置`, value: '__QUICK_SETTINGS__' },
+        { name: `${UIHelper.icons.info} 帮助`, value: '__HELP__' },
         { name: `${UIHelper.icons.error} 退出`, value: '__EXIT__' }
       );
     }
@@ -844,7 +901,8 @@ class EnvSwitcher extends BaseCommand {
   _buildStatusPromptMessage(providerCount, hasError = false) {
     const errorSuffix = hasError ? '，状态检测失败，使用默认配置' : '';
     if (this.currentPromptContext === 'selection') {
-      return `请选择要切换的供应商 (总计 ${providerCount} 个${errorSuffix}):`;
+      const filterSuffix = this.filter === 'codex' ? ' (Codex CLI)' : (this.filter === 'claude' ? ' (Claude Code)' : '');
+      return `请选择要切换的供应商${filterSuffix} (总计 ${providerCount} 个${errorSuffix}):`;
     }
     if (this.currentPromptContext === 'manage') {
       return `选择供应商或操作 (总计 ${providerCount} 个${errorSuffix}):`;
@@ -857,7 +915,7 @@ class EnvSwitcher extends BaseCommand {
     case 'back':
       return await this.showProviderSelection();
     case 'exit':
-      Logger.info('👋 再见！');
+      this.showExitScreen();
       this.destroy();
       process.exit(0);
     default:

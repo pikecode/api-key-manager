@@ -84,18 +84,26 @@ class UIHelper {
     return result;
   }
 
+  // 剥离 ANSI 转义码后的可见字符长度
+  static _visibleLength(str) {
+    // eslint-disable-next-line no-control-regex
+    return str.replace(/\x1b\[[0-9;]*m/g, '').length;
+  }
+
   // 创建卡片式布局
   static createCard(title, content, icon = '') {
     const lines = content.split('\n');
-    const maxLineLength = Math.max(...lines.map(line => line.length));
+    const maxLineLength = Math.max(...lines.map(line => UIHelper._visibleLength(line)));
+    const iconPrefix = icon ? `${icon} ` : '';
+    const titleVisible = UIHelper._visibleLength(title);
     const horizontalBorder = '─'.repeat(maxLineLength + 4);
 
     let result = `${UIHelper.colors.primary(`┌─${horizontalBorder}─┐`)}\n`;
-    result += `${UIHelper.colors.primary('│')}  ${chalk.bold.white(icon ? `${icon} ` : '')}${chalk.bold.white(title)}${' '.repeat(maxLineLength - title.length - (icon ? 2 : 0))}  ${UIHelper.colors.primary('│')}\n`;
+    result += `${UIHelper.colors.primary('│')}  ${chalk.bold.white(iconPrefix)}${chalk.bold.white(title)}${' '.repeat(Math.max(0, maxLineLength - titleVisible - iconPrefix.length))}  ${UIHelper.colors.primary('│')}\n`;
     result += `${UIHelper.colors.primary('├─')}${UIHelper.colors.muted(horizontalBorder)}${UIHelper.colors.primary('─┤')}\n`;
 
     lines.forEach(line => {
-      result += `${UIHelper.colors.primary('│')}  ${UIHelper.colors.info(line)}${' '.repeat(maxLineLength - line.length)}  ${UIHelper.colors.primary('│')}\n`;
+      result += `${UIHelper.colors.primary('│')}  ${UIHelper.colors.info(line)}${' '.repeat(Math.max(0, maxLineLength - UIHelper._visibleLength(line)))}  ${UIHelper.colors.primary('│')}\n`;
     });
 
     result += `${UIHelper.colors.primary('└─')}${UIHelper.colors.muted(horizontalBorder)}${UIHelper.colors.primary('─┘')}`;
