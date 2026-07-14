@@ -4,6 +4,7 @@ const os = require('os');
 const chalk = require('chalk');
 const { writeJsonAtomic } = require('./utils/atomic-file');
 const { validateAndNormalizeConfigData } = require('./utils/import-validator');
+const { validator } = require('./utils/validator');
 
 /**
  * @typedef {Object} ProviderConfig
@@ -134,6 +135,7 @@ class ConfigManager {
           await this._performSave(this.config, { skipConflictCheck: true });
         } else {
           this.config = validateAndNormalizeConfigData({ ...this.getDefaultConfig(), ...data });
+          this._warnAboutInsecureRemoteHttpProviders();
         }
 
         // 迁移旧的认证模式
@@ -190,6 +192,21 @@ class ConfigManager {
       }
     } catch {
       // 忽略权限检查错误，不影响主流程
+    }
+  }
+
+  _warnAboutInsecureRemoteHttpProviders() {
+    for (const [name, provider] of Object.entries(this.config.providers || {})) {
+      if (!validator.isInsecureRemoteHttp(provider.baseUrl)) {
+        continue;
+      }
+
+      const providerName = provider.displayName || name;
+      console.log(
+        chalk.yellow(
+          `⚠️  供应商 "${providerName}" 使用远程 HTTP，Token 将以明文传输: ${provider.baseUrl}`
+        )
+      );
     }
   }
 

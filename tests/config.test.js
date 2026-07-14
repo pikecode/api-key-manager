@@ -91,8 +91,8 @@ describe('ConfigManager', () => {
       expect(await fs.readJson(testConfigPath)).toEqual(invalidConfig);
     });
 
-    test('本地配置拒绝远程 HTTP 基础地址', async () => {
-      const invalidConfig = {
+    test('本地配置允许远程 HTTP 基础地址并提示明文传输风险', async () => {
+      const localConfig = {
         version: '1.0.0',
         currentProvider: 'insecure',
         providers: {
@@ -106,12 +106,22 @@ describe('ConfigManager', () => {
           }
         }
       };
-      await fs.writeJson(testConfigPath, invalidConfig);
+      await fs.writeJson(testConfigPath, localConfig);
       configManager.isLoaded = false;
       configManager.config = null;
+      const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      await expect(configManager.load(true)).rejects.toThrow('HTTPS');
-      expect(await fs.readJson(testConfigPath)).toEqual(invalidConfig);
+      try {
+        const config = await configManager.load(true);
+        expect(config.providers.insecure.baseUrl).toBe('http://api.example.com');
+
+        const warning = consoleLogSpy.mock.calls.flat().join(' ');
+        expect(warning).toContain('Token 将以明文传输');
+        expect(warning).toContain('http://api.example.com');
+        expect(warning).not.toContain('valid-token');
+      } finally {
+        consoleLogSpy.mockRestore();
+      }
     });
   });
 
@@ -292,6 +302,7 @@ describe('validator', () => {
     test('should accept valid URLs', () => {
       expect(validator.validateUrl('https://example.com')).toBeNull();
       expect(validator.validateUrl('http://127.0.0.1:8080')).toBeNull();
+      expect(validator.validateUrl('http://example.com')).toBeNull();
       expect(validator.validateUrl('https://api.example.com/v1')).toBeNull();
     });
 
@@ -299,7 +310,14 @@ describe('validator', () => {
       expect(validator.validateUrl('')).toBe('URL不能为空');
       expect(validator.validateUrl('not-a-url')).toBe('请输入有效的URL');
       expect(validator.validateUrl('ftp://example.com')).toBe('URL必须以http://或https://开头');
-      expect(validator.validateUrl('http://example.com')).toContain('HTTPS');
+    });
+
+    test('严格模式拒绝远程 HTTP，但允许回环地址', () => {
+      const options = { allowInsecureHttp: false };
+      expect(validator.validateUrl('http://example.com', true, options)).toContain('HTTPS');
+      expect(validator.validateUrl('http://127.0.0.1:8080', true, options)).toBeNull();
+      expect(validator.isInsecureRemoteHttp('http://example.com')).toBe(true);
+      expect(validator.isInsecureRemoteHttp('http://localhost:8080')).toBe(false);
     });
   });
 

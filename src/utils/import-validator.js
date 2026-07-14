@@ -135,8 +135,10 @@ function validateAndNormalizeData(data, source) {
     const launchArgs = provider.launchArgs || [];
     const lastUsedArgs = provider.lastUsedArgs || [];
 
-    // 本地配置、导入配置和交互式编辑必须共享同一套 URL 规则。
-    const baseUrlError = validator.validateUrl(provider.baseUrl, false);
+    // 外部导入保持安全默认值；本地显式配置允许连接远程 HTTP 代理。
+    const baseUrlError = validator.validateUrl(provider.baseUrl, false, {
+      allowInsecureHttp: source !== 'import'
+    });
     if (baseUrlError) {
       throw new Error(`供应商 "${safeName}" 的基础 URL 无效: ${baseUrlError}`);
     }

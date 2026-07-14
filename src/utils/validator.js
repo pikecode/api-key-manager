@@ -1,6 +1,17 @@
 const { getClaudeLaunchArgs } = require('./launch-args');
 const { containsUnsafeTerminalCharacters } = require('./terminal-format');
 
+function isLoopbackHostname(hostname) {
+  const normalizedHostname = hostname.toLowerCase();
+  return (
+    normalizedHostname === 'localhost' ||
+    normalizedHostname.endsWith('.localhost') ||
+    normalizedHostname === '::1' ||
+    normalizedHostname === '[::1]' ||
+    /^127(?:\.\d{1,3}){3}$/.test(normalizedHostname)
+  );
+}
+
 const validator = {
   validateName(name) {
     if (!name || typeof name !== 'string') {
@@ -75,7 +86,7 @@ const validator = {
     return null;
   },
 
-  validateUrl(url, required = true) {
+  validateUrl(url, required = true, options = {}) {
     if (url === null || url === undefined || url === '') {
       return required ? 'URL不能为空' : null;
     }
@@ -99,19 +110,28 @@ const validator = {
       return 'URL包含不安全字符';
     }
 
-    const hostname = parsedUrl.hostname.toLowerCase();
-    const isLoopback =
-      hostname === 'localhost' ||
-      hostname.endsWith('.localhost') ||
-      hostname === '::1' ||
-      hostname === '[::1]' ||
-      /^127(?:\.\d{1,3}){3}$/.test(hostname);
-
-    if (parsedUrl.protocol === 'http:' && !isLoopback) {
+    if (
+      parsedUrl.protocol === 'http:' &&
+      !isLoopbackHostname(parsedUrl.hostname) &&
+      options.allowInsecureHttp === false
+    ) {
       return '远程 API 地址必须使用 HTTPS；HTTP 仅允许 localhost 或回环地址';
     }
 
     return null;
+  },
+
+  isInsecureRemoteHttp(url) {
+    if (typeof url !== 'string') {
+      return false;
+    }
+
+    try {
+      const parsedUrl = new URL(url);
+      return parsedUrl.protocol === 'http:' && !isLoopbackHostname(parsedUrl.hostname);
+    } catch {
+      return false;
+    }
   },
 
   validateToken(token) {

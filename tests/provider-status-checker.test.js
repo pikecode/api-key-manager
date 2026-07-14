@@ -1,9 +1,9 @@
 const { ProviderStatusChecker } = require('../src/utils/provider-status-checker');
 
 describe('ProviderStatusChecker 安全边界', () => {
-  test('Codex 远程 HTTP 地址不会发起请求或发送 Token', async () => {
+  test('Codex 允许检查本地配置的远程 HTTP 地址', async () => {
     const originalFetch = global.fetch;
-    global.fetch = jest.fn();
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200 });
     const checker = new ProviderStatusChecker();
 
     try {
@@ -19,19 +19,24 @@ describe('ProviderStatusChecker 安全边界', () => {
 
       expect(result).toEqual(
         expect.objectContaining({
-          state: 'unknown',
-          label: expect.stringContaining('HTTPS')
+          state: 'online'
         })
       );
-      expect(global.fetch).not.toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://api.example.com/v1/models',
+        expect.objectContaining({
+          headers: expect.objectContaining({ Authorization: 'Bearer sk-review-secret' })
+        })
+      );
     } finally {
       global.fetch = originalFetch;
     }
   });
 
-  test('Claude 远程 HTTP 地址不会创建 SDK 客户端', async () => {
+  test('Claude 允许检查本地配置的远程 HTTP 地址', async () => {
     const checker = new ProviderStatusChecker();
-    checker._createClient = jest.fn();
+    const create = jest.fn().mockResolvedValue({ content: [{ text: 'ok' }] });
+    checker._createClient = jest.fn().mockReturnValue({ messages: { create } });
 
     const result = await checker.check(
       {
@@ -46,11 +51,11 @@ describe('ProviderStatusChecker 安全边界', () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        state: 'unknown',
-        label: expect.stringContaining('HTTPS')
+        state: 'online'
       })
     );
-    expect(checker._createClient).not.toHaveBeenCalled();
+    expect(checker._createClient).toHaveBeenCalled();
+    expect(create).toHaveBeenCalled();
   });
 
   test('非字符串 URL 不会被当作未配置值放行', async () => {
