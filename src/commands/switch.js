@@ -214,7 +214,7 @@ class EnvSwitcher extends BaseCommand {
       }
 
       // 确定使用的启动参数
-      let selectedArgs;
+      let selectedArgs = [];
       if (options.noArgs) {
         selectedArgs = [];
         Logger.info('使用空参数启动');
@@ -538,7 +538,7 @@ class EnvSwitcher extends BaseCommand {
       return await this.showQuickSettings();
     }
 
-    return await this.showProviderDetails(result.provider);
+    return await this.showLaunchArgsSelection(result.provider);
   }
 
   async showStatistics() {
@@ -556,12 +556,16 @@ class EnvSwitcher extends BaseCommand {
     console.log(UIHelper.createTitle('使用统计', UIHelper.icons.info));
     console.log();
 
+    const earliestCreated = providers.length > 0
+      ? providers.reduce((min, p) => (!p.createdAt || (min.createdAt && p.createdAt < min.createdAt)) ? min : p, providers[0])
+      : null;
+
     const stats = [
       ['总供应商数', totalProviders],
       ['当前供应商', currentProvider ? currentProvider.displayName : '无'],
       ['总使用次数', totalUsage],
       ['最常用供应商', mostUsed ? mostUsed.displayName : '无'],
-      ['创建时间', providers.length > 0 ? UIHelper.formatTime(providers[0].createdAt) : '无']
+      ['最早创建时间', earliestCreated?.createdAt ? UIHelper.formatTime(earliestCreated.createdAt) : '无']
     ];
 
     console.log(UIHelper.createTable(['项目', '数据'], stats));
@@ -923,7 +927,7 @@ class EnvSwitcher extends BaseCommand {
       const { ProviderRemover } = require('./remove');
       const remover = new ProviderRemover();
       try {
-        await remover.remove();
+        await remover.interactiveRemove({ onBack: () => this.showManageMenu() });
       } finally {
         remover.destroy();
       }

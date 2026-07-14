@@ -27,11 +27,10 @@ function buildEnvVariables(config) {
       }
       env.ANTHROPIC_AUTH_TOKEN = sanitizeEnvValue(config.authToken);
     } else {
-      // api_key 模式（默认）
-      if (!config.baseUrl) {
-        throw new Error('未配置基础地址');
+      // api_key 模式（默认）：baseUrl 为空时使用官方 Anthropic API
+      if (config.baseUrl) {
+        env.ANTHROPIC_BASE_URL = sanitizeEnvValue(config.baseUrl);
       }
-      env.ANTHROPIC_BASE_URL = sanitizeEnvValue(config.baseUrl);
       env.ANTHROPIC_API_KEY = sanitizeEnvValue(config.authToken);
     }
 
@@ -66,10 +65,10 @@ async function executeWithEnv(config, launchArgs = []) {
     });
 
     child.on('close', (code) => {
-      if (code === 0) {
+      if (code === 0 || code === null || code === 130) {
         resolve();
       } else {
-        reject(new Error(`Claude Code 退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
+        reject(new Error(`Claude Code 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
       }
     });
 

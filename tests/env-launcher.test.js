@@ -78,14 +78,21 @@ describe('Environment Launcher', () => {
       expect(childEnv.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
     });
 
-    it('应该在缺少 baseUrl 时抛出错误', async () => {
+    it('没有 baseUrl 时应使用官方 Anthropic API（不设置 ANTHROPIC_BASE_URL）', async () => {
       const config = {
         name: 'test-provider',
         authMode: 'api_key',
         authToken: 'sk-xxxxx'
       };
 
-      await expect(executeWithEnv(config)).rejects.toThrow('未配置基础地址');
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') setTimeout(() => callback(0), 0);
+      });
+
+      await executeWithEnv(config);
+      const childEnv = spawn.mock.calls[0][2].env;
+      expect(childEnv.ANTHROPIC_BASE_URL).toBeUndefined();
+      expect(childEnv.ANTHROPIC_API_KEY).toBe('sk-xxxxx');
     });
   });
 

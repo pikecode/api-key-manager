@@ -58,7 +58,7 @@ class ConfigManager {
       return null;
     }
     if (typeof value !== 'string') {
-      return value;
+      return null;
     }
     const trimmed = value.trim();
     return trimmed.length === 0 ? null : trimmed;

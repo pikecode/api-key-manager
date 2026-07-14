@@ -78,7 +78,7 @@ class ProviderRemover extends BaseCommand {
     }
   }
 
-  async interactiveRemove() {
+  async interactiveRemove(options = {}) {
     await this.configManager.ensureLoaded();
     const providers = this.configManager.listProviders();
 
@@ -98,12 +98,14 @@ class ProviderRemover extends BaseCommand {
       checked: false
     }));
 
-    // 设置 ESC 键监听
     const escListener = this.createESCListener(async () => {
       Logger.info('取消删除供应商');
-      // 使用CommandRegistry避免循环引用
-      const { registry } = require('../CommandRegistry');
-      await registry.executeCommand('switch');
+      if (typeof options.onBack === 'function') {
+        await options.onBack();
+      } else {
+        const { registry } = require('../CommandRegistry');
+        await registry.executeCommand('switch');
+      }
     }, '取消删除');
 
     try {

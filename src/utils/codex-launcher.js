@@ -84,10 +84,10 @@ async function executeCodexWithEnv(config, launchArgs = []) {
     });
 
     child.on('close', (code) => {
-      if (code === 0) {
+      if (code === 0 || code === null || code === 130) {
         resolve();
       } else {
-        reject(new Error(`Codex CLI 退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
+        reject(new Error(`Codex CLI 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
       }
     });
 
