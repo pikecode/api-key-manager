@@ -191,6 +191,7 @@ htmlcov/
 # Stylelint cache
 .stylelintcache
 
-# Temporary directories
-.tmp/
-.temp/
+# OMC runtime state
+.omc/state/
+.omc/logs/
+
