@@ -99,11 +99,11 @@ class ProviderRemover extends BaseCommand {
     }));
 
     // 设置 ESC 键监听
-    const escListener = this.createESCListener(() => {
+    const escListener = this.createESCListener(async () => {
       Logger.info('取消删除供应商');
       // 使用CommandRegistry避免循环引用
       const { registry } = require('../CommandRegistry');
-      registry.executeCommand('switch');
+      await registry.executeCommand('switch');
     }, '取消删除');
 
     try {

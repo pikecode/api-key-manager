@@ -3,12 +3,7 @@
  * 测试终端格式化工具
  */
 
-// Mock supports-color before requiring terminal-format
-jest.mock('supports-color', () => ({
-  stdout: { hasBasic: true, level: 1 }
-}));
-
-const { formatMessage } = require('../src/utils/terminal-format');
+const { escapeTerminalText, formatMessage } = require('../src/utils/terminal-format');
 
 describe('Terminal Format', () => {
   const originalEnv = process.env;
@@ -96,6 +91,21 @@ describe('Terminal Format', () => {
 
       expect(result).toBeDefined();
       expect(result).toContain('测试');
+    });
+  });
+
+  describe('escapeTerminalText', () => {
+    it('应该转义 ANSI、C1 和双向控制字符', () => {
+      const input = 'safe\x1b[31m\x9bred\u202Eend';
+      const result = escapeTerminalText(input);
+
+      expect(result).toBe('safe\\u001b[31m\\u009bred\\u202eend');
+      expect(result).not.toContain('\x1b');
+      expect(result).not.toContain('\u202E');
+    });
+
+    it('普通文本保持不变', () => {
+      expect(escapeTerminalText('普通文本-123')).toBe('普通文本-123');
     });
   });
 });

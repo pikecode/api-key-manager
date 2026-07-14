@@ -11,14 +11,10 @@ const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { UIHelper } = require('../utils/ui-helper');
 const { BaseCommand } = require('./BaseCommand');
-const { validator } = require('../utils/validator');
 const { ProviderStatusChecker } = require('../utils/provider-status-checker');
-const { AUTH_MODE_DISPLAY, BASE_URL } = require('../constants');
 const { StatusHelper } = require('./switch/status-helper');
 const { LaunchArgsHelper } = require('./switch/launch-args-helper');
 const { ProviderChoicesHelper } = require('./switch/provider-choices-helper');
-const { ProviderDetailsHelper } = require('./switch/provider-details-helper');
-const { ProviderEditQuestionsHelper } = require('./switch/provider-edit-questions-helper');
 const { ensureClaudeSettingsCompatibility } = require('./switch/claude-settings-compatibility');
 const { launchProviderProcess, markProviderAsCurrent } = require('./switch/provider-launcher');
 const { ProviderManager } = require('./switch/provider-manager');
@@ -375,7 +371,8 @@ class EnvSwitcher extends BaseCommand {
     switch (selection) {
     case '__ADD__': {
       const { registry } = require('../CommandRegistry');
-      return await registry.executeCommand('add');
+      await registry.executeCommand('add', { returnToParent: true });
+      return await this.showProviderSelection();
     }
     case '__MANAGE__':
       return await this.showManageMenu();
@@ -468,8 +465,8 @@ class EnvSwitcher extends BaseCommand {
     const searchResults = providers.filter(p => {
       const q = answer.search.toLowerCase();
       return p.name.toLowerCase().includes(q) ||
-        p.displayName.toLowerCase().includes(q) ||
-        (p.alias && p.alias.toLowerCase().includes(q));
+        (p.displayName || '').toLowerCase().includes(q) ||
+        (p.alias || '').toLowerCase().includes(q);
     });
 
     if (searchResults.length === 0) {
@@ -981,7 +978,11 @@ async function editCommand(providerName) {
   const switcher = new EnvSwitcher();
 
   try {
-    await switcher.editProvider(providerName);
+    if (providerName) {
+      await switcher.editProvider(providerName);
+    } else {
+      await switcher.showManageMenu();
+    }
   } finally {
     // 确保资源清理
     switcher.destroy();

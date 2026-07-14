@@ -9,6 +9,14 @@ const path = require('path');
 const chalk = require('chalk');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
+const {
+  validateAndNormalizeConfigData,
+  validateAndNormalizeImportData
+} = require('../utils/import-validator');
+const { writeJsonAtomic } = require('../utils/atomic-file');
+
+const MAX_IMPORT_FILE_SIZE = 5 * 1024 * 1024;
+let backupSequence = 0;
 
 /**
  * 备份管理器类
@@ -18,8 +26,8 @@ class BackupManager {
   /**
    * 创建备份管理器实例
    */
-  constructor() {
-    this.configManager = configManager;
+  constructor(manager = configManager) {
+    this.configManager = manager;
   }
 
   /**
@@ -39,30 +47,52 @@ class BackupManager {
 
       // 准备导出数据
       const exportData = {
-        version: '1.0',
+        version: '2.0',
         exportedAt: new Date().toISOString(),
+        secretsIncluded: false,
         providers: config.providers,
         currentProvider: config.currentProvider
       };
 
-      // 如果需要脱敏
-      if (options.mask) {
-        exportData.providers = this.maskTokens(exportData.providers);
+      // 默认不导出完整密钥；旧版 --mask 参数继续保持最高安全优先级。
+      const includeSecrets = options.includeSecrets === true && options.mask !== true;
+      exportData.secretsIncluded = includeSecrets;
+      if (!includeSecrets) {
+        exportData.providers = this.stripTokens(exportData.providers);
       }
 
       // 确定输出路径
       const finalPath = outputPath || `akm-config-${this.getTimestamp()}.json`;
-      const absolutePath = path.isAbsolute(finalPath) ? finalPath : path.join(process.cwd(), finalPath);
+      const absolutePath = path.isAbsolute(finalPath)
+        ? finalPath
+        : path.join(process.cwd(), finalPath);
+
+      if (options.dryRun) {
+        console.log(
+          JSON.stringify(
+            {
+              operation: 'export',
+              outputPath: absolutePath,
+              providerCount: Object.keys(config.providers).length,
+              secretsIncluded: includeSecrets
+            },
+            null,
+            2
+          )
+        );
+        return;
+      }
 
       // 写入文件
-      await fs.writeJson(absolutePath, exportData, { spaces: 2 });
+      await writeJsonAtomic(absolutePath, exportData, { spaces: 2, mode: 0o600 });
 
       Logger.success(`配置已导出到: ${absolutePath}`);
       console.log(chalk.gray(`  供应商数量: ${Object.keys(config.providers).length}`));
-      if (options.mask) {
-        console.log(chalk.yellow('  注意: Token 已脱敏，导入后需要重新设置'));
+      if (!includeSecrets) {
+        console.log(chalk.yellow('  注意: Token 未导出，导入后需要重新设置'));
+      } else {
+        console.log(chalk.yellow('  注意: 文件包含完整 Token，请妥善保管'));
       }
-
     } catch (error) {
       Logger.error(`导出配置失败: ${error.message}`);
       throw error;
@@ -81,22 +111,44 @@ class BackupManager {
         return;
       }
 
-      const absolutePath = path.isAbsolute(inputPath) ? inputPath : path.join(process.cwd(), inputPath);
+      const absolutePath = path.isAbsolute(inputPath)
+        ? inputPath
+        : path.join(process.cwd(), inputPath);
 
-      if (!await fs.pathExists(absolutePath)) {
+      if (!(await fs.pathExists(absolutePath))) {
         Logger.error(`文件不存在: ${absolutePath}`);
         return;
       }
 
-      const importData = await fs.readJson(absolutePath);
-
-      // 验证导入数据
-      if (!importData.providers || typeof importData.providers !== 'object') {
-        Logger.error('无效的配置文件格式');
-        return;
+      const fileStat = await fs.stat(absolutePath);
+      if (fileStat.size > MAX_IMPORT_FILE_SIZE) {
+        throw new Error('导入配置文件不能超过 5 MB');
       }
 
+      const importData = validateAndNormalizeImportData(await fs.readJson(absolutePath));
+
       await this.configManager.ensureLoaded();
+
+      const conflicts = Object.keys(importData.providers).filter(name =>
+        Boolean(this.configManager.getProvider(name))
+      );
+      if (options.dryRun) {
+        console.log(
+          JSON.stringify(
+            {
+              operation: 'import',
+              inputPath: absolutePath,
+              providerCount: Object.keys(importData.providers).length,
+              conflicts,
+              overwrite: options.overwrite === true,
+              currentProvider: importData.currentProvider || null
+            },
+            null,
+            2
+          )
+        );
+        return;
+      }
 
       // 导入前自动备份当前配置
       await this.backup();
@@ -123,10 +175,18 @@ class BackupManager {
       }
 
       // 如果设置了 currentProvider 且该供应商存在
-      if (importData.currentProvider && this.configManager.config.providers[importData.currentProvider]) {
+      if (
+        importData.currentProvider &&
+        this.configManager.config.providers[importData.currentProvider]
+      ) {
         if (!this.configManager.config.currentProvider || options.overwrite) {
           this.configManager.config.currentProvider = importData.currentProvider;
         }
+      }
+
+      const activeProvider = this.configManager.config.currentProvider;
+      for (const [name, provider] of Object.entries(this.configManager.config.providers)) {
+        provider.current = name === activeProvider;
       }
 
       await this.configManager.save();
@@ -137,7 +197,6 @@ class BackupManager {
       if (skippedCount > 0) {
         console.log(chalk.yellow(`  跳过: ${skippedCount} 个已存在的供应商`));
       }
-
     } catch (error) {
       Logger.error(`导入配置失败: ${error.message}`);
       throw error;
@@ -161,24 +220,27 @@ class BackupManager {
       await fs.ensureDir(finalDir);
 
       // 生成备份文件名
-      const backupFileName = `akm-backup-${this.getTimestamp()}.json`;
+      const backupFileName =
+        ['akm-backup', this.getTimestamp(), process.pid, backupSequence++].join('-') + '.json';
       const backupPath = path.join(finalDir, backupFileName);
 
       // 读取原始配置文件
       const configPath = this.configManager.configPath;
-      if (!await fs.pathExists(configPath)) {
+      if (!(await fs.pathExists(configPath))) {
         Logger.warning('配置文件不存在，无需备份');
         return;
       }
 
       // 复制配置文件
-      await fs.copy(configPath, backupPath);
+      await fs.copy(configPath, backupPath, { overwrite: false, errorOnExist: true });
+      if (process.platform !== 'win32') {
+        await fs.chmod(backupPath, 0o600);
+      }
 
       Logger.success(`配置已备份到: ${backupPath}`);
 
       // 清理旧备份（保留最近 10 个）
       await this.cleanOldBackups(finalDir, 10);
-
     } catch (error) {
       Logger.error(`备份配置失败: ${error.message}`);
       throw error;
@@ -195,7 +257,7 @@ class BackupManager {
       const defaultBackupDir = path.join(homeDir, '.akm-backups');
       const finalDir = backupDir || defaultBackupDir;
 
-      if (!await fs.pathExists(finalDir)) {
+      if (!(await fs.pathExists(finalDir))) {
         Logger.warning('备份目录不存在');
         return;
       }
@@ -225,7 +287,6 @@ class BackupManager {
       console.log(chalk.gray('═'.repeat(60)));
       console.log(chalk.blue(`总计: ${backups.length} 个备份`));
       console.log(chalk.gray(`备份目录: ${finalDir}`));
-
     } catch (error) {
       Logger.error(`列出备份失败: ${error.message}`);
       throw error;
@@ -251,20 +312,18 @@ class BackupManager {
         backupPath = path.join(defaultBackupDir, backupFile);
       }
 
-      if (!await fs.pathExists(backupPath)) {
+      if (!(await fs.pathExists(backupPath))) {
         Logger.error(`备份文件不存在: ${backupPath}`);
         return;
       }
 
-      // 先备份当前配置
-      await this.backup();
+      const restoredConfig = validateAndNormalizeConfigData(await fs.readJson(backupPath));
 
-      // 恢复备份
-      const configPath = this.configManager.configPath;
-      await fs.copy(backupPath, configPath);
+      // 只有恢复文件校验通过后才备份并替换当前配置。
+      await this.backup();
+      await this.configManager.save(restoredConfig);
 
       Logger.success(`配置已从备份恢复: ${backupPath}`);
-
     } catch (error) {
       Logger.error(`恢复备份失败: ${error.message}`);
       throw error;
@@ -293,22 +352,17 @@ class BackupManager {
   }
 
   /**
-   * Token 脱敏处理
+   * 从可分享配置中移除 Token
    */
-  maskTokens(providers) {
-    const masked = {};
+  stripTokens(providers) {
+    const withoutSecrets = {};
     for (const [name, provider] of Object.entries(providers)) {
-      masked[name] = {
+      withoutSecrets[name] = {
         ...provider,
-        authToken: provider.authToken ? this.maskToken(provider.authToken) : null
+        authToken: null
       };
     }
-    return masked;
-  }
-
-  maskToken(token) {
-    if (!token || token.length < 10) return '***';
-    return token.substring(0, 8) + '***' + token.substring(token.length - 4);
+    return withoutSecrets;
   }
 
   getTimestamp() {

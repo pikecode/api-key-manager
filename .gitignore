@@ -142,12 +142,10 @@ docs/build/
 # Dump files
 *.dump
 
-# Lock files (except package-lock.json which should be committed)
-package-lock.json
+# 其他包管理器锁文件（本项目提交 package-lock.json）
 yarn.lock
 
-# Node version file
-.nvmrc
+# 其他 Node 版本管理文件（本项目提交 .nvmrc）
 .node-version
 
 # Editor directories and files

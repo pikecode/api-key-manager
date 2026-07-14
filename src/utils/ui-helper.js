@@ -86,7 +86,6 @@ class UIHelper {
 
   // 剥离 ANSI 转义码后的可见字符长度
   static _visibleLength(str) {
-    // eslint-disable-next-line no-control-regex
     return str.replace(/\x1b\[[0-9;]*m/g, '').length;
   }
 

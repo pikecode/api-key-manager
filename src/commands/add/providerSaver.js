@@ -5,7 +5,6 @@
  */
 
 const { Logger } = require('../../utils/logger');
-const { UIHelper } = require('../../utils/ui-helper');
 const { promptCodexLaunchArgs, promptLaunchArgs, promptModelConfig } = require('./prompts');
 const { printProviderSummary } = require('./summaryPrinter');
 const { registry } = require('../../CommandRegistry');
@@ -31,13 +30,9 @@ async function saveProvider(adder, answers) {
     // 处理启动参数
     let launchArgs = [];
     if (answers.ideName === 'codex') {
-      launchArgs = answers.configureCodexLaunchArgs
-        ? await promptCodexLaunchArgs(adder)
-        : [];
+      launchArgs = answers.configureCodexLaunchArgs ? await promptCodexLaunchArgs(adder) : [];
     } else {
-      launchArgs = answers.configureLaunchArgs
-        ? await promptLaunchArgs(adder)
-        : [];
+      launchArgs = answers.configureLaunchArgs ? await promptLaunchArgs(adder) : [];
     }
 
     // 处理模型配置（仅非 Codex）
@@ -63,6 +58,10 @@ async function saveProvider(adder, answers) {
     // 打印摘要并返回主界面
     await printProviderSummary(adder, answers, launchArgs, modelConfig);
     await adder.pauseBeforeReturn();
+
+    if (adder.returnToParent) {
+      return;
+    }
 
     return await registry.executeCommand('switch');
   } catch (error) {

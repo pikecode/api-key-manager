@@ -3,11 +3,6 @@
  * 测试日志工具类
  */
 
-// Mock supports-color before requiring logger
-jest.mock('supports-color', () => ({
-  stdout: { hasBasic: true, level: 1 }
-}));
-
 const { Logger } = require('../src/utils/logger');
 
 // Mock console methods

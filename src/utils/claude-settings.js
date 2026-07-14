@@ -1,6 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
+const { writeJsonAtomic } = require('./atomic-file');
 
 const CONFLICT_ENV_KEYS = [
   'ANTHROPIC_API_KEY',
@@ -18,7 +19,7 @@ function unique(array) {
 
 function timestampSuffix() {
   const now = new Date();
-  const pad = (num) => String(num).padStart(2, '0');
+  const pad = num => String(num).padStart(2, '0');
   return [
     now.getFullYear(),
     pad(now.getMonth() + 1),
@@ -90,7 +91,7 @@ function detectConflictKeys(settings) {
     return [];
   }
 
-  return CONFLICT_ENV_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(env, key));
+  return CONFLICT_ENV_KEYS.filter(key => Object.prototype.hasOwnProperty.call(env, key));
 }
 
 async function backupSettingsFile(filePath) {
@@ -120,7 +121,7 @@ function clearConflictKeys(settings, keys) {
 }
 
 async function saveSettingsFile(filePath, data) {
-  await fs.writeJson(filePath, data, { spaces: 2 });
+  await writeJsonAtomic(filePath, data, { spaces: 2, mode: 0o600 });
 }
 
 async function findSettingsConflict() {

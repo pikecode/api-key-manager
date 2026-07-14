@@ -54,16 +54,28 @@ describe('Environment Launcher', () => {
 
       await executeWithEnv(config);
 
-      expect(spawn).toHaveBeenCalledWith(
-        'claude',
-        [],
-        expect.objectContaining({
-          env: expect.objectContaining({
-            ANTHROPIC_API_KEY: 'sk-xxxxx',
-            ANTHROPIC_BASE_URL: 'https://api.example.com'
-          })
-        })
-      );
+      expect(spawn).toHaveBeenCalledWith('claude', [], expect.any(Object));
+      const options = spawn.mock.calls[0][2];
+      expect(options.shell).toBe(false);
+      expect(options.env.ANTHROPIC_API_KEY).toBe('sk-xxxxx');
+      expect(options.env.ANTHROPIC_BASE_URL).toBe('https://api.example.com');
+    });
+
+    it('应该清理父进程遗留的 Auth Token', async () => {
+      process.env.ANTHROPIC_AUTH_TOKEN = 'stale-token';
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') setTimeout(() => callback(0), 0);
+      });
+
+      await executeWithEnv({
+        name: 'test-provider',
+        authMode: 'api_key',
+        authToken: 'sk-xxxxx',
+        baseUrl: 'https://api.example.com'
+      });
+
+      const childEnv = spawn.mock.calls[0][2].env;
+      expect(childEnv.ANTHROPIC_AUTH_TOKEN).toBeUndefined();
     });
 
     it('应该在缺少 baseUrl 时抛出错误', async () => {
@@ -93,15 +105,30 @@ describe('Environment Launcher', () => {
 
       await executeWithEnv(config);
 
-      expect(spawn).toHaveBeenCalledWith(
-        'claude',
-        [],
-        expect.objectContaining({
-          env: expect.objectContaining({
-            ANTHROPIC_AUTH_TOKEN: 'sk-xxxxx'
-          })
-        })
-      );
+      expect(spawn).toHaveBeenCalledWith('claude', [], expect.any(Object));
+      const options = spawn.mock.calls[0][2];
+      expect(options.shell).toBe(false);
+      expect(options.env.ANTHROPIC_AUTH_TOKEN).toBe('sk-xxxxx');
+    });
+
+    it('应该清理父进程遗留的 API Key 和模型变量', async () => {
+      process.env.ANTHROPIC_API_KEY = 'stale-key';
+      process.env.ANTHROPIC_MODEL = 'stale-model';
+      process.env.ANTHROPIC_SMALL_FAST_MODEL = 'stale-fast-model';
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') setTimeout(() => callback(0), 0);
+      });
+
+      await executeWithEnv({
+        name: 'test-provider',
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
+      });
+
+      const childEnv = spawn.mock.calls[0][2].env;
+      expect(childEnv.ANTHROPIC_API_KEY).toBeUndefined();
+      expect(childEnv.ANTHROPIC_MODEL).toBeUndefined();
+      expect(childEnv.ANTHROPIC_SMALL_FAST_MODEL).toBeUndefined();
     });
 
     it('应该设置 ANTHROPIC_BASE_URL 当提供时', async () => {
@@ -207,13 +234,25 @@ describe('Environment Launcher', () => {
         }
       });
 
-      await executeWithEnv(config, ['--continue', '--verbose']);
+      await executeWithEnv(config, ['--continue', '--dangerously-skip-permissions']);
 
       expect(spawn).toHaveBeenCalledWith(
         'claude',
-        ['--continue', '--verbose'],
+        ['--continue', '--dangerously-skip-permissions'],
         expect.any(Object)
       );
+    });
+
+    it('应该拒绝未知或恶意启动参数', async () => {
+      const config = {
+        name: 'test-provider',
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
+      };
+
+      await expect(executeWithEnv(config, ['--continue; echo injected']))
+        .rejects.toThrow('不支持的启动参数');
+      expect(spawn).not.toHaveBeenCalled();
     });
   });
 

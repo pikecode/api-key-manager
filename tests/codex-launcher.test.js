@@ -69,6 +69,8 @@ describe('Codex Launcher', () => {
     });
 
     it('应该处理缺少 baseUrl 的情况', () => {
+      process.env.OPENAI_BASE_URL = 'https://stale.example.com';
+      process.env.OPENAI_MODEL = 'stale-model';
       const config = {
         name: 'test-codex',
         authToken: 'sk-xxxxx'
@@ -78,6 +80,7 @@ describe('Codex Launcher', () => {
 
       expect(env.OPENAI_API_KEY).toBe('sk-xxxxx');
       expect(env.OPENAI_BASE_URL).toBeUndefined();
+      expect(env.OPENAI_MODEL).toBeUndefined();
     });
   });
 
@@ -98,15 +101,10 @@ describe('Codex Launcher', () => {
       await executeCodexWithEnv(config);
 
       expect(applyCodexConfig).toHaveBeenCalledWith(config);
-      expect(spawn).toHaveBeenCalledWith(
-        'codex',
-        [],
-        expect.objectContaining({
-          env: expect.objectContaining({
-            OPENAI_API_KEY: 'sk-xxxxx'
-          })
-        })
-      );
+      expect(spawn).toHaveBeenCalledWith('codex', [], expect.any(Object));
+      const options = spawn.mock.calls[0][2];
+      expect(options.shell).toBe(false);
+      expect(options.env.OPENAI_API_KEY).toBe('sk-xxxxx');
     });
 
     it('应该拒绝无效的配置', async () => {
@@ -140,11 +138,11 @@ describe('Codex Launcher', () => {
         }
       });
 
-      await executeCodexWithEnv(config, ['chat', '--verbose']);
+      await executeCodexWithEnv(config, ['resume', '--search']);
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['chat', '--verbose'],
+        ['resume', '--search'],
         expect.any(Object)
       );
     });
@@ -163,14 +161,26 @@ describe('Codex Launcher', () => {
       });
 
       // 混合顺序的参数
-      await executeCodexWithEnv(config, ['--verbose', 'chat', '--debug']);
+      await executeCodexWithEnv(config, ['--search', 'resume', '--full-auto']);
 
       // 应该重新排序：子命令在前，选项在后
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['chat', '--verbose', '--debug'],
+        ['resume', '--search', '--full-auto'],
         expect.any(Object)
       );
+    });
+
+    it('应该拒绝未知或恶意启动参数', async () => {
+      const config = {
+        name: 'test-codex',
+        ideName: 'codex',
+        authToken: 'sk-xxxxx'
+      };
+
+      await expect(executeCodexWithEnv(config, ['resume; echo injected']))
+        .rejects.toThrow('不支持的启动参数');
+      expect(spawn).not.toHaveBeenCalled();
     });
 
     it('应该处理非零退出代码', async () => {

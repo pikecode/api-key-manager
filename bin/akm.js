@@ -9,9 +9,9 @@ const { checkForUpdates } = require('../src/utils/update-checker');
 
 // 命令分组定义
 const COMMAND_GROUPS = {
-  '核心命令': ['add', 'switch', 'remove', 'list', 'current', 'edit'],
-  '运维命令': ['export', 'import', 'backup', 'validate', 'clone'],
-  '工具命令': ['stats', 'health', 'batch', 'benchmark', 'claude', 'mcp']
+  核心命令: ['add', 'switch', 'remove', 'list', 'current', 'edit'],
+  运维命令: ['export', 'import', 'backup', 'validate', 'clone'],
+  工具命令: ['stats', 'health', 'batch', 'benchmark', 'claude', 'mcp']
 };
 
 // Set up CLI
@@ -39,7 +39,9 @@ program.configureHelp({
 
     // 参数
     const argList = helper.visibleArguments(cmd).map(arg => {
-      return helper.formatHelp ? `  ${helper.argumentTerm(arg).padEnd(termWidth)}  ${helper.argumentDescription(arg)}` : '';
+      return helper.formatHelp
+        ? `  ${helper.argumentTerm(arg).padEnd(termWidth)}  ${helper.argumentDescription(arg)}`
+        : '';
     });
     if (argList.length > 0) {
       output += `${chalk.bold('参数:')}\n${argList.join('\n')}\n\n`;
@@ -78,7 +80,10 @@ program.configureHelp({
       const groupedNames = Object.values(COMMAND_GROUPS).flat();
       const ungrouped = commands
         .filter(sub => !groupedNames.includes(sub.name()))
-        .map(sub => `  ${chalk.cyan(helper.subcommandTerm(sub).padEnd(termWidth))}  ${helper.subcommandDescription(sub)}`);
+        .map(
+          sub =>
+            `  ${chalk.cyan(helper.subcommandTerm(sub).padEnd(termWidth))}  ${helper.subcommandDescription(sub)}`
+        );
 
       if (ungrouped.length > 0) {
         output += `${chalk.bold.yellow('其他命令:')}\n${ungrouped.join('\n')}\n\n`;
@@ -114,9 +119,9 @@ program
   .description('添加新的API密钥配置')
   .option('--codex', '直接添加 Codex CLI 供应商')
   .option('--claude', '直接添加 Claude Code 供应商')
-  .action(async (options) => {
+  .action(async options => {
     try {
-      const ideName = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      const ideName = options.codex ? 'codex' : options.claude ? 'claude' : null;
       await registry.executeCommand('add', { ideName });
     } catch (error) {
       console.error(chalk.red('❌ 添加失败:'), error.message);
@@ -135,7 +140,7 @@ program
   .option('--no-args', '以空参数启动（不使用任何启动参数）')
   .action(async (provider, options) => {
     try {
-      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      const filter = options.codex ? 'codex' : options.claude ? 'claude' : null;
       await registry.executeCommand('switch', provider, {
         filter,
         quick: options.quick,
@@ -152,7 +157,7 @@ program
   .command('remove')
   .argument('[provider]', '要删除的供应商名称')
   .description('删除API密钥配置')
-  .action(async (provider) => {
+  .action(async provider => {
     try {
       await registry.executeCommand('remove', provider);
     } catch (error) {
@@ -168,11 +173,15 @@ program
   .option('--codex', '仅显示 Codex CLI 供应商')
   .option('--claude', '仅显示 Claude Code 供应商')
   .option('--status', '检测供应商在线状态')
-  .option('--show-token', '显示完整 Token（默认脱敏）')
-  .action(async (options) => {
+  .option('--json', '以 JSON 输出配置')
+  .option('--show-token', '兼容参数：Token 默认完整显示')
+  .action(async options => {
     try {
-      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
-      await registry.executeCommand('list', filter, { showToken: options.showToken, checkStatus: options.status });
+      const filter = options.codex ? 'codex' : options.claude ? 'claude' : null;
+      await registry.executeCommand('list', filter, {
+        checkStatus: options.status,
+        json: options.json
+      });
     } catch (error) {
       console.error(chalk.red('❌ 列表失败:'), error.message);
       process.exit(1);
@@ -183,10 +192,12 @@ program
 program
   .command('current')
   .description('显示当前活跃的配置')
-  .option('--show-token', '显示完整 Token（默认脱敏）')
-  .action(async (options) => {
+  .option('--show-token', '兼容参数：Token 默认完整显示')
+  .option('--shell <shell>', '环境变量命令格式: bash/zsh/powershell/cmd')
+  .option('--json', '以 JSON 输出当前配置')
+  .action(async options => {
     try {
-      await registry.executeCommand('current', { showToken: options.showToken });
+      await registry.executeCommand('current', options);
     } catch (error) {
       console.error(chalk.red('❌ 获取当前配置失败:'), error.message);
       process.exit(1);
@@ -198,7 +209,7 @@ program
   .command('edit')
   .argument('[provider]', '要编辑的供应商名称')
   .description('编辑API密钥配置')
-  .action(async (provider) => {
+  .action(async provider => {
     try {
       await registry.executeCommand('edit', provider);
     } catch (error) {
@@ -212,7 +223,9 @@ program
   .command('export')
   .argument('[file]', '导出文件路径 (默认: akm-config-{timestamp}.json)')
   .description('导出配置到文件')
-  .option('--mask', '脱敏 Token (导入后需重新设置)')
+  .option('--include-secrets', '导出完整 Token（敏感文件，请妥善保管）')
+  .option('--mask', '兼容旧版本：不导出 Token（当前已是默认行为）')
+  .option('--dry-run', '只预览导出结果，不写入文件')
   .action(async (file, options) => {
     try {
       await registry.executeCommand('export', file, options);
@@ -228,6 +241,7 @@ program
   .argument('<file>', '要导入的配置文件路径')
   .description('从文件导入配置')
   .option('--overwrite', '覆盖已存在的供应商')
+  .option('--dry-run', '只校验并预览导入结果，不修改配置')
   .action(async (file, options) => {
     try {
       await registry.executeCommand('import', file, options);
@@ -244,7 +258,7 @@ program
   .option('-l, --list', '列出所有备份')
   .option('-r, --restore <file>', '从备份恢复')
   .option('-d, --dir <path>', '指定备份目录')
-  .action(async (options) => {
+  .action(async options => {
     try {
       await registry.executeCommand('backup', options);
     } catch (error) {
@@ -262,7 +276,7 @@ program
   .option('--claude', '仅验证 Claude Code 供应商')
   .action(async (provider, options) => {
     try {
-      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      const filter = options.codex ? 'codex' : options.claude ? 'claude' : null;
       await registry.executeCommand('validate', provider, { filter });
     } catch (error) {
       console.error(chalk.red('❌ 验证失败:'), error.message);
@@ -275,7 +289,7 @@ program
   .command('clone')
   .argument('[source]', '要克隆的源供应商名称')
   .description('克隆现有供应商配置')
-  .action(async (source) => {
+  .action(async source => {
     try {
       await registry.executeCommand('clone', source);
     } catch (error) {
@@ -296,7 +310,7 @@ program
   .option('-l, --limit <number>', '推荐列表数量限制', '5')
   .action(async (provider, options) => {
     try {
-      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      const filter = options.codex ? 'codex' : options.claude ? 'claude' : null;
       const limit = parseInt(options.limit, 10);
       await registry.executeCommand('stats', provider, {
         filter,
@@ -317,13 +331,16 @@ program
   .argument('[provider]', '要检查的供应商名称（不指定则检查全部）')
   .option('--codex', '仅检查 Codex CLI 供应商')
   .option('--claude', '仅检查 Claude Code 供应商')
-  .option('--no-connectivity', '跳过 API 连接性检查（加快速度）')
+  .option('--connectivity', '执行在线 API 检查（可能产生费用）')
+  .option('--no-connectivity', '兼容参数：跳过在线 API 检查')
+  .option('--json', '以 JSON 输出健康检查结果')
   .action(async (provider, options) => {
     try {
-      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      const filter = options.codex ? 'codex' : options.claude ? 'claude' : null;
       await registry.executeCommand('health', provider, {
         filter,
-        connectivity: options.connectivity
+        connectivity: options.connectivity === true,
+        json: options.json
       });
     } catch (error) {
       console.error(chalk.red('❌ 健康检查失败:'), error.message);
@@ -340,7 +357,7 @@ program
   .option('--unused', '仅操作长期未使用的供应商 (90天以上)')
   .action(async (operation, options) => {
     try {
-      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      const filter = options.codex ? 'codex' : options.claude ? 'claude' : null;
       await registry.executeCommand('batch', operation, {
         filter,
         unused: options.unused
@@ -360,9 +377,9 @@ program
   .option('-r, --rounds <number>', '每个供应商测试轮数', '3')
   .option('-p, --parallel', '并行测试（更快但可能不准确）')
   .option('--report [file]', '生成 Markdown 测试报告')
-  .action(async (options) => {
+  .action(async options => {
     try {
-      const filter = options.codex ? 'codex' : (options.claude ? 'claude' : null);
+      const filter = options.codex ? 'codex' : options.claude ? 'claude' : null;
       const rounds = parseInt(options.rounds, 10);
       await registry.executeCommand('benchmark', {
         filter,
@@ -381,7 +398,7 @@ program
   .command('claude')
   .argument('<subcommand>', '子命令: clean (清理) | analyze (分析)')
   .description('Claude Code 配置管理 (clean/analyze)')
-  .action(async (subcommand) => {
+  .action(async subcommand => {
     try {
       if (subcommand !== 'clean' && subcommand !== 'analyze') {
         console.error(chalk.red(`❌ 未知子命令: ${subcommand}`));
@@ -400,7 +417,7 @@ program
   .command('mcp')
   .argument('<subcommand>', '子命令: list | add | edit | remove')
   .description('MCP 服务器管理 (list/add/edit/remove)')
-  .action(async (subcommand) => {
+  .action(async subcommand => {
     try {
       await registry.executeCommand('mcp', subcommand);
     } catch (error) {

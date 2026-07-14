@@ -48,6 +48,11 @@ const codexLaunchArgs = [
   }
 ];
 
+const dangerousImportArgs = new Set([
+  '--dangerously-skip-permissions',
+  '--dangerously-bypass-approvals-and-sandbox'
+]);
+
 function getClaudeLaunchArgs() {
   return claudeLaunchArgs.map(arg => ({ ...arg }));
 }
@@ -58,6 +63,57 @@ function getCodexLaunchArgs() {
 
 function getLaunchArgs(ideName) {
   return ideName === 'codex' ? getCodexLaunchArgs() : getClaudeLaunchArgs();
+}
+
+/**
+ * 校验启动参数是否属于当前支持列表
+ * @param {string} ideName - IDE 名称
+ * @param {string[]} selectedArgs - 待校验参数
+ * @returns {string|null} 校验错误，合法时返回 null
+ */
+function validateLaunchArgs(ideName, selectedArgs) {
+  if (!Array.isArray(selectedArgs)) {
+    return '启动参数必须是字符串数组';
+  }
+
+  const availableArgs = getLaunchArgs(ideName);
+  const allowedArgs = new Set(availableArgs.map(arg => arg.name));
+  const invalidArgs = selectedArgs.filter(arg => typeof arg !== 'string' || !allowedArgs.has(arg));
+
+  if (invalidArgs.length > 0) {
+    const printableArgs = invalidArgs.map(arg => {
+      const serialized = JSON.stringify(arg);
+      return serialized === undefined ? String(arg) : serialized;
+    });
+    return `不支持的启动参数: ${printableArgs.join(', ')}`;
+  }
+
+  return checkExclusiveArgs(selectedArgs, availableArgs);
+}
+
+/**
+ * 断言启动参数合法，供配置导入和子进程启动边界复用
+ * @param {string} ideName - IDE 名称
+ * @param {string[]} selectedArgs - 待校验参数
+ */
+function assertSupportedLaunchArgs(ideName, selectedArgs) {
+  const error = validateLaunchArgs(ideName, selectedArgs);
+  if (error) {
+    throw new Error(error);
+  }
+}
+
+/**
+ * 外部配置不得静默启用跳过审批或沙盒的最高权限参数。
+ * @param {string} ideName - IDE 名称
+ * @param {string[]} selectedArgs - 导入配置中的启动参数
+ */
+function assertSafeImportLaunchArgs(ideName, selectedArgs) {
+  assertSupportedLaunchArgs(ideName, selectedArgs);
+  const dangerousArgs = selectedArgs.filter(arg => dangerousImportArgs.has(arg));
+  if (dangerousArgs.length > 0) {
+    throw new Error(`导入配置不能包含最高权限启动参数: ${dangerousArgs.join(', ')}`);
+  }
 }
 
 /**
@@ -92,5 +148,8 @@ module.exports = {
   getClaudeLaunchArgs,
   getCodexLaunchArgs,
   getLaunchArgs,
-  checkExclusiveArgs
+  checkExclusiveArgs,
+  validateLaunchArgs,
+  assertSupportedLaunchArgs,
+  assertSafeImportLaunchArgs
 };

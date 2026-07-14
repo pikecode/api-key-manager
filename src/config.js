@@ -2,6 +2,8 @@ const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
 const chalk = require('chalk');
+const { writeJsonAtomic } = require('./utils/atomic-file');
+const { validateAndNormalizeConfigData } = require('./utils/import-validator');
 
 /**
  * @typedef {Object} ProviderConfig
@@ -114,14 +116,14 @@ class ConfigManager {
         let data;
         try {
           data = await fs.readJSON(this.configPath);
-        } catch (jsonError) {
+        } catch {
           // 配置文件损坏，创建备份并重置
           const backupPath = `${this.configPath}.corrupted.${Date.now()}`;
           await fs.copy(this.configPath, backupPath);
           console.log(chalk.yellow('⚠️  配置文件损坏，已备份到:'), backupPath);
 
           this.config = this.getDefaultConfig();
-          await this._performSave();
+          await this._performSave(this.config, { skipConflictCheck: true });
           this.isLoaded = true;
           return this.config;
         }
@@ -129,9 +131,9 @@ class ConfigManager {
         if (!data || typeof data !== 'object' || Array.isArray(data)) {
           // 配置文件被写成非对象内容时，重置为默认配置
           this.config = this.getDefaultConfig();
-          await this._performSave();
+          await this._performSave(this.config, { skipConflictCheck: true });
         } else {
-          this.config = { ...this.getDefaultConfig(), ...data };
+          this.config = validateAndNormalizeConfigData({ ...this.getDefaultConfig(), ...data });
         }
 
         // 迁移旧的认证模式
@@ -143,7 +145,7 @@ class ConfigManager {
         this.lastModified = stat.mtime;
       } else {
         this.config = this.getDefaultConfig();
-        await this._performSave();
+        await this._performSave(this.config, { skipConflictCheck: true });
       }
       this.isLoaded = true;
       return this.config;
@@ -151,7 +153,7 @@ class ConfigManager {
       if (error.message.includes('Unexpected end of JSON input')) {
         // 处理空文件或损坏的JSON文件
         this.config = this.getDefaultConfig();
-        await this._performSave();
+        await this._performSave(this.config, { skipConflictCheck: true });
         this.isLoaded = true;
         return this.config;
       }
@@ -172,17 +174,21 @@ class ConfigManager {
 
       // 检查权限是否为 600 (仅所有者可读写) 或 400 (仅所有者可读)
       if (mode !== 0o600 && mode !== 0o400) {
-        console.log(chalk.yellow('⚠️  配置文件权限不安全:'), mode.toString(8), chalk.gray('建议: 0600'));
+        console.log(
+          chalk.yellow('⚠️  配置文件权限不安全:'),
+          mode.toString(8),
+          chalk.gray('建议: 0600')
+        );
 
         try {
           await fs.chmod(this.configPath, 0o600);
           console.log(chalk.green('✅ 已自动修复文件权限为: 0600'));
-        } catch (chmodError) {
+        } catch {
           console.log(chalk.red('❌ 无法自动修复权限，请手动执行:'));
           console.log(chalk.gray(`   chmod 600 ${this.configPath}`));
         }
       }
-    } catch (error) {
+    } catch {
       // 忽略权限检查错误，不影响主流程
     }
   }
@@ -208,12 +214,12 @@ class ConfigManager {
 
   async checkIfModified() {
     try {
-      if (!this.lastModified || !await fs.pathExists(this.configPath)) {
+      if (!this.lastModified || !(await fs.pathExists(this.configPath))) {
         return true;
       }
       const stat = await fs.stat(this.configPath);
-      return stat.mtime > this.lastModified;
-    } catch (error) {
+      return stat.mtime.getTime() !== this.lastModified.getTime();
+    } catch {
       return true; // 出错时重新加载
     }
   }
@@ -221,22 +227,17 @@ class ConfigManager {
   async save(config = this.config) {
     // 确保配置已加载
     await this.ensureLoaded();
-    if (config) {
-      this.config = config;
-    }
-    return await this._performSave();
+    return await this._performSave(config);
   }
 
-  async _performSave() {
+  async _performSave(config = this.config, options = {}) {
     try {
-      // 保存前确保迁移已应用
-      this._migrateAuthModes();
-      await fs.writeJSON(this.configPath, this.config, { spaces: 2 });
-
-      // 设置文件权限为 600 (仅所有者可读写)
-      if (process.platform !== 'win32') {
-        await fs.chmod(this.configPath, 0o600);
+      const normalizedConfig = validateAndNormalizeConfigData(config);
+      if (!options.skipConflictCheck) {
+        await this._assertConfigUnchanged();
       }
+      await writeJsonAtomic(this.configPath, normalizedConfig, { spaces: 2, mode: 0o600 });
+      this.config = normalizedConfig;
 
       // 更新最后修改时间
       const stat = await fs.stat(this.configPath);
@@ -245,6 +246,21 @@ class ConfigManager {
     } catch (error) {
       console.error(chalk.red('❌ 保存配置失败:'), error.message);
       throw error;
+    }
+  }
+
+  async _assertConfigUnchanged() {
+    if (!this.lastModified) {
+      return;
+    }
+
+    if (!(await fs.pathExists(this.configPath))) {
+      throw new Error('配置文件已被其他进程删除，请重新执行当前操作');
+    }
+
+    const stat = await fs.stat(this.configPath);
+    if (stat.mtime.getTime() !== this.lastModified.getTime()) {
+      throw new Error('配置文件已被其他进程修改，请重新执行当前操作以避免覆盖最新配置');
     }
   }
 
@@ -268,14 +284,14 @@ class ConfigManager {
     const updatedProviders = {};
 
     if (current && providers[current]) {
-      keys.forEach((key) => {
+      keys.forEach(key => {
         updatedProviders[key] = {
           ...providers[key],
           current: key === current
         };
       });
     } else {
-      keys.forEach((key) => {
+      keys.forEach(key => {
         updatedProviders[key] = {
           ...providers[key],
           current: false
@@ -303,16 +319,18 @@ class ConfigManager {
       providerConfig.baseUrl !== undefined ? providerConfig.baseUrl : existing?.baseUrl
     );
 
-    const authToken = providerConfig.authToken !== undefined ? providerConfig.authToken : existing?.authToken;
+    const authToken =
+      providerConfig.authToken !== undefined ? providerConfig.authToken : existing?.authToken;
 
     const launchArgs = Array.isArray(providerConfig.launchArgs)
       ? providerConfig.launchArgs
-      : (existing?.launchArgs || []);
+      : existing?.launchArgs || [];
 
     // 处理别名
-    const alias = providerConfig.alias !== undefined
-      ? this._normalizeOptionalString(providerConfig.alias)
-      : (existing?.alias || null);
+    const alias =
+      providerConfig.alias !== undefined
+        ? this._normalizeOptionalString(providerConfig.alias)
+        : existing?.alias || null;
 
     // 创建新的 provider 对象
     const newProvider = {
@@ -333,12 +351,14 @@ class ConfigManager {
     // Claude Code 特定字段
     if (!isCodex) {
       const authMode = providerConfig.authMode || existing?.authMode || 'api_key';
-      const primaryModel = providerConfig.primaryModel !== undefined
-        ? providerConfig.primaryModel
-        : (existing?.models?.primary ?? null);
-      const smallFastModel = providerConfig.smallFastModel !== undefined
-        ? providerConfig.smallFastModel
-        : (existing?.models?.smallFast ?? null);
+      const primaryModel =
+        providerConfig.primaryModel !== undefined
+          ? providerConfig.primaryModel
+          : (existing?.models?.primary ?? null);
+      const smallFastModel =
+        providerConfig.smallFastModel !== undefined
+          ? providerConfig.smallFastModel
+          : (existing?.models?.smallFast ?? null);
 
       newProvider.authMode = authMode;
       newProvider.models = {
@@ -352,7 +372,8 @@ class ConfigManager {
     }
 
     // 如果是第一个供应商或设置为默认，则设为当前供应商
-    const shouldSetCurrent = (!existing && Object.keys(this.config.providers).length === 0) || providerConfig.setAsDefault;
+    const shouldSetCurrent =
+      (!existing && Object.keys(this.config.providers).length === 0) || providerConfig.setAsDefault;
 
     let newCurrentProvider = this.config.currentProvider;
     if (shouldSetCurrent) {
@@ -384,10 +405,12 @@ class ConfigManager {
     }
 
     // 创建新的 providers 对象，排除要删除的供应商
-    const { [name]: removed, ...remainingProviders } = this.config.providers;
+    const remainingProviders = { ...this.config.providers };
+    delete remainingProviders[name];
 
     // 如果删除的是当前供应商，清空当前供应商
-    const newCurrentProvider = this.config.currentProvider === name ? null : this.config.currentProvider;
+    const newCurrentProvider =
+      this.config.currentProvider === name ? null : this.config.currentProvider;
 
     // 使用不可变方式更新 config
     this.config = {
@@ -615,7 +638,8 @@ class ConfigManager {
 
       // 最近使用时间权重 (30%)
       if (provider.lastUsed) {
-        const daysSinceLastUse = (Date.now() - new Date(provider.lastUsed).getTime()) / (1000 * 60 * 60 * 24);
+        const daysSinceLastUse =
+          (Date.now() - new Date(provider.lastUsed).getTime()) / (1000 * 60 * 60 * 24);
         // 越近使用分数越高，超过30天分数衰减
         const recencyScore = Math.max(0, 30 - daysSinceLastUse) / 30;
         score += recencyScore * 30;
@@ -641,9 +665,7 @@ class ConfigManager {
     });
 
     // 按推荐分数降序排序并限制数量
-    return scoredProviders
-      .sort((a, b) => b.recommendScore - a.recommendScore)
-      .slice(0, limit);
+    return scoredProviders.sort((a, b) => b.recommendScore - a.recommendScore).slice(0, limit);
   }
 
   getProvider(name) {
@@ -672,7 +694,8 @@ class ConfigManager {
 
     // 再尝试按别名查找
     const providerEntry = Object.entries(this.config.providers).find(
-      ([_, provider]) => provider.alias && provider.alias.toLowerCase() === nameOrAlias.toLowerCase()
+      ([_, provider]) =>
+        provider.alias && provider.alias.toLowerCase() === nameOrAlias.toLowerCase()
     );
 
     return providerEntry ? providerEntry[1] : null;

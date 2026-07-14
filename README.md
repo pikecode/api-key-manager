@@ -16,7 +16,7 @@
 - 🧹 **配置清理** — 清理 Claude Code 配置文件中的冗余数据
 - 📋 **克隆配置** — 快速克隆现有供应商配置
 - ✅ **配置验证** — 验证 Token 有效性和 API 可用性
-- 🔐 **安全存储** — 本地文件存储，Unix 自动设置 0600 权限
+- 🔐 **权限保护** — 本地文件存储，Unix 自动设置 0600 权限
 - 💾 **备份恢复** — 配置导出、导入、备份功能
 - 🌍 **跨平台** — macOS / Linux / Windows
 
@@ -49,35 +49,35 @@ akm current
 
 ### 核心命令
 
-| 命令 | 说明 |
-|------|------|
-| `akm` / `akm switch` | 交互式选择和切换供应商 |
-| `akm add` | 添加新的供应商配置 |
+| 命令                    | 说明                           |
+| ----------------------- | ------------------------------ |
+| `akm` / `akm switch`    | 交互式选择和切换供应商         |
+| `akm add`               | 添加新的供应商配置             |
 | `akm remove [provider]` | 删除供应商配置（支持批量删除） |
-| `akm list` | 列出所有供应商 |
-| `akm current` | 显示当前激活的配置 |
-| `akm edit [provider]` | 编辑供应商配置 |
+| `akm list`              | 列出所有供应商                 |
+| `akm current`           | 显示当前激活的配置             |
+| `akm edit [provider]`   | 编辑供应商配置                 |
 
 ### 运维命令
 
-| 命令 | 说明 |
-|------|------|
-| `akm export [file]` | 导出配置到文件 |
-| `akm import <file>` | 从文件导入配置 |
-| `akm backup` | 备份和恢复配置 |
+| 命令                      | 说明                 |
+| ------------------------- | -------------------- |
+| `akm export [file]`       | 导出配置到文件       |
+| `akm import <file>`       | 从文件导入配置       |
+| `akm backup`              | 备份和恢复配置       |
 | `akm validate [provider]` | 验证供应商配置有效性 |
-| `akm clone [source]` | 克隆现有供应商配置 |
+| `akm clone [source]`      | 克隆现有供应商配置   |
 
 ### 工具命令
 
-| 命令 | 说明 |
-|------|------|
-| `akm stats [provider]` | 显示供应商使用统计 |
-| `akm health [provider]` | 检查配置健康状态 |
-| `akm batch <operation>` | 批量操作供应商 |
-| `akm benchmark` | 供应商性能测试和对比 |
-| `akm claude <subcommand>` | Claude Code 配置管理 (clean/analyze) |
-| `akm mcp <subcommand>` | MCP 服务器管理 (list/add/edit/remove) |
+| 命令                      | 说明                                  |
+| ------------------------- | ------------------------------------- |
+| `akm stats [provider]`    | 显示供应商使用统计                    |
+| `akm health [provider]`   | 检查配置健康状态                      |
+| `akm batch <operation>`   | 批量操作供应商                        |
+| `akm benchmark`           | 供应商性能测试和对比                  |
+| `akm claude <subcommand>` | Claude Code 配置管理 (clean/analyze)  |
+| `akm mcp <subcommand>`    | MCP 服务器管理 (list/add/edit/remove) |
 
 ---
 
@@ -99,12 +99,14 @@ akm add --codex
 添加流程分两步：
 
 **步骤 1 — 填写供应商信息：**
+
 - 选择 IDE 类型（Claude Code / Codex CLI）
 - 输入供应商名称
 - 选择认证模式（Claude Code 有两种）
 - 输入 API 基础 URL 和 Token
 
 **步骤 2 — 可选配置：**
+
 - 启动参数
 - 模型配置
 
@@ -112,10 +114,10 @@ akm add --codex
 
 Claude Code 支持两种认证模式：
 
-| 模式 | 环境变量 | 适用场景 |
-|------|---------|---------|
-| API Key | `ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL` | 大多数第三方代理 |
-| Auth Token | `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL` | 部分服务商 |
+| 模式       | 环境变量                                      | 适用场景         |
+| ---------- | --------------------------------------------- | ---------------- |
+| API Key    | `ANTHROPIC_API_KEY` + `ANTHROPIC_BASE_URL`    | 大多数第三方代理 |
+| Auth Token | `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL` | 部分服务商       |
 
 Codex CLI 使用 `OPENAI_API_KEY` + `OPENAI_BASE_URL`。
 
@@ -159,14 +161,16 @@ akm list --status
 # 按 IDE 类型过滤
 akm list --claude
 akm list --codex
+akm list --json
 
-# 显示完整 Token
-akm list --show-token
-
-# 查看当前激活的配置
+# 查看当前激活的配置（list/current 默认完整显示 Token）
 akm current
-akm current --show-token
+akm current --shell zsh
+akm current --json
 ```
+
+`--show-token` 作为兼容参数继续接受；本地 `list`、`current`、创建摘要和供应商详情均直接显示完整 Token。
+分享配置时仍建议使用默认的无密钥导出。
 
 ### 克隆供应商
 
@@ -193,6 +197,7 @@ akm remove my-provider
 ```
 
 **批量删除流程：**
+
 1. 使用空格键选择多个要删除的供应商
 2. 按 Enter 确认选择
 3. 预览将要删除的供应商列表
@@ -209,6 +214,7 @@ akm edit my-provider
 ```
 
 **可编辑内容：**
+
 - 供应商名称
 - 认证模式
 - API 基础 URL
@@ -259,16 +265,28 @@ akm backup --list
 # 恢复备份
 akm backup --restore <file>
 
-# 导出配置（可分享）
+# 导出无密钥配置（默认，可作为模板分享）
 akm export my-config.json
 
-# 导出脱敏版本（配置模板）
-akm export template.json --mask
+# 显式导出包含完整 Token 的配置（敏感文件）
+akm export private-backup.json --include-secrets
+
+# 预览导出，不写入文件
+akm export my-config.json --dry-run
 
 # 导入配置
 akm import my-config.json
 akm import my-config.json --overwrite
+akm import my-config.json --dry-run
 ```
+
+导出文件在 Unix 系统上会设置为 `0600`。默认导出会把 `authToken` 设为 `null`，并写入
+`secretsIncluded: false`，导入后需要重新设置密钥；只有明确使用 `--include-secrets` 时才会
+写出原始密钥。
+`health` 默认只做本地配置健康检查；使用 `--connectivity` 才会真实调用 API，可能产生费用。
+`--json` 和 `--dry-run` 适合脚本或自动化流程。
+
+如果配置文件在当前操作期间被另一个 `akm` 进程修改，保存会停止并提示重新执行，避免覆盖较新的配置。
 
 ### 配置验证
 
@@ -350,25 +368,25 @@ akm personal -q
 
 ### 状态图标
 
-| 图标 | 含义 |
-|-----|------|
-| 🟢 | API 可用 |
-| 🟡 | 有限可用/响应慢 |
-| 🔴 | API 不可用 |
-| ⏳ | 正在检测 |
-| ⚪ | 未知状态 |
+| 图标 | 含义            |
+| ---- | --------------- |
+| 🟢   | API 可用        |
+| 🟡   | 有限可用/响应慢 |
+| 🔴   | API 不可用      |
+| ⏳   | 正在检测        |
+| ⚪   | 未知状态        |
 
 ### 快捷键
 
-| 按键 | 功能 |
-|------|------|
-| ↑/↓ | 上下导航 |
-| Space | 切换选中（多选） |
-| A | 全选 |
-| I | 反选 |
-| Enter | 确认 |
-| ESC | 返回上级 / 取消 |
-| Ctrl+C | 退出程序 |
+| 按键   | 功能             |
+| ------ | ---------------- |
+| ↑/↓    | 上下导航         |
+| Space  | 切换选中（多选） |
+| A      | 全选             |
+| I      | 反选             |
+| Enter  | 确认             |
+| ESC    | 返回上级 / 取消  |
+| Ctrl+C | 退出程序         |
 
 ---
 
@@ -454,7 +472,9 @@ Codex CLI:
 akm my-codex
 ```
 
-akm 会自动设置 `preferred_auth_method = "apikey"` 并写入正确格式的 `auth.json`。
+akm 会把活跃认证切换为 `auth_mode = "apikey"`，并写入新的 `OPENAI_API_KEY`。
+原 ChatGPT 登录态不会混入活跃认证文件，修改前内容会保存在 `~/.codex/akm-backups/`。
+`auth.json` 与 `config.toml` 作为一组更新；任一文件写入失败时会自动恢复两者的原始内容。
 
 ### Claude Code 切换后环境变量不生效
 
@@ -484,8 +504,15 @@ chmod 600 ~/.akm-config.json
 
 ## 系统要求
 
-- Node.js >= 14.0.0
+- Node.js >= 20.0.0
 - macOS / Linux / Windows
+
+### 2.0 升级提示
+
+- Node.js 最低版本由 14 提升到 20。
+- 默认导出改为无密钥模板；完整备份必须显式使用 `--include-secrets`。
+- 远程 API 地址必须使用 HTTPS，HTTP 仅允许 localhost 和回环地址。
+- 导入配置不能携带跳过审批或沙盒的最高权限启动参数。
 
 ## 许可证
 

@@ -3,11 +3,6 @@
  * 测试错误处理工具
  */
 
-// Mock supports-color and logger
-jest.mock('supports-color', () => ({
-  stdout: { hasBasic: true, level: 1 }
-}));
-
 const { ErrorHandler } = require('../src/utils/error-handler');
 const { Logger } = require('../src/utils/logger');
 

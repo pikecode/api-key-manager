@@ -2,7 +2,8 @@ class ProviderEditQuestionsHelper {
   static buildQuestions(provider, validator) {
     const isCodex = provider.ideName === 'codex';
     const questions = [
-      this.buildNameQuestion(provider, validator)
+      this.buildNameQuestion(provider, validator),
+      this.buildDisplayNameQuestion(provider, validator)
     ];
 
     if (!isCodex) {
@@ -10,8 +11,8 @@ class ProviderEditQuestionsHelper {
     }
 
     questions.push(
-      this.buildBaseUrlQuestion(provider, isCodex),
-      this.buildAuthTokenQuestion(provider, isCodex)
+      this.buildBaseUrlQuestion(provider, isCodex, validator),
+      this.buildAuthTokenQuestion(provider, isCodex, validator)
     );
 
     return questions;
@@ -27,6 +28,19 @@ class ProviderEditQuestionsHelper {
         const error = validator.validateName(input);
         if (error) return error;
         return true;
+      }
+    };
+  }
+
+  static buildDisplayNameQuestion(provider, validator) {
+    return {
+      type: 'input',
+      name: 'displayName',
+      message: '请输入显示名称:',
+      default: provider.displayName || provider.name,
+      validate: input => {
+        if (typeof validator?.validateDisplayName !== 'function') return true;
+        return validator.validateDisplayName(input) || true;
       }
     };
   }
@@ -72,17 +86,21 @@ class ProviderEditQuestionsHelper {
     ];
   }
 
-  static buildBaseUrlQuestion(provider, isCodex) {
+  static buildBaseUrlQuestion(provider, isCodex, validator) {
     return {
       type: 'input',
       name: 'baseUrl',
       message: isCodex ? '基础URL (OPENAI_BASE_URL):' : '基础URL:',
       default: provider.baseUrl,
-      prefillDefault: true
+      prefillDefault: true,
+      validate: input => {
+        if (typeof validator?.validateUrl !== 'function') return true;
+        return validator.validateUrl(input, false) || true;
+      }
     };
   }
 
-  static buildAuthTokenQuestion(provider, isCodex) {
+  static buildAuthTokenQuestion(provider, isCodex, validator) {
     return {
       type: 'input',
       name: 'authToken',
@@ -94,7 +112,11 @@ class ProviderEditQuestionsHelper {
         return `Token (${envVar}):`;
       },
       default: provider.authToken,
-      prefillDefault: true
+      prefillDefault: true,
+      validate: input => {
+        if (typeof validator?.validateToken !== 'function') return true;
+        return validator.validateToken(input) || true;
+      }
     };
   }
 }

@@ -1,6 +1,8 @@
 const spawn = require('cross-spawn');
 const { sanitizeEnvValue, clearTerminal } = require('./env-utils');
 const { applyCodexConfig } = require('./codex-files');
+const { assertSupportedLaunchArgs } = require('./launch-args');
+const { validator } = require('./validator');
 
 /**
  * 构建 Codex CLI 环境变量
@@ -10,6 +12,10 @@ const { applyCodexConfig } = require('./codex-files');
 function buildCodexEnvVariables(config) {
   const env = { ...process.env };
 
+  delete env.OPENAI_API_KEY;
+  delete env.OPENAI_BASE_URL;
+  delete env.OPENAI_MODEL;
+
   try {
     // Codex CLI 使用 OpenAI 环境变量
     if (config.authToken) {
@@ -17,10 +23,11 @@ function buildCodexEnvVariables(config) {
     }
 
     if (config.baseUrl) {
+      const baseUrlError = validator.validateUrl(config.baseUrl);
+      if (baseUrlError) {
+        throw new Error(baseUrlError);
+      }
       env.OPENAI_BASE_URL = sanitizeEnvValue(config.baseUrl);
-    } else {
-      // 未配置基础地址时必须清理父进程遗留值，避免切换到官方默认时仍走旧代理。
-      delete env.OPENAI_BASE_URL;
     }
 
     // 支持自定义模型
@@ -49,14 +56,15 @@ async function executeCodexWithEnv(config, launchArgs = []) {
     throw new Error(`供应商 '${config.name}' 未配置 API Key，请使用 'akm edit ${config.name}' 添加`);
   }
 
+  assertSupportedLaunchArgs('codex', launchArgs);
+
+  // 在写入 Codex 配置文件前完成全部输入校验。
+  const env = buildCodexEnvVariables(config);
+
   // 写入 ~/.codex/config.toml 和 ~/.codex/auth.json
   // 确保 Codex CLI 使用 API Key 认证方式
   // 这样用户也可以直接运行 `codex` 命令而无需通过 akm
   await applyCodexConfig(config);
-
-  // 同时设置环境变量，确保兼容性
-  // 环境变量优先级更高，作为双重保障
-  const env = buildCodexEnvVariables(config);
 
   // 处理参数：子命令放前面，选项放后面
   const rawArgs = Array.isArray(launchArgs) ? [...launchArgs] : [];
@@ -72,7 +80,7 @@ async function executeCodexWithEnv(config, launchArgs = []) {
     const child = spawn('codex', args, {
       stdio: 'inherit',
       env,
-      shell: true
+      shell: false
     });
 
     child.on('close', (code) => {

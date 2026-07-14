@@ -84,7 +84,7 @@ class ProviderManager {
   async editProvider(providerName, onComplete) {
     try {
       await this.configManager.load();
-      let provider = this.configManager.getProvider(providerName);
+      const provider = this.configManager.getProvider(providerName);
 
       if (!provider) {
         Logger.error(`供应商 '${providerName}' 不存在`);
@@ -110,55 +110,54 @@ class ProviderManager {
         throw error;
       }
 
+      const originalConfig = this.configManager.config;
       const originalName = provider.name;
       const newName = answers.name;
 
-      // 处理重命名逻辑
-      if (newName !== originalName) {
-        await this.configManager.ensureLoaded();
-        const providersMap = this.configManager.config.providers;
-
-        if (providersMap[newName]) {
-          Logger.error(`供应商名称 '${newName}' 已存在，请使用其他名称`);
-          return await onComplete();
-        }
-
-        providersMap[newName] = {
-          ...provider,
-          name: newName
-        };
-
-        delete providersMap[originalName];
-
-        if (this.configManager.config.currentProvider === originalName) {
-          this.configManager.config.currentProvider = newName;
-          providersMap[newName].current = true;
-        }
-
-        provider = providersMap[newName];
+      if (newName !== originalName && originalConfig.providers[newName]) {
+        Logger.error(`供应商名称 '${newName}' 已存在，请使用其他名称`);
+        return await onComplete();
       }
 
-      // 更新供应商配置
-      provider.displayName = newName;
-      provider.baseUrl = answers.baseUrl;
-      provider.authToken = answers.authToken;
+      // 在内存中构造快照，校验和保存失败时不污染当前配置对象。
+      const updatedProvider = {
+        ...provider,
+        name: newName,
+        displayName: answers.displayName || provider.displayName || newName,
+        baseUrl: answers.baseUrl || null,
+        authToken: answers.authToken,
+        launchArgs: Array.isArray(answers.launchArgs)
+          ? answers.launchArgs
+          : (provider.launchArgs || [])
+      };
 
       if (!isCodex) {
-        provider.authMode = answers.authMode;
-
-        if (!provider.models) {
-          provider.models = {};
-        }
-        provider.models.primary = answers.primaryModel || null;
-        provider.models.smallFast = answers.smallFastModel || null;
+        updatedProvider.authMode = answers.authMode;
+        updatedProvider.models = {
+          ...(provider.models || {}),
+          primary: answers.primaryModel || null,
+          smallFast: answers.smallFastModel || null
+        };
       } else {
-        provider.authMode = null;
-        provider.models = null;
+        updatedProvider.authMode = null;
+        updatedProvider.models = null;
       }
 
-      provider.ideName = isCodex ? 'codex' : 'claude';
+      updatedProvider.ideName = isCodex ? 'codex' : 'claude';
 
-      await this.configManager.save();
+      const providers = { ...originalConfig.providers };
+      delete providers[originalName];
+      providers[newName] = updatedProvider;
+      const nextConfig = {
+        ...originalConfig,
+        currentProvider:
+          originalConfig.currentProvider === originalName
+            ? newName
+            : originalConfig.currentProvider,
+        providers
+      };
+
+      await this.configManager.save(nextConfig);
       Logger.success(`供应商 '${newName}' 已更新`);
 
       return await onComplete();

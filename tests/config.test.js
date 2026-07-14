@@ -1,5 +1,6 @@
 const { ConfigManager } = require('../src/config');
 const { validator } = require('../src/utils/validator');
+const fs = require('fs-extra');
 
 describe('ConfigManager', () => {
   let configManager;
@@ -54,6 +55,95 @@ describe('ConfigManager', () => {
 
       const persisted = await fs.readJSON(testConfigPath);
       expect(persisted).toEqual(configManager.getDefaultConfig());
+    });
+
+    test('结构错误的对象不会被加载或覆盖', async () => {
+      const invalidConfig = {
+        version: '1.0.0',
+        currentProvider: 'broken',
+        providers: {
+          broken: {
+            name: 'broken',
+            ideName: 'claude',
+            baseUrl: 12345
+          }
+        }
+      };
+      await fs.writeJson(testConfigPath, invalidConfig);
+      configManager.isLoaded = false;
+      configManager.config = null;
+
+      await expect(configManager.load(true)).rejects.toThrow('配置 Schema 校验失败');
+      expect(await fs.readJson(testConfigPath)).toEqual(invalidConfig);
+    });
+
+    test('currentProvider 必须指向存在的供应商', async () => {
+      const invalidConfig = {
+        version: '1.0.0',
+        currentProvider: 'missing',
+        providers: {}
+      };
+      await fs.writeJson(testConfigPath, invalidConfig);
+      configManager.isLoaded = false;
+      configManager.config = null;
+
+      await expect(configManager.load(true)).rejects.toThrow('currentProvider');
+      expect(await fs.readJson(testConfigPath)).toEqual(invalidConfig);
+    });
+
+    test('本地配置拒绝远程 HTTP 基础地址', async () => {
+      const invalidConfig = {
+        version: '1.0.0',
+        currentProvider: 'insecure',
+        providers: {
+          insecure: {
+            name: 'insecure',
+            displayName: '不安全配置',
+            ideName: 'claude',
+            authMode: 'api_key',
+            authToken: 'valid-token',
+            baseUrl: 'http://api.example.com'
+          }
+        }
+      };
+      await fs.writeJson(testConfigPath, invalidConfig);
+      configManager.isLoaded = false;
+      configManager.config = null;
+
+      await expect(configManager.load(true)).rejects.toThrow('HTTPS');
+      expect(await fs.readJson(testConfigPath)).toEqual(invalidConfig);
+    });
+  });
+
+  describe('save', () => {
+    test('拒绝错误配置且保留磁盘上的最后有效版本', async () => {
+      const before = await fs.readJson(testConfigPath);
+      const invalidConfig = {
+        version: '1.0.0',
+        currentProvider: null,
+        providers: []
+      };
+
+      await expect(configManager.save(invalidConfig)).rejects.toThrow('配置 Schema 校验失败');
+      expect(await fs.readJson(testConfigPath)).toEqual(before);
+    });
+
+    test('检测到外部修改时拒绝覆盖最新配置', async () => {
+      const externalConfig = {
+        version: '1.0.0',
+        currentProvider: null,
+        providers: {}
+      };
+      await new Promise(resolve => setTimeout(resolve, 10));
+      await fs.writeJson(testConfigPath, externalConfig);
+
+      const staleConfig = {
+        ...externalConfig,
+        version: 'stale-write'
+      };
+
+      await expect(configManager.save(staleConfig)).rejects.toThrow('其他进程修改');
+      expect(await fs.readJson(testConfigPath)).toEqual(externalConfig);
     });
   });
 
@@ -145,8 +235,9 @@ describe('ConfigManager', () => {
     });
 
     test('should throw error for non-existent provider', async () => {
-      await expect(configManager.removeProvider('non-existent'))
-        .rejects.toThrow('供应商 \'non-existent\' 不存在');
+      await expect(configManager.removeProvider('non-existent')).rejects.toThrow(
+        "供应商 'non-existent' 不存在"
+      );
     });
   });
 
@@ -192,13 +283,15 @@ describe('validator', () => {
       expect(validator.validateName('')).toBe('供应商名称不能为空');
       expect(validator.validateName('   ')).toBe('供应商名称不能为空或只包含空格');
       expect(validator.validateName('a'.repeat(101))).toBe('供应商名称不能超过100个字符');
+      expect(validator.validateName('bad\x1bname')).toBe('供应商名称不能包含控制字符');
+      expect(validator.validateName('__proto__')).toBe('供应商名称不能使用系统保留名称');
     });
   });
 
   describe('validateUrl', () => {
     test('should accept valid URLs', () => {
       expect(validator.validateUrl('https://example.com')).toBeNull();
-      expect(validator.validateUrl('http://example.com')).toBeNull();
+      expect(validator.validateUrl('http://127.0.0.1:8080')).toBeNull();
       expect(validator.validateUrl('https://api.example.com/v1')).toBeNull();
     });
 
@@ -206,6 +299,7 @@ describe('validator', () => {
       expect(validator.validateUrl('')).toBe('URL不能为空');
       expect(validator.validateUrl('not-a-url')).toBe('请输入有效的URL');
       expect(validator.validateUrl('ftp://example.com')).toBe('URL必须以http://或https://开头');
+      expect(validator.validateUrl('http://example.com')).toContain('HTTPS');
     });
   });
 
@@ -240,5 +334,4 @@ describe('validator', () => {
       expect(validator.validateModel('a'.repeat(101))).toBe('模型名称不能超过100个字符');
     });
   });
-
 });

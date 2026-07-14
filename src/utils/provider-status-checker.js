@@ -1,5 +1,13 @@
-const { Anthropic, APIConnectionTimeoutError, APIConnectionError, APIError } = require('@anthropic-ai/sdk');
+const {
+  Anthropic,
+  APIConnectionTimeoutError,
+  APIConnectionError,
+  APIError
+} = require('@anthropic-ai/sdk');
+const crypto = require('crypto');
 const { API_CONFIG } = require('../constants');
+const { validator } = require('./validator');
+const { mapWithConcurrency } = require('./concurrency');
 
 const STATUS_CACHE_MAX = 100;
 
@@ -32,10 +40,24 @@ class ProviderStatusChecker {
     this.maxTokens = options.maxTokens ?? API_CONFIG.MAX_TOKENS;
     this.defaultModel = API_CONFIG.DEFAULT_MODEL;
     this.cacheTTL = options.cacheTTL ?? API_CONFIG.CACHE_TTL;
+    this.maxConcurrency = options.maxConcurrency ?? 4;
   }
 
   _getCacheKey(provider) {
-    return `${provider.name}:${provider.authMode}:${provider.baseUrl || ''}`;
+    const tokenFingerprint = crypto
+      .createHash('sha256')
+      .update(String(provider.authToken || ''))
+      .digest('hex')
+      .slice(0, 16);
+    const model = provider.models?.primary || provider.models?.smallFast || this.defaultModel;
+    return JSON.stringify([
+      provider.name,
+      provider.ideName || 'claude',
+      provider.authMode,
+      provider.baseUrl || '',
+      model,
+      tokenFingerprint
+    ]);
   }
 
   _getCachedStatus(provider) {
@@ -63,6 +85,11 @@ class ProviderStatusChecker {
   async check(provider, options = {}) {
     if (!provider) {
       return this._result('unknown', '未找到配置', null);
+    }
+
+    const baseUrlError = validator.validateUrl(provider.baseUrl, false);
+    if (baseUrlError) {
+      return this._result('unknown', `基础 URL 无效: ${baseUrlError}`, null);
     }
 
     // 检查缓存（除非明确跳过）
@@ -101,16 +128,19 @@ class ProviderStatusChecker {
         }
 
         const start = process.hrtime.bigint();
-        const response = await client.messages.create({
-          model,
-          max_tokens: this.maxTokens,
-          messages: [
-            {
-              role: 'user',
-              content: this.testMessage
-            }
-          ]
-        }, { timeout: this.timeout });
+        const response = await client.messages.create(
+          {
+            model,
+            max_tokens: this.maxTokens,
+            messages: [
+              {
+                role: 'user',
+                content: this.testMessage
+              }
+            ]
+          },
+          { timeout: this.timeout }
+        );
         const latency = Number(process.hrtime.bigint() - start) / 1e6;
 
         const text = this._extractText(response);
@@ -132,18 +162,16 @@ class ProviderStatusChecker {
   }
 
   async checkAll(providers) {
-    const entries = await Promise.all(
-      providers.map(async provider => {
-        const status = await this.check(provider);
-        return [provider.name, status];
-      })
-    );
+    const entries = await mapWithConcurrency(providers, this.maxConcurrency, async provider => {
+      const status = await this.check(provider);
+      return [provider.name, status];
+    });
     return Object.fromEntries(entries);
   }
 
   checkAllStreaming(providers, onUpdate) {
     const results = {};
-    const tasks = providers.map(async provider => {
+    return mapWithConcurrency(providers, this.maxConcurrency, async provider => {
       try {
         const status = await this.check(provider);
         results[provider.name] = status;
@@ -157,9 +185,7 @@ class ProviderStatusChecker {
           onUpdate(provider.name, fallback, error);
         }
       }
-    });
-
-    return Promise.all(tasks).then(() => results);
+    }).then(() => results);
   }
 
   _createClient(provider) {
@@ -240,7 +266,6 @@ class ProviderStatusChecker {
     return '';
   }
 
-
   _handleError(error) {
     if (error instanceof APIConnectionTimeoutError) {
       return this._result('offline', '请求超时', null);
@@ -298,7 +323,7 @@ class ProviderStatusChecker {
       const response = await fetch(modelsUrl, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${provider.authToken}`,
+          Authorization: `Bearer ${provider.authToken}`,
           'Content-Type': 'application/json'
         },
         signal: controller.signal

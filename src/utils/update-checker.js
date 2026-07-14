@@ -37,7 +37,7 @@ function getLatestVersion(pkgName, timeoutMs = 4000) {
   return new Promise((resolve, _reject) => {
     let done = false;
     const child = spawn('npm', ['view', pkgName, 'version', '--json'], {
-      shell: process.platform === 'win32',
+      shell: false,
       stdio: ['ignore', 'pipe', 'ignore']
     });
 
@@ -117,7 +117,7 @@ async function checkForUpdates({ packageName, currentVersion }) {
       console.log(chalk.yellow('开始更新，请稍候...'));
       await new Promise((resolve) => {
         const child = spawn('npm', ['i', '-g', `${packageName}@latest`], {
-          shell: process.platform === 'win32',
+          shell: false,
           stdio: 'inherit'
         });
         child.on('close', (code) => resolve(code === 0));
@@ -134,7 +134,7 @@ async function checkForUpdates({ packageName, currentVersion }) {
           : process.argv.slice(2);
 
         const child = spawn(restartCommand, restartArgs, {
-          shell: process.platform === 'win32',
+          shell: false,
           stdio: 'inherit'
         });
         child.on('close', (code) => {

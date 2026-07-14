@@ -8,7 +8,10 @@ const { ProviderEditQuestionsHelper } = require('../src/commands/switch/provider
 describe('ProviderEditQuestionsHelper', () => {
   const createValidator = () => ({
     validateName: jest.fn(() => null),
-    validateModel: jest.fn(() => null)
+    validateDisplayName: jest.fn(() => null),
+    validateModel: jest.fn(() => null),
+    validateUrl: jest.fn(() => null),
+    validateToken: jest.fn(() => null)
   });
 
   const claudeProvider = {
@@ -39,6 +42,7 @@ describe('ProviderEditQuestionsHelper', () => {
 
     expect(questions.map(question => question.name)).toEqual([
       'name',
+      'displayName',
       'authMode',
       'primaryModel',
       'smallFastModel',
@@ -52,6 +56,7 @@ describe('ProviderEditQuestionsHelper', () => {
 
     expect(questions.map(question => question.name)).toEqual([
       'name',
+      'displayName',
       'baseUrl',
       'authToken'
     ]);
@@ -81,6 +86,15 @@ describe('ProviderEditQuestionsHelper', () => {
     expect(validator.validateName).toHaveBeenCalledWith('new-name');
   });
 
+  it('显示名称校验应该调用注入的 validateDisplayName', () => {
+    const validator = createValidator();
+    const questions = ProviderEditQuestionsHelper.buildQuestions(claudeProvider, validator);
+    const displayNameQuestion = questions.find(question => question.name === 'displayName');
+
+    expect(displayNameQuestion.validate('新的显示名称')).toBe(true);
+    expect(validator.validateDisplayName).toHaveBeenCalledWith('新的显示名称');
+  });
+
   it('模型字段校验应该调用注入的 validateModel', () => {
     const validator = createValidator();
     const questions = ProviderEditQuestionsHelper.buildQuestions(claudeProvider, validator);
@@ -93,14 +107,28 @@ describe('ProviderEditQuestionsHelper', () => {
     expect(validator.validateModel).toHaveBeenCalledWith('fast-model');
   });
 
+  it('基础 URL 和 Token 校验应该调用注入的校验器', () => {
+    const validator = createValidator();
+    const questions = ProviderEditQuestionsHelper.buildQuestions(claudeProvider, validator);
+    const baseUrlQuestion = questions.find(question => question.name === 'baseUrl');
+    const tokenQuestion = questions.find(question => question.name === 'authToken');
+
+    expect(baseUrlQuestion.validate('https://new.example.com')).toBe(true);
+    expect(tokenQuestion.validate('new-token')).toBe(true);
+    expect(validator.validateUrl).toHaveBeenCalledWith('https://new.example.com', false);
+    expect(validator.validateToken).toHaveBeenCalledWith('new-token');
+  });
+
   it('校验失败时应该返回校验器错误信息', () => {
     const validator = {
       validateName: jest.fn(() => '名称错误'),
+      validateDisplayName: jest.fn(() => '显示名称错误'),
       validateModel: jest.fn(() => '模型错误')
     };
     const questions = ProviderEditQuestionsHelper.buildQuestions(claudeProvider, validator);
 
     expect(questions.find(question => question.name === 'name').validate('bad name')).toBe('名称错误');
+    expect(questions.find(question => question.name === 'displayName').validate('bad display')).toBe('显示名称错误');
     expect(questions.find(question => question.name === 'primaryModel').validate('bad model')).toBe('模型错误');
   });
 });

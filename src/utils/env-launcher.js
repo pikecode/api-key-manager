@@ -1,10 +1,25 @@
 const spawn = require('cross-spawn');
 const { sanitizeEnvValue, clearTerminal } = require('./env-utils');
+const { assertSupportedLaunchArgs } = require('./launch-args');
+const { validator } = require('./validator');
 
 function buildEnvVariables(config) {
   const env = { ...process.env };
 
+  delete env.ANTHROPIC_API_KEY;
+  delete env.ANTHROPIC_AUTH_TOKEN;
+  delete env.ANTHROPIC_BASE_URL;
+  delete env.ANTHROPIC_MODEL;
+  delete env.ANTHROPIC_SMALL_FAST_MODEL;
+
   try {
+    if (config.baseUrl) {
+      const baseUrlError = validator.validateUrl(config.baseUrl);
+      if (baseUrlError) {
+        throw new Error(baseUrlError);
+      }
+    }
+
     // Claude Code 配置
     if (config.authMode === 'auth_token') {
       if (config.baseUrl) {
@@ -35,6 +50,7 @@ function buildEnvVariables(config) {
 }
 
 async function executeWithEnv(config, launchArgs = []) {
+  assertSupportedLaunchArgs('claude', launchArgs);
   const env = buildEnvVariables(config);
   const args = [...launchArgs];
 
@@ -46,7 +62,7 @@ async function executeWithEnv(config, launchArgs = []) {
     const child = spawn('claude', args, {
       stdio: 'inherit',
       env,
-      shell: true
+      shell: false
     });
 
     child.on('close', (code) => {

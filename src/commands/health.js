@@ -8,6 +8,7 @@ const chalk = require('chalk');
 const { configManager } = require('../config');
 const { Logger } = require('../utils/logger');
 const { HealthChecker } = require('../utils/health-checker');
+const { mapWithConcurrency } = require('../utils/concurrency');
 const { UIHelper } = require('../utils/ui-helper');
 
 /**
@@ -31,16 +32,28 @@ async function showProviderHealth(providerName, options = {}) {
       return;
     }
 
-    console.log(chalk.blue(`\n🏥 健康检查: ${provider.displayName} (${provider.name})`));
-    console.log(chalk.gray('═'.repeat(60)));
-    console.log();
+    if (!options.json) {
+      console.log(chalk.blue(`\n🏥 健康检查: ${provider.displayName} (${provider.name})`));
+      console.log(chalk.gray('═'.repeat(60)));
+      console.log();
+    }
 
     const checker = new HealthChecker();
-    const loadingInterval = UIHelper.createLoadingAnimation('检查中...');
+    const loadingInterval = options.json ? null : UIHelper.createLoadingAnimation('检查中...');
 
     try {
-      const results = await checker.performHealthCheck(provider, options);
-      UIHelper.clearLoadingAnimation(loadingInterval);
+      const results = await checker.performHealthCheck(provider, {
+        ...options,
+        checkConnectivity: options.connectivity === true || options.checkConnectivity === true
+      });
+      if (loadingInterval) {
+        UIHelper.clearLoadingAnimation(loadingInterval);
+      }
+
+      if (options.json) {
+        console.log(JSON.stringify(results, null, 2));
+        return;
+      }
 
       console.log(checker.formatHealthReport(results));
       console.log();
@@ -49,11 +62,17 @@ async function showProviderHealth(providerName, options = {}) {
       if (results.overallStatus === 'error' || results.overallStatus === 'warning') {
         console.log(chalk.yellow('💡 建议操作:'));
 
-        if (results.checks.tokenExpiry?.status === 'expired' || results.checks.tokenExpiry?.status === 'critical') {
+        if (
+          results.checks.tokenExpiry?.status === 'expired' ||
+          results.checks.tokenExpiry?.status === 'critical'
+        ) {
           console.log(chalk.yellow('   • 使用 "akm edit" 更新 Token'));
         }
 
-        if (results.checks.quota?.status === 'exceeded' || results.checks.quota?.status === 'critical') {
+        if (
+          results.checks.quota?.status === 'exceeded' ||
+          results.checks.quota?.status === 'critical'
+        ) {
           console.log(chalk.yellow('   • 检查 API 配额使用情况'));
           console.log(chalk.yellow('   • 考虑升级套餐或添加新的供应商'));
         }
@@ -71,12 +90,12 @@ async function showProviderHealth(providerName, options = {}) {
 
         console.log();
       }
-
     } catch (error) {
-      UIHelper.clearLoadingAnimation(loadingInterval);
+      if (loadingInterval) {
+        UIHelper.clearLoadingAnimation(loadingInterval);
+      }
       Logger.error(`健康检查失败: ${error.message}`);
     }
-
   } catch (error) {
     Logger.error(`健康检查执行失败: ${error.message}`);
     throw error;
@@ -110,10 +129,17 @@ async function showAllHealth(options = {}) {
       return;
     }
 
-    const titleSuffix = options.filter === 'codex' ? ' (Codex CLI)' : (options.filter === 'claude' ? ' (Claude Code)' : '');
-    console.log(chalk.blue(`\n🏥 健康检查${titleSuffix}`));
-    console.log(chalk.gray('═'.repeat(60)));
-    console.log();
+    const titleSuffix =
+      options.filter === 'codex'
+        ? ' (Codex CLI)'
+        : options.filter === 'claude'
+          ? ' (Claude Code)'
+          : '';
+    if (!options.json) {
+      console.log(chalk.blue(`\n🏥 健康检查${titleSuffix}`));
+      console.log(chalk.gray('═'.repeat(60)));
+      console.log();
+    }
 
     const checker = new HealthChecker();
     const allResults = [];
@@ -121,25 +147,41 @@ async function showAllHealth(options = {}) {
     const total = providers.length;
 
     // 创建进度显示
-    const progressInterval = setInterval(() => {
-      process.stdout.write(`\r检查中... ${completedCount}/${total}`);
-    }, 100);
+    const progressInterval = options.json
+      ? null
+      : setInterval(() => {
+        process.stdout.write(`\r检查中... ${completedCount}/${total}`);
+      }, 100);
 
     try {
       // 并行检查所有供应商
-      const checkPromises = providers.map(async (provider) => {
-        const results = await checker.performHealthCheck(provider, {
-          checkConnectivity: options.connectivity !== false
+      const results = await mapWithConcurrency(providers, 4, async provider => {
+        const providerResults = await checker.performHealthCheck(provider, {
+          checkConnectivity: options.connectivity === true || options.checkConnectivity === true
         });
         completedCount++;
-        return results;
+        return providerResults;
       });
-
-      const results = await Promise.all(checkPromises);
-      clearInterval(progressInterval);
-      process.stdout.write('\r' + ' '.repeat(50) + '\r'); // 清除进度显示
+      if (progressInterval) {
+        clearInterval(progressInterval);
+        process.stdout.write('\r' + ' '.repeat(50) + '\r'); // 清除进度显示
+      }
 
       allResults.push(...results);
+
+      if (options.json) {
+        console.log(
+          JSON.stringify(
+            {
+              currentProvider: configManager.getCurrentProvider()?.name || null,
+              results
+            },
+            null,
+            2
+          )
+        );
+        return;
+      }
 
       // 显示结果
       const currentProvider = configManager.getCurrentProvider();
@@ -157,7 +199,9 @@ async function showAllHealth(options = {}) {
       // 显示统计
       const errorCount = allResults.filter(r => r.overallStatus === 'error').length;
       const warningCount = allResults.filter(r => r.overallStatus === 'warning').length;
-      const okCount = allResults.filter(r => r.overallStatus === 'ok' || r.overallStatus === 'info').length;
+      const okCount = allResults.filter(
+        r => r.overallStatus === 'ok' || r.overallStatus === 'info'
+      ).length;
 
       console.log(chalk.gray('═'.repeat(60)));
       console.log(chalk.blue('📊 健康统计:'));
@@ -171,7 +215,7 @@ async function showAllHealth(options = {}) {
         console.log();
         console.log(chalk.yellow('⚠️  发现需要关注的问题:'));
 
-        allResults.forEach((result) => {
+        allResults.forEach(result => {
           const hasIssue = result.overallStatus === 'error' || result.overallStatus === 'warning';
           if (hasIssue) {
             const issues = Object.entries(result.checks)
@@ -187,12 +231,12 @@ async function showAllHealth(options = {}) {
           }
         });
       }
-
     } catch (error) {
-      clearInterval(progressInterval);
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
       Logger.error(`批量健康检查失败: ${error.message}`);
     }
-
   } catch (error) {
     Logger.error(`健康检查执行失败: ${error.message}`);
     throw error;

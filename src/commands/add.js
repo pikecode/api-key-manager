@@ -26,6 +26,7 @@ class ProviderAdder extends BaseCommand {
     super();
     this.configManager = configManager;
     this.presetIdeName = options.ideName || null;
+    this.returnToParent = options.returnToParent === true;
   }
 
   /**
@@ -92,10 +93,13 @@ class ProviderAdder extends BaseCommand {
           message: `供应商 '${name}' 已存在，是否覆盖?`,
           default: false
         }
-      ], '取消覆盖', () => {
+      ], '取消覆盖', async () => {
         Logger.info('取消覆盖供应商');
+        if (this.returnToParent) {
+          return;
+        }
         const { registry } = require('../CommandRegistry');
-        registry.executeCommand('switch');
+        await registry.executeCommand('switch');
       });
 
       return overwrite;
