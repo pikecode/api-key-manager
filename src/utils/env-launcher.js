@@ -64,8 +64,8 @@ async function executeWithEnv(config, launchArgs = []) {
       shell: false
     });
 
-    child.on('close', (code) => {
-      if (code === 0 || code === null || code === 130) {
+    child.on('close', (code, signal) => {
+      if (code === 0 || code === 130 || signal === 'SIGINT') {
         resolve();
       } else {
         reject(new Error(`Claude Code 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));

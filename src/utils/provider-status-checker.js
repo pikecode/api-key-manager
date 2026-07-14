@@ -313,7 +313,8 @@ class ProviderStatusChecker {
     }
 
     const baseUrl = provider.baseUrl || 'https://api.openai.com/v1';
-    const modelsUrl = new URL('/v1/models', baseUrl).href;
+    const base = baseUrl.replace(/\/$/, '');
+    const modelsUrl = base.endsWith('/models') ? base : `${base}/models`;
 
     try {
       const controller = new AbortController();

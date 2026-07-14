@@ -557,7 +557,7 @@ class EnvSwitcher extends BaseCommand {
     console.log();
 
     const earliestCreated = providers.length > 0
-      ? providers.reduce((min, p) => (!p.createdAt || (min.createdAt && p.createdAt < min.createdAt)) ? min : p, providers[0])
+      ? providers.reduce((min, p) => (p.createdAt && (!min.createdAt || p.createdAt < min.createdAt)) ? p : min, providers[0])
       : null;
 
     const stats = [
@@ -927,7 +927,7 @@ class EnvSwitcher extends BaseCommand {
       const { ProviderRemover } = require('./remove');
       const remover = new ProviderRemover();
       try {
-        await remover.interactiveRemove({ onBack: () => this.showManageMenu() });
+        await remover.interactiveRemove({ onBack: null });
       } finally {
         remover.destroy();
       }
