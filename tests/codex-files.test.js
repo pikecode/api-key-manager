@@ -4,6 +4,7 @@ const { writeFileAtomic } = require('../src/utils/atomic-file');
 const {
   readCodexFiles,
   applyCodexConfig,
+  clearCodexAkmConfig,
   buildCodexPaths,
   removeTopLevelApiBaseUrl,
   extractBaseUrlFromConfigToml,
@@ -390,5 +391,51 @@ describe('applyCodexConfig with baseUrl', () => {
     expect(toml).not.toContain('[model_providers.akm]');
     expect(toml).not.toContain('https://proxy.example.com/v1');
     expect(toml).toContain('[model_providers.user]');
+  });
+
+  test('clearCodexAkmConfig 删除 auth.json', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, { OPENAI_API_KEY: 'test-key' });
+
+    expect(await fs.pathExists(authJsonPath)).toBe(true);
+    await clearCodexAkmConfig();
+    expect(await fs.pathExists(authJsonPath)).toBe(false);
+  });
+
+  test('clearCodexAkmConfig 清理 config.toml 中的 AKM provider', async () => {
+    const { configTomlPath } = buildCodexPaths(codexHome);
+    await fs.ensureDir(codexHome);
+    await fs.writeFile(
+      configTomlPath,
+      'model_provider = "akm"\n\n[model_providers.akm]\nname = "akm"\nbase_url = "https://test.api.com"\n\n[model_providers.user]\nbase_url = "https://user.example.com"\n',
+      'utf8'
+    );
+
+    await clearCodexAkmConfig();
+
+    const toml = await fs.readFile(configTomlPath, 'utf8');
+    expect(toml).not.toContain('[model_providers.akm]');
+    expect(toml).not.toContain('model_provider = "akm"');
+    expect(toml).toContain('[model_providers.user]');
+  });
+
+  test('clearCodexAkmConfig 创建备份', async () => {
+    const { authJsonPath, configTomlPath } = buildCodexPaths(codexHome);
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, { OPENAI_API_KEY: 'backup-test' });
+    await fs.writeFile(configTomlPath, 'model_provider = "akm"\n', 'utf8');
+
+    await clearCodexAkmConfig();
+
+    const backupRoot = path.join(codexHome, 'akm-backups');
+    expect(await fs.pathExists(backupRoot)).toBe(true);
+    const backupDirs = await fs.readdir(backupRoot);
+    expect(backupDirs.length).toBeGreaterThan(0);
+  });
+
+  test('clearCodexAkmConfig 处理不存在的文件', async () => {
+    // 不创建任何文件
+    await expect(clearCodexAkmConfig()).resolves.toBeDefined();
   });
 });

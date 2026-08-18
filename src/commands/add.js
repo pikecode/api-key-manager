@@ -66,7 +66,8 @@ class ProviderAdder extends BaseCommand {
       }
 
       if (answers.ideName === 'codex') {
-        answers.authMode = 'openai_api_key';
+        // authMode 由用户在 prompts 中选择，不再强制覆盖
+        // 支持 api_key 和 chatgpt_login 两种模式
         answers.codexFiles = null;
 
         // Codex 启动参数配置

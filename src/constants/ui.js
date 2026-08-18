@@ -89,6 +89,13 @@ const UI_MESSAGES = {
   // 认证模式
   AUTH_MODE_API_KEY: '🔑 ANTHROPIC_API_KEY - 大多数第三方代理使用',
   AUTH_MODE_AUTH_TOKEN: '🔐 ANTHROPIC_AUTH_TOKEN - 部分服务商使用',
+  AUTH_MODE_CODEX_API_KEY: '🔑 API Key - 使用 OpenAI API Key',
+  AUTH_MODE_CODEX_CHATGPT_LOGIN: '🌐 官方网页登录 - 使用 OpenAI 账号登录',
+
+  // Codex 特定提示
+  SELECT_CODEX_AUTH_MODE: '选择 Codex 认证方式:',
+  CODEX_CHATGPT_LOGIN_INFO: '使用官方 OpenAI 网页登录，Codex 启动时会打开浏览器',
+  CODEX_API_KEY_INFO: '使用 API Key 方式，支持官方或第三方代理',
 
   // 操作结果
   OPERATION_CANCELLED: '操作已取消',

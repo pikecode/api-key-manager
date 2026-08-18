@@ -1,6 +1,6 @@
 const spawn = require('cross-spawn');
 const { sanitizeEnvValue, clearTerminal } = require('./env-utils');
-const { applyCodexConfig } = require('./codex-files');
+const { applyCodexConfig, clearCodexAkmConfig } = require('./codex-files');
 const { assertSupportedLaunchArgs } = require('./launch-args');
 const { validator } = require('./validator');
 
@@ -17,7 +17,15 @@ function buildCodexEnvVariables(config) {
   delete env.OPENAI_MODEL;
 
   try {
-    // Codex CLI 使用 OpenAI 环境变量
+    // 确定认证模式，默认为 api_key（向后兼容）
+    const authMode = config.authMode || 'api_key';
+
+    // chatgpt_login 模式不设置环境变量，使用 Codex 官方登录
+    if (authMode === 'chatgpt_login') {
+      return env;
+    }
+
+    // api_key 模式使用 OpenAI 环境变量
     if (config.authToken) {
       env.OPENAI_API_KEY = sanitizeEnvValue(config.authToken);
     }
@@ -52,7 +60,11 @@ async function executeCodexWithEnv(config, launchArgs = []) {
     throw new Error('无效的 Codex 供应商配置');
   }
 
-  if (!config.authToken) {
+  // 确定认证模式，默认为 api_key（向后兼容）
+  const authMode = config.authMode || 'api_key';
+
+  // api_key 模式需要 authToken，chatgpt_login 模式不需要
+  if (authMode === 'api_key' && !config.authToken) {
     throw new Error(`供应商 '${config.name}' 未配置 API Key，请使用 'akm edit ${config.name}' 添加`);
   }
 
@@ -61,10 +73,15 @@ async function executeCodexWithEnv(config, launchArgs = []) {
   // 在写入 Codex 配置文件前完成全部输入校验。
   const env = buildCodexEnvVariables(config);
 
-  // 写入 ~/.codex/config.toml 和 ~/.codex/auth.json
-  // 确保 Codex CLI 使用 API Key 认证方式
-  // 这样用户也可以直接运行 `codex` 命令而无需通过 akm
-  await applyCodexConfig(config);
+  // 根据认证模式处理配置文件
+  if (authMode === 'api_key') {
+    // 写入 ~/.codex/config.toml 和 ~/.codex/auth.json
+    // 确保 Codex CLI 使用 API Key 认证方式
+    await applyCodexConfig(config);
+  } else if (authMode === 'chatgpt_login') {
+    // chatgpt_login 模式：清理 AKM 的配置，让 Codex 使用官方登录
+    await clearCodexAkmConfig();
+  }
 
   // 处理参数：子命令放前面，选项放后面
   const rawArgs = Array.isArray(launchArgs) ? [...launchArgs] : [];
@@ -74,7 +91,11 @@ async function executeCodexWithEnv(config, launchArgs = []) {
 
   clearTerminal();
 
-  console.log('\n启动 Codex CLI...\n');
+  if (authMode === 'chatgpt_login') {
+    console.log('\n启动 Codex CLI (官方网页登录)...\n');
+  } else {
+    console.log('\n启动 Codex CLI...\n');
+  }
 
   return new Promise((resolve, reject) => {
     const child = spawn('codex', args, {

@@ -55,6 +55,29 @@ async function saveProvider(adder, answers) {
       setAsDefault: answers.setAsDefault
     });
 
+    // 如果是首个 Codex 配置，自动创建官方登录配置
+    if (answers.ideName === 'codex') {
+      const existingCodexProviders = Object.values(adder.configManager.getAllProviders())
+        .filter(p => p.ideName === 'codex');
+
+      // 只有当刚才添加的是第一个 Codex 配置，且没有官方配置时才创建
+      if (existingCodexProviders.length === 1 && !adder.configManager.getProvider('openai-official')) {
+        await adder.configManager.addProvider('openai-official', {
+          displayName: 'OpenAI Official',
+          ideName: 'codex',
+          authMode: 'chatgpt_login',
+          baseUrl: null,
+          authToken: null,
+          codexFiles: null,
+          launchArgs: [],
+          primaryModel: null,
+          smallFastModel: null,
+          setAsDefault: false
+        });
+        Logger.info('✨ 自动创建官方登录配置: openai-official');
+      }
+    }
+
     // 打印摘要并返回主界面
     await printProviderSummary(adder, answers, launchArgs, modelConfig);
     await adder.pauseBeforeReturn();

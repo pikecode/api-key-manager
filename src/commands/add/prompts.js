@@ -78,6 +78,17 @@ async function promptProviderInfo(adder) {
       },
       // Codex‑specific prompts (manual entry)
       {
+        type: 'list',
+        name: 'authMode',
+        message: UI_MESSAGES.SELECT_CODEX_AUTH_MODE,
+        choices: [
+          { name: UI_MESSAGES.AUTH_MODE_CODEX_API_KEY, value: 'api_key' },
+          { name: UI_MESSAGES.AUTH_MODE_CODEX_CHATGPT_LOGIN, value: 'chatgpt_login' }
+        ],
+        default: 'api_key',
+        when: answers => (answers.ideName || adder.presetIdeName) === 'codex'
+      },
+      {
         type: 'input',
         name: 'baseUrl',
         message: UI_MESSAGES.INPUT_OPENAI_BASE_URL,
@@ -87,7 +98,7 @@ async function promptProviderInfo(adder) {
           const err = validator.validateUrl(input);
           return err || true;
         },
-        when: answers => (answers.ideName || adder.presetIdeName) === 'codex'
+        when: answers => (answers.ideName || adder.presetIdeName) === 'codex' && answers.authMode !== 'chatgpt_login'
       },
       {
         type: 'input',
@@ -98,7 +109,14 @@ async function promptProviderInfo(adder) {
           const err = validator.validateToken(input);
           return err || true;
         },
-        when: answers => (answers.ideName || adder.presetIdeName) === 'codex'
+        when: answers => (answers.ideName || adder.presetIdeName) === 'codex' && answers.authMode !== 'chatgpt_login'
+      },
+      {
+        type: 'confirm',
+        name: 'confirmCodexLogin',
+        message: 'Codex 将使用官方 OpenAI 网页登录方式，启动时需要在浏览器中登录。确认继续?',
+        default: true,
+        when: answers => (answers.ideName || adder.presetIdeName) === 'codex' && answers.authMode === 'chatgpt_login'
       },
       {
         type: 'confirm',

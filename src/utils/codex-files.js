@@ -404,11 +404,49 @@ async function applyCodexConfig(config, options = {}) {
   return { codexHome };
 }
 
+/**
+ * 清理 AKM 的 Codex 配置，让 Codex 使用官方网页登录
+ * 删除 auth.json（这样 Codex 会提示登录）
+ * 清理 config.toml 中的 [model_providers.akm] 配置
+ * @param {object} options - 选项
+ * @returns {Promise<{codexHome: string}>}
+ */
+async function clearCodexAkmConfig(options = {}) {
+  try {
+    const codexHome = await ensureCodexHome(options.codexHome);
+    const { configTomlPath, authJsonPath } = buildCodexPaths(codexHome);
+
+    // 备份当前配置
+    await backupCodexFiles(codexHome);
+
+    // 如果 auth.json 存在就删除它（chatgpt_login 模式不需要）
+    if (await fs.pathExists(authJsonPath)) {
+      await fs.remove(authJsonPath);
+    }
+
+    // 清理 config.toml 中的 AKM 配置
+    if (await fs.pathExists(configTomlPath)) {
+      const existingToml = await fs.readFile(configTomlPath, 'utf8');
+      const cleanedToml = removeAkmModelProvider(removeTopLevelApiBaseUrl(existingToml));
+
+      if (cleanedToml !== existingToml) {
+        await writeFileAtomic(configTomlPath, cleanedToml, { encoding: 'utf8', mode: 0o600 });
+        await setSecurePermissions(configTomlPath);
+      }
+    }
+
+    return { codexHome };
+  } catch (error) {
+    throw new Error(`清理 Codex AKM 配置失败: ${error.message}`, { cause: error });
+  }
+}
+
 module.exports = {
   resolveCodexHome,
   buildCodexPaths,
   readCodexFiles,
   applyCodexConfig,
+  clearCodexAkmConfig,
   backupCodexFiles,
   removeTopLevelApiBaseUrl,
   removeAkmModelProvider,

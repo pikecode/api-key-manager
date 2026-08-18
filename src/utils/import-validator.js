@@ -21,7 +21,7 @@ const providerSchema = {
     displayName: nullableString,
     alias: nullableString,
     ideName: { enum: ['claude', 'codex'] },
-    authMode: { enum: ['api_key', 'api_token', 'auth_token', 'openai_api_key', null] },
+    authMode: { enum: ['api_key', 'api_token', 'auth_token', 'openai_api_key', 'chatgpt_login', null] },
     authToken: { type: ['string', 'null'], maxLength: 16384 },
     baseUrl: { type: ['string', 'null'], maxLength: 2048 },
     models: {

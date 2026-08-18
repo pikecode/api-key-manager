@@ -11,7 +11,7 @@ jest.mock('../src/utils/codex-files');
 const spawn = require('cross-spawn');
 const { executeCodexWithEnv, buildCodexEnvVariables } = require('../src/utils/codex-launcher');
 const { sanitizeEnvValue, clearTerminal } = require('../src/utils/env-utils');
-const { applyCodexConfig } = require('../src/utils/codex-files');
+const { applyCodexConfig, clearCodexAkmConfig } = require('../src/utils/codex-files');
 
 describe('Codex Launcher', () => {
   const originalEnv = process.env;
@@ -265,6 +265,103 @@ describe('Codex Launcher', () => {
       await executeCodexWithEnv(config);
 
       expect(applyCodexConfig).toHaveBeenCalledWith(config);
+    });
+
+    it('chatgpt_login 模式应该调用 clearCodexAkmConfig', async () => {
+      const config = {
+        name: 'test-codex-official',
+        ideName: 'codex',
+        authMode: 'chatgpt_login'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(0), 0);
+        }
+      });
+
+      await executeCodexWithEnv(config);
+
+      expect(clearCodexAkmConfig).toHaveBeenCalled();
+      expect(applyCodexConfig).not.toHaveBeenCalled();
+    });
+
+    it('chatgpt_login 模式不需要 authToken', async () => {
+      const config = {
+        name: 'test-official',
+        ideName: 'codex',
+        authMode: 'chatgpt_login',
+        authToken: null
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(0), 0);
+        }
+      });
+
+      await expect(executeCodexWithEnv(config)).resolves.toBeUndefined();
+    });
+  });
+
+  describe('authMode handling', () => {
+    it('chatgpt_login 模式不设置环境变量', () => {
+      process.env.OPENAI_API_KEY = 'existing-key';
+      const config = {
+        name: 'test-official',
+        authMode: 'chatgpt_login'
+      };
+
+      const env = buildCodexEnvVariables(config);
+
+      expect(env.OPENAI_API_KEY).toBeUndefined();
+      expect(env.OPENAI_BASE_URL).toBeUndefined();
+    });
+
+    it('缺少 authMode 时默认为 api_key', () => {
+      const config = {
+        name: 'test-codex',
+        authToken: 'sk-legacy-key'
+        // authMode 未设置
+      };
+
+      const env = buildCodexEnvVariables(config);
+
+      expect(env.OPENAI_API_KEY).toBe('sk-legacy-key');
+    });
+
+    it('从 api_key 模式切换到 chatgpt_login 时清理旧文件', async () => {
+      const config1 = {
+        name: 'test-codex',
+        ideName: 'codex',
+        authMode: 'api_key',
+        authToken: 'sk-old-key'
+      };
+
+      const config2 = {
+        name: 'test-codex',
+        ideName: 'codex',
+        authMode: 'chatgpt_login'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(0), 0);
+        }
+      });
+
+      // 先用 api_key 模式启动
+      await executeCodexWithEnv(config1);
+      expect(applyCodexConfig).toHaveBeenCalledWith(config1);
+
+      // 重置 mock
+      applyCodexConfig.mockClear();
+      clearCodexAkmConfig.mockClear();
+
+      // 然后切换到 chatgpt_login 模式
+      await executeCodexWithEnv(config2);
+      expect(clearCodexAkmConfig).toHaveBeenCalled();
+      expect(applyCodexConfig).not.toHaveBeenCalled();
     });
   });
 });

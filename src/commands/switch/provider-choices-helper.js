@@ -49,8 +49,13 @@ class ProviderChoicesHelper {
       : chalk.magenta('[Claude]');
     const lastUsedLabel = isLastUsed ? UIHelper.colors.muted(' --- 上次使用') : '';
 
+    // 官方登录特殊标记
+    const authModeLabel = provider.authMode === 'chatgpt_login'
+      ? chalk.green(' 🌐 官方登录')
+      : '';
+
     return {
-      name: `${icon} ${ideTag} ${UIHelper.formatProvider(provider)}${lastUsedLabel} ${statusLabel}`,
+      name: `${icon} ${ideTag} ${UIHelper.formatProvider(provider)}${authModeLabel}${lastUsedLabel} ${statusLabel}`,
       value: provider.name,
       short: provider.name
     };
