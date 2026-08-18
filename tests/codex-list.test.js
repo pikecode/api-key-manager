@@ -1,4 +1,3 @@
-const { ProviderLister } = require('../src/commands/list');
 const { ConfigManager } = require('../src/config');
 const path = require('path');
 const fs = require('fs-extra');
@@ -7,7 +6,6 @@ const os = require('os');
 describe('Codex Official Config in List', () => {
   let configPath;
   let configManager;
-  let lister;
   let tmpDir;
 
   beforeEach(async () => {
@@ -16,7 +14,6 @@ describe('Codex Official Config in List', () => {
     configPath = path.join(tmpDir, '.akm.json');
     configManager = new ConfigManager(configPath);
     await configManager.ensureLoaded();
-    lister = new ProviderLister(configManager);
   });
 
   afterEach(() => {
