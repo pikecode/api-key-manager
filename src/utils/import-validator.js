@@ -165,7 +165,7 @@ function validateAndNormalizeData(data, source) {
       ideName,
       authMode:
         ideName === 'codex'
-          ? null
+          ? provider.authMode || null
           : provider.authMode === 'api_token'
             ? 'auth_token'
             : provider.authMode || 'api_key',

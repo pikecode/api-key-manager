@@ -383,8 +383,9 @@ class ConfigManager {
         smallFast: smallFastModel
       };
     } else {
-      // Codex 不需要这些字段，设置为 null 以保持向后兼容
-      newProvider.authMode = null;
+      // Codex 支持 authMode（api_key 或 chatgpt_login）
+      const authMode = providerConfig.authMode || existing?.authMode || null;
+      newProvider.authMode = authMode;
       newProvider.models = null;
     }
 
