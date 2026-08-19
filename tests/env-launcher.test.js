@@ -283,6 +283,28 @@ describe('Environment Launcher', () => {
       await expect(executeWithEnv(config)).rejects.toThrow('退出代码: 1');
     });
 
+    it('应该检测"No conversation found"错误', async () => {
+      const config = {
+        name: 'test-provider',
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(1), 0);
+        }
+      });
+
+      mockChild.stderr.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => callback(Buffer.from('No conversation found to continue')), 0);
+        }
+      });
+
+      await expect(executeWithEnv(config, ['--continue'])).rejects.toThrow('没有可恢复的会话');
+    });
+
     it('应该处理 ENOENT 错误', async () => {
       const config = {
         name: 'test-provider',
