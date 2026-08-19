@@ -1,4 +1,4 @@
-const { hasCodexSessionHistory, getCodexLaunchArgsWithHistory, getClaudeLaunchArgsWithHistory } = require('../src/utils/launch-args');
+const { hasCodexSessionHistory, getCodexLaunchArgsWithHistory } = require('../src/utils/launch-args');
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
@@ -156,33 +156,17 @@ describe('Session History Detection', () => {
   });
 
   describe('Claude Code Session History', () => {
-    it('应该在没有历史文件时禁用 --continue 选项', async () => {
-      // 直接测试，不依赖 HOME 环境变量
-      const args = await getClaudeLaunchArgsWithHistory(false);
+    it('Claude Code 参数应该始终可用 - 让用户自由选择', () => {
+      // Claude Code 的 --continue 选项不再被禁用
+      // 用户可以自由选择是否继续上次对话
+      // 如果没有可用的会话，Claude Code 会自己处理
+      const { getClaudeLaunchArgs } = require('../src/utils/launch-args');
+      const args = getClaudeLaunchArgs();
       const continueArg = args.find(arg => arg.name === '--continue');
+
       expect(continueArg).toBeDefined();
+      expect(continueArg.disabled).toBeFalsy();
       expect(continueArg.description).toBe('恢复上次的对话记录');
-    });
-
-    it('getClaudeLaunchArgsWithHistory 应该返回包含 --continue 选项的数组', async () => {
-      const args = await getClaudeLaunchArgsWithHistory(false);
-      const continueArg = args.find(arg => arg.name === '--continue');
-      expect(continueArg).toBeDefined();
-    });
-
-    it('filterByHistory=true 时应该检查历史并禁用选项', async () => {
-      const args = await getClaudeLaunchArgsWithHistory(true);
-      const continueArg = args.find(arg => arg.name === '--continue');
-      expect(continueArg).toBeDefined();
-      // 实际用户环境有历史，所以不应该被禁用
-      // 但如果没有历史，应该有 disabled: true
-    });
-
-    it('应该包含所有 Claude 启动参数', async () => {
-      const args = await getClaudeLaunchArgsWithHistory(false);
-      expect(args.length).toBeGreaterThan(0);
-      expect(args.some(arg => arg.name === '--continue')).toBe(true);
-      expect(args.some(arg => arg.name === '--dangerously-skip-permissions')).toBe(true);
     });
   });
 });

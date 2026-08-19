@@ -91,13 +91,13 @@ class EnvSwitcher extends BaseCommand {
       const provider = await this.validateProvider(providerName);
       const isCodex = provider.ideName === 'codex';
 
-      // 根据 IDE 类型检查会话历史并获取过滤后的参数
+      // 只对 Codex 检查会话历史，Claude Code 让用户自由选择
       let availableArgs;
-      const { getCodexLaunchArgsWithHistory, getClaudeLaunchArgsWithHistory } = require('../utils/launch-args');
       if (isCodex) {
+        const { getCodexLaunchArgsWithHistory } = require('../utils/launch-args');
         availableArgs = await getCodexLaunchArgsWithHistory(true);
       } else {
-        availableArgs = await getClaudeLaunchArgsWithHistory(true);
+        availableArgs = LaunchArgsHelper.getAvailableLaunchArgs(isCodex);
       }
 
       const defaultLaunchArgs = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0
