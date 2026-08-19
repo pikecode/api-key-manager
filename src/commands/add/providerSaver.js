@@ -57,7 +57,7 @@ async function saveProvider(adder, answers) {
 
     // 如果是首个 Codex 配置，自动创建官方登录配置
     if (answers.ideName === 'codex') {
-      const existingCodexProviders = Object.values(adder.configManager.getAllProviders())
+      const existingCodexProviders = adder.configManager.listProviders()
         .filter(p => p.ideName === 'codex');
 
       // 只有当刚才添加的是第一个 Codex 配置，且没有官方配置时才创建
