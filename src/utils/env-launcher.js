@@ -59,16 +59,31 @@ async function executeWithEnv(config, launchArgs = []) {
 
   return new Promise((resolve, reject) => {
     const child = spawn('claude', args, {
-      stdio: 'inherit',
+      stdio: ['inherit', 'inherit', 'pipe'],
       env,
       shell: false
+    });
+
+    let stderrOutput = '';
+
+    // 捕获 stderr 用于检查错误信息
+    child.stderr.on('data', (data) => {
+      const output = data.toString();
+      stderrOutput += output;
+      // 同时输出 stderr 给用户
+      process.stderr.write(data);
     });
 
     child.on('close', (code, signal) => {
       if (code === 0 || code === 130 || signal === 'SIGINT') {
         resolve();
       } else {
-        reject(new Error(`Claude Code 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
+        // 检查是否是"没有可恢复会话"的错误
+        if (stderrOutput.includes('No conversation found to continue')) {
+          reject(new Error('没有可恢复的会话\n提示: 请选择不带 --continue 参数重新开始'));
+        } else {
+          reject(new Error(`Claude Code 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
+        }
       }
     });
 
