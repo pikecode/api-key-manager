@@ -369,6 +369,33 @@ describe('Environment Launcher', () => {
       }
     });
 
+    it('应该检测"no deferred tool marker"错误', async () => {
+      const config = {
+        name: 'test-provider',
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(1), 0);
+        }
+      });
+
+      mockChild.stderr.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => callback(Buffer.from('Error: No deferred tool marker found in the resumed session')), 0);
+        }
+      });
+
+      try {
+        await executeWithEnv(config, ['--continue']);
+        expect(true).toBe(false);
+      } catch (error) {
+        expect(error.code).toBe('NO_CONVERSATION_FOUND');
+      }
+    });
+
     it('应该处理 ENOENT 错误', async () => {
       const config = {
         name: 'test-provider',

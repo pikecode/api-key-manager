@@ -85,11 +85,12 @@ async function executeWithEnv(config, launchArgs = []) {
         resolve();
       } else {
         // 检查是否是"没有可恢复会话"的错误
-        // 检查 stdout 和 stderr 中是否包含错误消息
+        // 检查 stdout 和 stderr 中是否包含各种格式的错误消息
         const combinedOutput = (stderrOutput + stdoutOutput).toLowerCase();
         const isNoConversationError =
           combinedOutput.includes('no conversation found') ||
-          combinedOutput.includes('no recoverable session');
+          combinedOutput.includes('no recoverable session') ||
+          combinedOutput.includes('no deferred tool marker');
 
         if (isNoConversationError) {
           const error = new Error('没有可恢复的会话\n提示: 请选择不带 --continue 参数重新开始');
