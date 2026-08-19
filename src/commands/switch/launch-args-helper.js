@@ -63,11 +63,18 @@ class LaunchArgsHelper {
         ? ` ${UIHelper.colors.muted(arg.description)}`
         : '';
 
-      return {
+      const choice = {
         name: `${UIHelper.colors.accent(arg.label || arg.name)} ${commandText}${descriptionText}`,
         value: arg.name,
         checked: Boolean(arg.checked)
       };
+
+      // 添加禁用状态支持
+      if (arg.disabled) {
+        choice.disabled = arg.disabled;
+      }
+
+      return choice;
     });
   }
 

@@ -3,6 +3,10 @@
  * 统一管理 Claude Code 和 Codex CLI 的启动参数
  */
 
+const fs = require('fs-extra');
+const path = require('path');
+const os = require('os');
+
 const claudeLaunchArgs = [
   {
     name: '--continue',
@@ -144,12 +148,71 @@ function checkExclusiveArgs(selectedArgs, availableArgs) {
   return null;
 }
 
+/**
+ * 检查 Codex 是否有会话历史
+ * @returns {Promise<boolean>} 如果存在会话历史返回 true
+ */
+async function hasCodexSessionHistory() {
+  try {
+    const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
+
+    // 检查会话目录中是否有实际的会话数据
+    const sessionsDir = path.join(codexHome, 'sessions');
+    if (await fs.pathExists(sessionsDir)) {
+      const entries = await fs.readdir(sessionsDir);
+      if (entries.length > 0) {
+        return true;
+      }
+    }
+
+    // 检查会话历史数据库是否存在且非空
+    const threadHistoryDb = path.join(codexHome, 'thread_history_1.sqlite');
+    if (await fs.pathExists(threadHistoryDb)) {
+      const stat = await fs.stat(threadHistoryDb);
+      if (stat.size > 0) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 获取 Codex 启动参数，根据会话历史动态禁用/隐藏 resume 选项
+ * @param {boolean} filterByHistory - 是否根据会话历史过滤参数（默认 true）
+ * @returns {Promise<Array>} 可用的启动参数数组
+ */
+async function getCodexLaunchArgsWithHistory(filterByHistory = true) {
+  const args = codexLaunchArgs.map(arg => ({ ...arg }));
+
+  if (!filterByHistory) {
+    return args;
+  }
+
+  const hasHistory = await hasCodexSessionHistory();
+  if (!hasHistory) {
+    // 如果没有会话历史，标记 resume 选项为禁用
+    const resumeArg = args.find(arg => arg.name === 'resume');
+    if (resumeArg) {
+      resumeArg.disabled = true;
+      resumeArg.description = '没有可用的会话历史';
+    }
+  }
+
+  return args;
+}
+
 module.exports = {
   getClaudeLaunchArgs,
   getCodexLaunchArgs,
+  getCodexLaunchArgsWithHistory,
   getLaunchArgs,
   checkExclusiveArgs,
   validateLaunchArgs,
   assertSupportedLaunchArgs,
-  assertSafeImportLaunchArgs
+  assertSafeImportLaunchArgs,
+  hasCodexSessionHistory
 };

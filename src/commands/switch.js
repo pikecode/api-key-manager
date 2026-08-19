@@ -90,7 +90,15 @@ class EnvSwitcher extends BaseCommand {
       this.clearScreen();
       const provider = await this.validateProvider(providerName);
       const isCodex = provider.ideName === 'codex';
-      const availableArgs = LaunchArgsHelper.getAvailableLaunchArgs(isCodex);
+
+      // 对于 Codex，检查会话历史并获取过滤后的参数
+      let availableArgs;
+      if (isCodex) {
+        const { getCodexLaunchArgsWithHistory } = require('../utils/launch-args');
+        availableArgs = await getCodexLaunchArgsWithHistory(true);
+      } else {
+        availableArgs = LaunchArgsHelper.getAvailableLaunchArgs(isCodex);
+      }
 
       const defaultLaunchArgs = Array.isArray(provider.lastUsedArgs) && provider.lastUsedArgs.length > 0
         ? provider.lastUsedArgs
