@@ -1,4 +1,4 @@
-const { hasCodexSessionHistory, getCodexLaunchArgsWithHistory, hasClaudeSessionHistory, getClaudeLaunchArgsWithHistory } = require('../src/utils/launch-args');
+const { hasCodexSessionHistory, getCodexLaunchArgsWithHistory, getClaudeLaunchArgsWithHistory } = require('../src/utils/launch-args');
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');

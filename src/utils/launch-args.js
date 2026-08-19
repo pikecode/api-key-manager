@@ -262,6 +262,5 @@ module.exports = {
   validateLaunchArgs,
   assertSupportedLaunchArgs,
   assertSafeImportLaunchArgs,
-  hasCodexSessionHistory,
-  hasClaudeSessionHistory
+  hasCodexSessionHistory
 };
