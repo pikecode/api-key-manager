@@ -181,6 +181,28 @@ async function hasCodexSessionHistory() {
 }
 
 /**
+ * 检查 Claude Code 是否有会话历史
+ * @returns {Promise<boolean>} 如果存在会话历史返回 true
+ */
+async function hasClaudeSessionHistory() {
+  try {
+    const claudeHome = path.join(os.homedir(), '.claude');
+    const historyFile = path.join(claudeHome, 'history.jsonl');
+
+    if (await fs.pathExists(historyFile)) {
+      const stat = await fs.stat(historyFile);
+      if (stat.size > 0) {
+        return true;
+      }
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * 获取 Codex 启动参数，根据会话历史动态禁用/隐藏 resume 选项
  * @param {boolean} filterByHistory - 是否根据会话历史过滤参数（默认 true）
  * @returns {Promise<Array>} 可用的启动参数数组
@@ -205,14 +227,41 @@ async function getCodexLaunchArgsWithHistory(filterByHistory = true) {
   return args;
 }
 
+/**
+ * 获取 Claude Code 启动参数，根据会话历史动态禁用/隐藏 --continue 选项
+ * @param {boolean} filterByHistory - 是否根据会话历史过滤参数（默认 true）
+ * @returns {Promise<Array>} 可用的启动参数数组
+ */
+async function getClaudeLaunchArgsWithHistory(filterByHistory = true) {
+  const args = claudeLaunchArgs.map(arg => ({ ...arg }));
+
+  if (!filterByHistory) {
+    return args;
+  }
+
+  const hasHistory = await hasClaudeSessionHistory();
+  if (!hasHistory) {
+    // 如果没有会话历史，标记 --continue 选项为禁用
+    const continueArg = args.find(arg => arg.name === '--continue');
+    if (continueArg) {
+      continueArg.disabled = true;
+      continueArg.description = '没有可用的会话历史';
+    }
+  }
+
+  return args;
+}
+
 module.exports = {
   getClaudeLaunchArgs,
   getCodexLaunchArgs,
+  getClaudeLaunchArgsWithHistory,
   getCodexLaunchArgsWithHistory,
   getLaunchArgs,
   checkExclusiveArgs,
   validateLaunchArgs,
   assertSupportedLaunchArgs,
   assertSafeImportLaunchArgs,
-  hasCodexSessionHistory
+  hasCodexSessionHistory,
+  hasClaudeSessionHistory
 };
