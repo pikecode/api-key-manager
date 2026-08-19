@@ -80,7 +80,9 @@ async function executeWithEnv(config, launchArgs = []) {
       } else {
         // 检查是否是"没有可恢复会话"的错误
         if (stderrOutput.includes('No conversation found to continue')) {
-          reject(new Error('没有可恢复的会话\n提示: 请选择不带 --continue 参数重新开始'));
+          const error = new Error('没有可恢复的会话\n提示: 请选择不带 --continue 参数重新开始');
+          error.code = 'NO_CONVERSATION_FOUND';
+          reject(error);
         } else {
           reject(new Error(`Claude Code 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
         }

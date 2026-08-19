@@ -302,7 +302,13 @@ describe('Environment Launcher', () => {
         }
       });
 
-      await expect(executeWithEnv(config, ['--continue'])).rejects.toThrow('没有可恢复的会话');
+      try {
+        await executeWithEnv(config, ['--continue']);
+        expect(true).toBe(false); // 应该抛出错误
+      } catch (error) {
+        expect(error.message).toContain('没有可恢复的会话');
+        expect(error.code).toBe('NO_CONVERSATION_FOUND');
+      }
     });
 
     it('应该处理 ENOENT 错误', async () => {

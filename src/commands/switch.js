@@ -195,7 +195,7 @@ class EnvSwitcher extends BaseCommand {
 
         // 如果是 Claude Code 的"没有可恢复的会话"错误，自动移除 --continue 参数并重试
         if (!isCodex &&
-            error.message.includes('没有可恢复的会话') &&
+            error.code === 'NO_CONVERSATION_FOUND' &&
             selectedLaunchArgs.includes('--continue')) {
           Logger.info('会话不可用，自动移除 --continue 参数重新启动...');
           console.log();
