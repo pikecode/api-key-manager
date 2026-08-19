@@ -108,7 +108,7 @@ async function promptProviderInfo(adder) {
             await adder.configManager.ensureLoaded();
             const hasOfficialConfig = adder.configManager.getProvider('openai-official');
             return !hasOfficialConfig;
-          } catch (error) {
+          } catch {
             // 如果加载失败，仍然显示选择提示
             return true;
           }
