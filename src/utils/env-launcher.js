@@ -59,18 +59,24 @@ async function executeWithEnv(config, launchArgs = []) {
 
   return new Promise((resolve, reject) => {
     const child = spawn('claude', args, {
-      stdio: ['inherit', 'inherit', 'pipe'],
+      stdio: ['inherit', 'pipe', 'pipe'],
       env,
       shell: false
     });
 
     let stderrOutput = '';
+    let stdoutOutput = '';
 
-    // 捕获 stderr 用于检查错误信息
+    // 捕获 stdout 和 stderr 用于检查错误信息
+    child.stdout.on('data', (data) => {
+      const output = data.toString();
+      stdoutOutput += output;
+      process.stdout.write(data);
+    });
+
     child.stderr.on('data', (data) => {
       const output = data.toString();
       stderrOutput += output;
-      // 同时输出 stderr 给用户
       process.stderr.write(data);
     });
 
@@ -79,7 +85,13 @@ async function executeWithEnv(config, launchArgs = []) {
         resolve();
       } else {
         // 检查是否是"没有可恢复会话"的错误
-        if (stderrOutput.includes('No conversation found to continue')) {
+        // 检查 stdout 和 stderr 中是否包含错误消息
+        const combinedOutput = (stderrOutput + stdoutOutput).toLowerCase();
+        const isNoConversationError =
+          combinedOutput.includes('no conversation found') ||
+          combinedOutput.includes('no recoverable session');
+
+        if (isNoConversationError) {
           const error = new Error('没有可恢复的会话\n提示: 请选择不带 --continue 参数重新开始');
           error.code = 'NO_CONVERSATION_FOUND';
           reject(error);

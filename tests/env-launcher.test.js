@@ -25,6 +25,9 @@ describe('Environment Launcher', () => {
     // Mock spawn child process
     mockChild = {
       on: jest.fn(),
+      stdout: {
+        on: jest.fn()
+      },
       stderr: {
         on: jest.fn()
       }
