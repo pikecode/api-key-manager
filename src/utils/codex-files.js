@@ -321,6 +321,47 @@ async function shouldRemoveAuthJsonForChatGptLogin(authJsonPath) {
   return data.auth_mode === 'apikey' || Object.prototype.hasOwnProperty.call(data, 'OPENAI_API_KEY');
 }
 
+function isChatGptLoginAuth(data) {
+  return Boolean(
+    data &&
+      typeof data === 'object' &&
+      !Array.isArray(data) &&
+      data.auth_mode &&
+      data.auth_mode !== 'apikey' &&
+      Object.prototype.hasOwnProperty.call(data, 'tokens')
+  );
+}
+
+async function findLatestChatGptLoginAuthBackup(codexHome) {
+  const backupRoot = path.join(codexHome, BACKUP_DIR_NAME);
+  if (!(await fs.pathExists(backupRoot))) {
+    return null;
+  }
+
+  const backupDirectories = (await fs.readdir(backupRoot))
+    .filter(name => name.startsWith('backup-'))
+    .sort()
+    .reverse();
+
+  for (const backupName of backupDirectories) {
+    const backupAuthPath = path.join(backupRoot, backupName, AUTH_JSON_FILE);
+    if (!(await fs.pathExists(backupAuthPath))) {
+      continue;
+    }
+
+    try {
+      const data = await fs.readJson(backupAuthPath);
+      if (isChatGptLoginAuth(data)) {
+        return backupAuthPath;
+      }
+    } catch {
+      // 跳过损坏的备份，继续寻找更早的可用登录态。
+    }
+  }
+
+  return null;
+}
+
 async function readFileSnapshot(filePath) {
   if (!(await fs.pathExists(filePath))) {
     return { exists: false, content: null, mode: 0o600 };
@@ -444,7 +485,13 @@ async function clearCodexAkmConfig(options = {}) {
 
     // 只移除 API Key 认证文件，避免破坏 Codex 官方网页登录态。
     if (await shouldRemoveAuthJsonForChatGptLogin(authJsonPath)) {
-      await fs.remove(authJsonPath);
+      const backupAuthPath = await findLatestChatGptLoginAuthBackup(codexHome);
+      if (backupAuthPath) {
+        await fs.copy(backupAuthPath, authJsonPath);
+        await setSecurePermissions(authJsonPath);
+      } else {
+        await fs.remove(authJsonPath);
+      }
     }
 
     // 清理 config.toml 中的 AKM 配置

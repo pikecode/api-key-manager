@@ -448,6 +448,28 @@ describe('applyCodexConfig with baseUrl', () => {
     expect(await fs.readJson(authJsonPath)).toEqual(loginAuth);
   });
 
+  test('clearCodexAkmConfig 从备份恢复 Codex 官方网页登录态', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    const loginAuth = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'existing-session' },
+      last_refresh: '2026-08-19T00:00:00.000Z',
+      OPENAI_API_KEY: 'official-derived-key'
+    };
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, loginAuth);
+
+    await applyCodexConfig({ authToken: 'proxy-key', name: 'proxy' });
+    expect(await fs.readJson(authJsonPath)).toEqual({
+      auth_mode: 'apikey',
+      OPENAI_API_KEY: 'proxy-key'
+    });
+
+    await clearCodexAkmConfig();
+
+    expect(await fs.readJson(authJsonPath)).toEqual(loginAuth);
+  });
+
   test('clearCodexAkmConfig 移除 API Key 认证文件', async () => {
     const { authJsonPath } = buildCodexPaths(codexHome);
     await fs.ensureDir(codexHome);
