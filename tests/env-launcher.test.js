@@ -286,7 +286,7 @@ describe('Environment Launcher', () => {
       await expect(executeWithEnv(config)).rejects.toThrow('退出代码: 1');
     });
 
-    it('应该检测"No conversation found"错误', async () => {
+    it('应该检测 stderr 中的"No conversation found"错误', async () => {
       const config = {
         name: 'test-provider',
         authMode: 'auth_token',
@@ -307,9 +307,64 @@ describe('Environment Launcher', () => {
 
       try {
         await executeWithEnv(config, ['--continue']);
-        expect(true).toBe(false); // 应该抛出错误
+        expect(true).toBe(false);
       } catch (error) {
         expect(error.message).toContain('没有可恢复的会话');
+        expect(error.code).toBe('NO_CONVERSATION_FOUND');
+      }
+    });
+
+    it('应该检测 stdout 中的"No conversation found"错误', async () => {
+      const config = {
+        name: 'test-provider',
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(1), 0);
+        }
+      });
+
+      mockChild.stdout.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => callback(Buffer.from('No conversation found to continue')), 0);
+        }
+      });
+
+      try {
+        await executeWithEnv(config, ['--continue']);
+        expect(true).toBe(false);
+      } catch (error) {
+        expect(error.message).toContain('没有可恢复的会话');
+        expect(error.code).toBe('NO_CONVERSATION_FOUND');
+      }
+    });
+
+    it('应该检测 stdout 中的小写"no conversation found"', async () => {
+      const config = {
+        name: 'test-provider',
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(1), 0);
+        }
+      });
+
+      mockChild.stdout.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => callback(Buffer.from('error: no conversation found')), 0);
+        }
+      });
+
+      try {
+        await executeWithEnv(config, ['--continue']);
+        expect(true).toBe(false);
+      } catch (error) {
         expect(error.code).toBe('NO_CONVERSATION_FOUND');
       }
     });

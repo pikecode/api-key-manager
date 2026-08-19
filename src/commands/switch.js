@@ -193,15 +193,6 @@ class EnvSwitcher extends BaseCommand {
       } catch (error) {
         UIHelper.clearLoadingAnimation(loadingInterval);
 
-        // Debug 日志
-        console.error('[DEBUG] Error caught:', {
-          code: error.code,
-          isCodex: isCodex,
-          hasNoConversationCode: error.code === 'NO_CONVERSATION_FOUND',
-          hasContinue: selectedLaunchArgs.includes('--continue'),
-          message: error.message?.substring(0, 50)
-        });
-
         // 如果是 Claude Code 的"没有可恢复的会话"错误，自动移除 --continue 参数并重试
         if (!isCodex &&
             error.code === 'NO_CONVERSATION_FOUND' &&
