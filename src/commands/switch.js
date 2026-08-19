@@ -192,7 +192,31 @@ class EnvSwitcher extends BaseCommand {
 
       } catch (error) {
         UIHelper.clearLoadingAnimation(loadingInterval);
-        throw error;
+
+        // 如果是 Claude Code 的"没有可恢复的会话"错误，自动移除 --continue 参数并重试
+        if (!isCodex &&
+            error.message.includes('没有可恢复的会话') &&
+            selectedLaunchArgs.includes('--continue')) {
+          Logger.info('会话不可用，自动移除 --continue 参数重新启动...');
+          console.log();
+
+          const retryArgs = selectedLaunchArgs.filter(arg => arg !== '--continue');
+          const retryLoadingInterval = UIHelper.createLoadingAnimation('正在重新启动（无历史恢复）...');
+
+          try {
+            await markProviderAsCurrent(this.configManager, provider, retryArgs);
+            UIHelper.clearLoadingAnimation(retryLoadingInterval);
+
+            console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
+            console.log();
+            await launchProviderProcess(provider, retryArgs);
+          } catch (retryError) {
+            UIHelper.clearLoadingAnimation(retryLoadingInterval);
+            throw retryError;
+          }
+        } else {
+          throw error;
+        }
       }
 
     } catch (error) {
