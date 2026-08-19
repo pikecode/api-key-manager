@@ -86,7 +86,13 @@ async function promptProviderInfo(adder) {
           { name: UI_MESSAGES.AUTH_MODE_CODEX_CHATGPT_LOGIN, value: 'chatgpt_login' }
         ],
         default: 'api_key',
-        when: answers => (answers.ideName || adder.presetIdeName) === 'codex'
+        when: answers => {
+          const isCodex = (answers.ideName || adder.presetIdeName) === 'codex';
+          if (!isCodex) return false;
+          // 如果已经有官方配置了，就用 api_key 模式，不提示选择
+          const hasOfficialConfig = adder.configManager.getProvider('openai-official');
+          return !hasOfficialConfig;
+        }
       },
       {
         type: 'input',

@@ -66,8 +66,11 @@ class ProviderAdder extends BaseCommand {
       }
 
       if (answers.ideName === 'codex') {
-        // authMode 由用户在 prompts 中选择，不再强制覆盖
-        // 支持 api_key 和 chatgpt_login 两种模式
+        // authMode 由用户在 prompts 中选择，没有官方配置时才提示
+        // 如果已有官方配置，默认为 api_key
+        if (!answers.authMode) {
+          answers.authMode = 'api_key';
+        }
         answers.codexFiles = null;
 
         // Codex 启动参数配置
