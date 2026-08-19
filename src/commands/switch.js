@@ -193,7 +193,7 @@ class EnvSwitcher extends BaseCommand {
       } catch (error) {
         UIHelper.clearLoadingAnimation(loadingInterval);
 
-        // 如果是 Claude Code 的"没有可恢复的会话"错误，自动移除 --continue 参数并重试
+        // Claude Code: 如果是"没有可恢复的会话"错误，自动移除 --continue 参数并重试
         if (!isCodex &&
             error.code === 'NO_CONVERSATION_FOUND' &&
             selectedLaunchArgs.includes('--continue')) {
@@ -215,9 +215,33 @@ class EnvSwitcher extends BaseCommand {
             UIHelper.clearLoadingAnimation(retryLoadingInterval);
             throw retryError;
           }
-        } else {
-          throw error;
         }
+
+        // Codex: 如果是"会话被锁定"错误，自动移除 resume 参数并重试
+        if (isCodex &&
+            error.code === 'SESSION_LOCKED' &&
+            selectedLaunchArgs.includes('resume')) {
+          Logger.info('会话被锁定，自动移除 resume 参数重新启动...');
+          console.log();
+
+          const retryArgs = selectedLaunchArgs.filter(arg => arg !== 'resume');
+          const retryLoadingInterval = UIHelper.createLoadingAnimation('正在重新启动（新会话）...');
+
+          try {
+            await markProviderAsCurrent(this.configManager, provider, retryArgs);
+            UIHelper.clearLoadingAnimation(retryLoadingInterval);
+
+            console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
+            console.log();
+            await launchProviderProcess(provider, retryArgs);
+            return;
+          } catch (retryError) {
+            UIHelper.clearLoadingAnimation(retryLoadingInterval);
+            throw retryError;
+          }
+        }
+
+        throw error;
       }
 
     } catch (error) {

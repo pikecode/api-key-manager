@@ -57,9 +57,27 @@ describe('ProviderEditQuestionsHelper', () => {
     expect(questions.map(question => question.name)).toEqual([
       'name',
       'displayName',
+      'authMode',
       'baseUrl',
       'authToken'
     ]);
+  });
+
+  it('Codex 官方登录应该隐藏 API Key 相关字段', () => {
+    const officialProvider = {
+      ...codexProvider,
+      authMode: 'chatgpt_login',
+      baseUrl: null,
+      authToken: null
+    };
+    const questions = ProviderEditQuestionsHelper.buildQuestions(officialProvider, createValidator());
+    const baseUrlQuestion = questions.find(question => question.name === 'baseUrl');
+    const authTokenQuestion = questions.find(question => question.name === 'authToken');
+
+    expect(baseUrlQuestion.when({ authMode: 'chatgpt_login' })).toBe(false);
+    expect(authTokenQuestion.when({ authMode: 'chatgpt_login' })).toBe(false);
+    expect(baseUrlQuestion.when({ authMode: 'api_key' })).toBe(true);
+    expect(authTokenQuestion.when({ authMode: 'api_key' })).toBe(true);
   });
 
   it('Codex 认证字段应该显示 OPENAI_API_KEY', () => {

@@ -139,7 +139,11 @@ class ProviderManager {
           smallFast: answers.smallFastModel || null
         };
       } else {
-        updatedProvider.authMode = null;
+        updatedProvider.authMode = answers.authMode || provider.authMode || 'api_key';
+        if (updatedProvider.authMode === 'chatgpt_login') {
+          updatedProvider.baseUrl = null;
+          updatedProvider.authToken = null;
+        }
         updatedProvider.models = null;
       }
 

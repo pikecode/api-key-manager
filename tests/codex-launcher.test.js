@@ -27,7 +27,10 @@ describe('Codex Launcher', () => {
 
     // Mock spawn child process
     mockChild = {
-      on: jest.fn()
+      on: jest.fn(),
+      stderr: {
+        on: jest.fn()
+      }
     };
     spawn.mockReturnValue(mockChild);
 
@@ -362,6 +365,65 @@ describe('Codex Launcher', () => {
       await executeCodexWithEnv(config2);
       expect(clearCodexAkmConfig).toHaveBeenCalled();
       expect(applyCodexConfig).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Error Handling', () => {
+    it('应该检测"already has an active writer"错误', async () => {
+      const config = {
+        name: 'test-codex',
+        ideName: 'codex',
+        authMode: 'api_key',
+        authToken: 'sk-xxxxx'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(1), 0);
+        }
+      });
+
+      mockChild.stderr.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => callback(Buffer.from('Error: thread already has an active writer')), 0);
+        }
+      });
+
+      try {
+        await executeCodexWithEnv(config, ['resume']);
+        expect(true).toBe(false);
+      } catch (error) {
+        expect(error.code).toBe('SESSION_LOCKED');
+        expect(error.message).toContain('会话被锁定');
+      }
+    });
+
+    it('应该检测"failed to resume session"错误', async () => {
+      const config = {
+        name: 'test-codex',
+        ideName: 'codex',
+        authMode: 'api_key',
+        authToken: 'sk-xxxxx'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(1), 0);
+        }
+      });
+
+      mockChild.stderr.on.mockImplementation((event, callback) => {
+        if (event === 'data') {
+          setTimeout(() => callback(Buffer.from('Error: Failed to resume session')), 0);
+        }
+      });
+
+      try {
+        await executeCodexWithEnv(config, ['resume']);
+        expect(true).toBe(false);
+      } catch (error) {
+        expect(error.code).toBe('SESSION_LOCKED');
+      }
     });
   });
 });

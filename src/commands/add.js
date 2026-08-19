@@ -77,6 +77,11 @@ class ProviderAdder extends BaseCommand {
           answers.name = 'openai-official';
         }
 
+        if (answers.authMode === 'chatgpt_login' && answers.confirmCodexLogin === false) {
+          Logger.info('已取消添加 Codex 官方登录配置');
+          return;
+        }
+
         answers.codexFiles = null;
 
         // Codex 启动参数配置

@@ -434,6 +434,30 @@ describe('applyCodexConfig with baseUrl', () => {
     expect(backupDirs.length).toBeGreaterThan(0);
   });
 
+  test('clearCodexAkmConfig 保留 Codex 官方网页登录态', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    const loginAuth = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'existing-session' }
+    };
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, loginAuth);
+
+    await clearCodexAkmConfig();
+
+    expect(await fs.readJson(authJsonPath)).toEqual(loginAuth);
+  });
+
+  test('clearCodexAkmConfig 移除 API Key 认证文件', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, { auth_mode: 'apikey', OPENAI_API_KEY: 'sk-test' });
+
+    await clearCodexAkmConfig();
+
+    expect(await fs.pathExists(authJsonPath)).toBe(false);
+  });
+
   test('clearCodexAkmConfig 处理不存在的文件', async () => {
     // 不创建任何文件
     await expect(clearCodexAkmConfig()).resolves.toBeDefined();

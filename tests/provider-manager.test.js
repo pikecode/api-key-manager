@@ -71,4 +71,54 @@ describe('ProviderManager 编辑供应商', () => {
     expect(provider.displayName).toBe('旧显示名称');
     expect(onComplete).toHaveBeenCalledTimes(1);
   });
+
+  test('编辑 Codex 官方登录配置时保留认证模式且清空 API Key 字段', async () => {
+    const provider = {
+      name: 'openai-official',
+      displayName: 'OpenAI Official',
+      ideName: 'codex',
+      authMode: 'chatgpt_login',
+      authToken: null,
+      baseUrl: null,
+      launchArgs: [],
+      models: null,
+      current: true
+    };
+    const originalConfig = {
+      version: '2.0',
+      currentProvider: 'openai-official',
+      providers: { 'openai-official': provider }
+    };
+    const manager = new ProviderManager({
+      clearScreen: jest.fn(),
+      isEscCancelled: jest.fn(() => false),
+      promptWithESC: jest.fn().mockResolvedValue({
+        name: 'openai-official',
+        displayName: 'OpenAI Official',
+        authMode: 'chatgpt_login'
+      })
+    });
+    manager.configManager = {
+      config: originalConfig,
+      load: jest.fn().mockResolvedValue(),
+      getProvider: jest.fn(() => provider),
+      save: jest.fn().mockResolvedValue(true)
+    };
+    const onComplete = jest.fn();
+
+    await manager.editProvider('openai-official', onComplete);
+
+    expect(manager.configManager.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providers: expect.objectContaining({
+          'openai-official': expect.objectContaining({
+            authMode: 'chatgpt_login',
+            baseUrl: null,
+            authToken: null,
+            models: null
+          })
+        })
+      })
+    );
+  });
 });

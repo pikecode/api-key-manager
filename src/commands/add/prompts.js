@@ -32,6 +32,27 @@ async function promptProviderInfo(adder) {
         when: () => !adder.presetIdeName
       },
       {
+        type: 'list',
+        name: 'authMode',
+        message: UI_MESSAGES.SELECT_CODEX_AUTH_MODE,
+        choices: [
+          { name: UI_MESSAGES.AUTH_MODE_CODEX_API_KEY, value: 'api_key' },
+          { name: UI_MESSAGES.AUTH_MODE_CODEX_CHATGPT_LOGIN, value: 'chatgpt_login' }
+        ],
+        default: 'api_key',
+        when: async answers => {
+          const isCodex = (answers.ideName || adder.presetIdeName) === 'codex';
+          if (!isCodex) return false;
+          try {
+            await adder.configManager.ensureLoaded();
+            const hasOfficialConfig = adder.configManager.getProvider('openai-official');
+            return !hasOfficialConfig;
+          } catch {
+            return true;
+          }
+        }
+      },
+      {
         type: 'input',
         name: 'name',
         message: UI_MESSAGES.INPUT_PROVIDER_NAME,
@@ -91,29 +112,6 @@ async function promptProviderInfo(adder) {
         when: answers => (answers.ideName || adder.presetIdeName) !== 'codex'
       },
       // Codex‑specific prompts (manual entry)
-      {
-        type: 'list',
-        name: 'authMode',
-        message: UI_MESSAGES.SELECT_CODEX_AUTH_MODE,
-        choices: [
-          { name: UI_MESSAGES.AUTH_MODE_CODEX_API_KEY, value: 'api_key' },
-          { name: UI_MESSAGES.AUTH_MODE_CODEX_CHATGPT_LOGIN, value: 'chatgpt_login' }
-        ],
-        default: 'api_key',
-        when: async answers => {
-          const isCodex = (answers.ideName || adder.presetIdeName) === 'codex';
-          if (!isCodex) return false;
-          // 如果已经有官方配置了，就用 api_key 模式，不提示选择
-          try {
-            await adder.configManager.ensureLoaded();
-            const hasOfficialConfig = adder.configManager.getProvider('openai-official');
-            return !hasOfficialConfig;
-          } catch {
-            // 如果加载失败，仍然显示选择提示
-            return true;
-          }
-        }
-      },
       {
         type: 'input',
         name: 'baseUrl',

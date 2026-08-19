@@ -8,6 +8,8 @@ class ProviderEditQuestionsHelper {
 
     if (!isCodex) {
       questions.push(...this.buildClaudeQuestions(provider, validator));
+    } else {
+      questions.push(this.buildCodexAuthModeQuestion(provider));
     }
 
     questions.push(
@@ -86,6 +88,19 @@ class ProviderEditQuestionsHelper {
     ];
   }
 
+  static buildCodexAuthModeQuestion(provider) {
+    return {
+      type: 'list',
+      name: 'authMode',
+      message: 'Codex 认证方式:',
+      choices: [
+        { name: '🔑 API Key - 使用 OpenAI API Key', value: 'api_key' },
+        { name: '🌐 官方网页登录 - 使用 OpenAI 账号登录', value: 'chatgpt_login' }
+      ],
+      default: provider.authMode || 'api_key'
+    };
+  }
+
   static buildBaseUrlQuestion(provider, isCodex, validator) {
     return {
       type: 'input',
@@ -93,6 +108,7 @@ class ProviderEditQuestionsHelper {
       message: isCodex ? '基础URL (OPENAI_BASE_URL):' : '基础URL:',
       default: provider.baseUrl,
       prefillDefault: true,
+      when: answers => !isCodex || (answers.authMode || provider.authMode || 'api_key') !== 'chatgpt_login',
       validate: input => {
         if (typeof validator?.validateUrl !== 'function') return true;
         return validator.validateUrl(input, false) || true;
@@ -113,6 +129,7 @@ class ProviderEditQuestionsHelper {
       },
       default: provider.authToken,
       prefillDefault: true,
+      when: answers => !isCodex || (answers.authMode || provider.authMode || 'api_key') !== 'chatgpt_login',
       validate: input => {
         if (typeof validator?.validateToken !== 'function') return true;
         return validator.validateToken(input) || true;

@@ -298,6 +298,29 @@ async function readExistingAuthJson(authJsonPath) {
   }
 }
 
+async function shouldRemoveAuthJsonForChatGptLogin(authJsonPath) {
+  if (!(await fs.pathExists(authJsonPath))) {
+    return false;
+  }
+
+  let data;
+  try {
+    data = await fs.readJson(authJsonPath);
+  } catch {
+    return false;
+  }
+
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return false;
+  }
+
+  if (data.auth_mode && data.auth_mode !== 'apikey') {
+    return false;
+  }
+
+  return data.auth_mode === 'apikey' || Object.prototype.hasOwnProperty.call(data, 'OPENAI_API_KEY');
+}
+
 async function readFileSnapshot(filePath) {
   if (!(await fs.pathExists(filePath))) {
     return { exists: false, content: null, mode: 0o600 };
@@ -419,8 +442,8 @@ async function clearCodexAkmConfig(options = {}) {
     // 备份当前配置
     await backupCodexFiles(codexHome);
 
-    // 如果 auth.json 存在就删除它（chatgpt_login 模式不需要）
-    if (await fs.pathExists(authJsonPath)) {
+    // 只移除 API Key 认证文件，避免破坏 Codex 官方网页登录态。
+    if (await shouldRemoveAuthJsonForChatGptLogin(authJsonPath)) {
       await fs.remove(authJsonPath);
     }
 

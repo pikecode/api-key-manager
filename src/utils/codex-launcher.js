@@ -99,16 +99,38 @@ async function executeCodexWithEnv(config, launchArgs = []) {
 
   return new Promise((resolve, reject) => {
     const child = spawn('codex', args, {
-      stdio: 'inherit',
+      stdio: ['inherit', 'inherit', 'pipe'],
       env,
       shell: false
+    });
+
+    let stderrOutput = '';
+
+    // 捕获 stderr 用于检查错误信息
+    child.stderr.on('data', (data) => {
+      const output = data.toString();
+      stderrOutput += output;
+      process.stderr.write(data);
     });
 
     child.on('close', (code, signal) => {
       if (code === 0 || code === 130 || signal === 'SIGINT') {
         resolve();
       } else {
-        reject(new Error(`Codex CLI 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
+        // 检查是否是"会话被锁定"或"已有活跃写入者"的错误
+        const errorOutput = stderrOutput.toLowerCase();
+        const isSessionLockedError =
+          errorOutput.includes('already has an active writer') ||
+          errorOutput.includes('failed to resume session') ||
+          errorOutput.includes('thread already has an active');
+
+        if (isSessionLockedError) {
+          const error = new Error('会话被锁定或无法恢复\n提示: 请选择不带 resume 参数重新开始');
+          error.code = 'SESSION_LOCKED';
+          reject(error);
+        } else {
+          reject(new Error(`Codex CLI 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
+        }
       }
     });
 
