@@ -59,21 +59,14 @@ async function executeWithEnv(config, launchArgs = []) {
 
   return new Promise((resolve, reject) => {
     const child = spawn('claude', args, {
-      stdio: ['inherit', 'pipe', 'pipe'],
+      stdio: ['inherit', 'inherit', 'pipe'],
       env,
       shell: false
     });
 
     let stderrOutput = '';
-    let stdoutOutput = '';
 
-    // 捕获 stdout 和 stderr 用于检查错误信息
-    child.stdout.on('data', (data) => {
-      const output = data.toString();
-      stdoutOutput += output;
-      process.stdout.write(data);
-    });
-
+    // 捕获 stderr 用于检查错误信息
     child.stderr.on('data', (data) => {
       const output = data.toString();
       stderrOutput += output;
@@ -85,12 +78,12 @@ async function executeWithEnv(config, launchArgs = []) {
         resolve();
       } else {
         // 检查是否是"没有可恢复会话"的错误
-        // 检查 stdout 和 stderr 中是否包含各种格式的错误消息
-        const combinedOutput = (stderrOutput + stdoutOutput).toLowerCase();
+        // 检查 stderr 中是否包含各种格式的错误消息
+        const errorOutput = stderrOutput.toLowerCase();
         const isNoConversationError =
-          combinedOutput.includes('no conversation found') ||
-          combinedOutput.includes('no recoverable session') ||
-          combinedOutput.includes('no deferred tool marker');
+          errorOutput.includes('no conversation found') ||
+          errorOutput.includes('no recoverable session') ||
+          errorOutput.includes('no deferred tool marker');
 
         if (isNoConversationError) {
           const error = new Error('没有可恢复的会话\n提示: 请选择不带 --continue 参数重新开始');
