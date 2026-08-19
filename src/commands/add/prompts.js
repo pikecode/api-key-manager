@@ -38,6 +38,20 @@ async function promptProviderInfo(adder) {
         validate: input => {
           const err = validator.validateName(input);
           return err || true;
+        },
+        when: answers => {
+          // 如果选择了官方登录，直接用 "openai-official"，不需要输入名称
+          if ((answers.ideName || adder.presetIdeName) === 'codex' && answers.authMode === 'chatgpt_login') {
+            return false;
+          }
+          return true;
+        },
+        default: answers => {
+          // 官方登录模式下返回默认名称
+          if ((answers.ideName || adder.presetIdeName) === 'codex' && answers.authMode === 'chatgpt_login') {
+            return 'openai-official';
+          }
+          return undefined;
         }
       },
       {

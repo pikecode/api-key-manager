@@ -71,6 +71,12 @@ class ProviderAdder extends BaseCommand {
         if (!answers.authMode) {
           answers.authMode = 'api_key';
         }
+
+        // 官方登录模式下自动设置名称为 openai-official
+        if (answers.authMode === 'chatgpt_login' && !answers.name) {
+          answers.name = 'openai-official';
+        }
+
         answers.codexFiles = null;
 
         // Codex 启动参数配置
