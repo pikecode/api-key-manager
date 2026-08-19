@@ -183,12 +183,12 @@ class EnvSwitcher extends BaseCommand {
       const loadingInterval = UIHelper.createLoadingAnimation('正在设置环境...');
 
       try {
-        await markProviderAsCurrent(this.configManager, provider, selectedLaunchArgs);
+        const launchProvider = await markProviderAsCurrent(this.configManager, provider, selectedLaunchArgs);
         UIHelper.clearLoadingAnimation(loadingInterval);
 
         console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}...`, UIHelper.icons.success));
         console.log();
-        await launchProviderProcess(provider, selectedLaunchArgs);
+        await launchProviderProcess(launchProvider, selectedLaunchArgs);
 
       } catch (error) {
         UIHelper.clearLoadingAnimation(loadingInterval);
@@ -204,12 +204,12 @@ class EnvSwitcher extends BaseCommand {
           const retryLoadingInterval = UIHelper.createLoadingAnimation('正在重新启动（无历史恢复）...');
 
           try {
-            await markProviderAsCurrent(this.configManager, provider, retryArgs);
+            const retryProvider = await markProviderAsCurrent(this.configManager, provider, retryArgs);
             UIHelper.clearLoadingAnimation(retryLoadingInterval);
 
             console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
             console.log();
-            await launchProviderProcess(provider, retryArgs);
+            await launchProviderProcess(retryProvider, retryArgs);
             return;
           } catch (retryError) {
             UIHelper.clearLoadingAnimation(retryLoadingInterval);
@@ -228,12 +228,12 @@ class EnvSwitcher extends BaseCommand {
           const retryLoadingInterval = UIHelper.createLoadingAnimation('正在重新启动（新会话）...');
 
           try {
-            await markProviderAsCurrent(this.configManager, provider, retryArgs);
+            const retryProvider = await markProviderAsCurrent(this.configManager, provider, retryArgs);
             UIHelper.clearLoadingAnimation(retryLoadingInterval);
 
             console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
             console.log();
-            await launchProviderProcess(provider, retryArgs);
+            await launchProviderProcess(retryProvider, retryArgs);
             return;
           } catch (retryError) {
             UIHelper.clearLoadingAnimation(retryLoadingInterval);

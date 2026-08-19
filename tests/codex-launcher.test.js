@@ -425,5 +425,23 @@ describe('Codex Launcher', () => {
         expect(error.code).toBe('SESSION_LOCKED');
       }
     });
+
+    it('resume 启动以 1 退出但 stderr 未捕获错误文本时也应该允许上层重试', async () => {
+      const config = {
+        name: 'test-codex',
+        ideName: 'codex',
+        authMode: 'api_key',
+        authToken: 'sk-xxxxx'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(1), 0);
+        }
+      });
+
+      await expect(executeCodexWithEnv(config, ['resume']))
+        .rejects.toMatchObject({ code: 'SESSION_LOCKED' });
+    });
   });
 });

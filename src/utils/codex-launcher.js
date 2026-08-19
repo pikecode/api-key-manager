@@ -119,13 +119,14 @@ async function executeCodexWithEnv(config, launchArgs = []) {
       } else {
         // 检查是否是"会话被锁定"或"已有活跃写入者"的错误
         const errorOutput = stderrOutput.toLowerCase();
+        const isResumeLaunch = rawArgs.includes('resume');
         const isSessionLockedError =
           errorOutput.includes('already has an active writer') ||
           errorOutput.includes('failed to resume session') ||
           errorOutput.includes('thread already has an active');
 
-        if (isSessionLockedError) {
-          const error = new Error('会话被锁定或无法恢复\n提示: 请选择不带 resume 参数重新开始');
+        if (isSessionLockedError || (isResumeLaunch && code === 1)) {
+          const error = new Error('Codex 会话被锁定或无法恢复\n提示: 已尝试不带 resume 参数重新开始');
           error.code = 'SESSION_LOCKED';
           reject(error);
         } else {
