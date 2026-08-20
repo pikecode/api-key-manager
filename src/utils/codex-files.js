@@ -1,6 +1,7 @@
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { validator } = require('./validator');
 const { writeFileAtomic } = require('./atomic-file');
 
@@ -8,6 +9,7 @@ const CODEX_DIR_NAME = '.codex';
 const CONFIG_TOML_FILE = 'config.toml';
 const AUTH_JSON_FILE = 'auth.json';
 const BACKUP_DIR_NAME = 'akm-backups';
+const SESSION_CACHE_DIR_NAME = 'akm-session-cache';
 const BACKUP_LIMIT = 10;
 let backupSequence = 0;
 
@@ -332,6 +334,114 @@ function isChatGptLoginAuth(data) {
   );
 }
 
+function normalizeSessionKey(sessionKey) {
+  if (typeof sessionKey !== 'string' || sessionKey.trim().length === 0) {
+    return null;
+  }
+
+  return sessionKey.trim();
+}
+
+function buildSessionCacheAuthPath(codexHome, sessionKey = null) {
+  const normalizedKey = normalizeSessionKey(sessionKey);
+  if (!normalizedKey) {
+    return path.join(codexHome, SESSION_CACHE_DIR_NAME, AUTH_JSON_FILE);
+  }
+
+  const safePrefix = normalizedKey
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48) || 'official';
+  const hash = crypto.createHash('sha256').update(normalizedKey).digest('hex').slice(0, 12);
+  return path.join(codexHome, SESSION_CACHE_DIR_NAME, `${safePrefix}-${hash}.auth.json`);
+}
+
+async function readJsonObjectIfExists(filePath) {
+  if (!(await fs.pathExists(filePath))) {
+    return null;
+  }
+
+  const data = await fs.readJson(filePath);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return null;
+  }
+
+  return data;
+}
+
+async function cacheChatGptLoginAuth(codexHome, authData, sessionKey = null) {
+  if (!isChatGptLoginAuth(authData)) {
+    return null;
+  }
+
+  const cacheAuthPath = buildSessionCacheAuthPath(codexHome, sessionKey);
+  const cacheDir = path.dirname(cacheAuthPath);
+  await fs.ensureDir(cacheDir);
+  await setSecureDirectoryPermissions(cacheDir);
+  await writeFileAtomic(cacheAuthPath, JSON.stringify(authData, null, 2), {
+    encoding: 'utf8',
+    mode: 0o600
+  });
+  await setSecurePermissions(cacheAuthPath);
+  return cacheAuthPath;
+}
+
+async function cacheCurrentChatGptLoginAuth(codexHome, authJsonPath, sessionKey = null) {
+  let authData;
+  try {
+    authData = await readJsonObjectIfExists(authJsonPath);
+  } catch {
+    return null;
+  }
+
+  return await cacheChatGptLoginAuth(codexHome, authData, sessionKey);
+}
+
+async function findCachedChatGptLoginAuth(codexHome, sessionKey = null) {
+  const candidatePaths = [];
+  if (normalizeSessionKey(sessionKey)) {
+    candidatePaths.push(buildSessionCacheAuthPath(codexHome, sessionKey));
+  } else {
+    candidatePaths.push(buildSessionCacheAuthPath(codexHome));
+  }
+
+  for (const cacheAuthPath of candidatePaths) {
+    try {
+      const data = await readJsonObjectIfExists(cacheAuthPath);
+      if (isChatGptLoginAuth(data)) {
+        return cacheAuthPath;
+      }
+    } catch {
+      // 忽略损坏缓存，继续尝试其他来源。
+    }
+  }
+
+  return null;
+}
+
+async function clearCachedChatGptLoginAuth(codexHome, sessionKey = null) {
+  const targetPaths = [buildSessionCacheAuthPath(codexHome, sessionKey)];
+  if (normalizeSessionKey(sessionKey)) {
+    targetPaths.push(buildSessionCacheAuthPath(codexHome));
+  }
+
+  await Promise.all([...new Set(targetPaths)].map(filePath => fs.remove(filePath)));
+}
+
+async function shouldRemoveAuthJsonForRelogin(authJsonPath) {
+  if (!(await fs.pathExists(authJsonPath))) {
+    return false;
+  }
+
+  try {
+    const data = await readJsonObjectIfExists(authJsonPath);
+    return isChatGptLoginAuth(data) || await shouldRemoveAuthJsonForChatGptLogin(authJsonPath);
+  } catch {
+    return false;
+  }
+}
+
 async function findLatestChatGptLoginAuthBackup(codexHome) {
   const backupRoot = path.join(codexHome, BACKUP_DIR_NAME);
   if (!(await fs.pathExists(backupRoot))) {
@@ -360,6 +470,15 @@ async function findLatestChatGptLoginAuthBackup(codexHome) {
   }
 
   return null;
+}
+
+async function findChatGptLoginAuthSource(codexHome, sessionKey = null) {
+  const cachedAuth = await findCachedChatGptLoginAuth(codexHome, sessionKey);
+  if (cachedAuth || normalizeSessionKey(sessionKey)) {
+    return cachedAuth;
+  }
+
+  return await findLatestChatGptLoginAuthBackup(codexHome);
 }
 
 async function readFileSnapshot(filePath) {
@@ -425,7 +544,7 @@ async function applyCodexConfig(config, options = {}) {
   };
 
   // 所有旧文件必须在任何写入发生前完成校验和目标内容计算。
-  await readExistingAuthJson(authJsonPath);
+  const existingAuthJson = await readExistingAuthJson(authJsonPath);
   const authJsonContent = buildAuthJson(config.authToken);
   let nextConfigToml = null;
   const existingToml = snapshots.configToml.exists
@@ -440,6 +559,9 @@ async function applyCodexConfig(config, options = {}) {
       nextConfigToml = cleanedToml;
     }
   }
+
+  // API Key 模式会覆盖 auth.json，先持久缓存官方网页登录态，避免备份轮转后丢失。
+  await cacheChatGptLoginAuth(codexHome, existingAuthJson);
 
   // 修改用户 Codex 文件前保留最近备份，便于恢复登录态和自定义配置。
   await backupCodexFiles(codexHome);
@@ -479,16 +601,32 @@ async function clearCodexAkmConfig(options = {}) {
   try {
     const codexHome = await ensureCodexHome(options.codexHome);
     const { configTomlPath, authJsonPath } = buildCodexPaths(codexHome);
+    const sessionKey = normalizeSessionKey(options.sessionKey);
+    const forceRelogin = options.forceRelogin === true;
+    const cachedAuthPath = forceRelogin ? null : await findChatGptLoginAuthSource(codexHome, sessionKey);
 
     // 备份当前配置
     await backupCodexFiles(codexHome);
+    if (forceRelogin) {
+      await clearCachedChatGptLoginAuth(codexHome, sessionKey);
+    } else if (!sessionKey) {
+      await cacheCurrentChatGptLoginAuth(codexHome, authJsonPath, sessionKey);
+    }
 
     // 只移除 API Key 认证文件，避免破坏 Codex 官方网页登录态。
-    if (await shouldRemoveAuthJsonForChatGptLogin(authJsonPath)) {
-      const backupAuthPath = await findLatestChatGptLoginAuthBackup(codexHome);
-      if (backupAuthPath) {
-        await fs.copy(backupAuthPath, authJsonPath);
+    const shouldRemoveAuthJson = forceRelogin
+      ? await shouldRemoveAuthJsonForRelogin(authJsonPath)
+      : sessionKey
+        ? await shouldRemoveAuthJsonForRelogin(authJsonPath)
+        : await shouldRemoveAuthJsonForChatGptLogin(authJsonPath);
+    const shouldRestoreCachedAuth =
+      Boolean(cachedAuthPath) && (!(await fs.pathExists(authJsonPath)) || shouldRemoveAuthJson);
+
+    if (shouldRemoveAuthJson || shouldRestoreCachedAuth) {
+      if (shouldRestoreCachedAuth) {
+        await fs.copy(cachedAuthPath, authJsonPath);
         await setSecurePermissions(authJsonPath);
+        await cacheCurrentChatGptLoginAuth(codexHome, authJsonPath, sessionKey);
       } else {
         await fs.remove(authJsonPath);
       }
@@ -511,12 +649,19 @@ async function clearCodexAkmConfig(options = {}) {
   }
 }
 
+async function cacheCodexOfficialSession(options = {}) {
+  const codexHome = await ensureCodexHome(options.codexHome);
+  const { authJsonPath } = buildCodexPaths(codexHome);
+  return await cacheCurrentChatGptLoginAuth(codexHome, authJsonPath, options.sessionKey);
+}
+
 module.exports = {
   resolveCodexHome,
   buildCodexPaths,
   readCodexFiles,
   applyCodexConfig,
   clearCodexAkmConfig,
+  cacheCodexOfficialSession,
   backupCodexFiles,
   removeTopLevelApiBaseUrl,
   removeAkmModelProvider,

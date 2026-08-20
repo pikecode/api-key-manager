@@ -5,6 +5,7 @@ const {
   readCodexFiles,
   applyCodexConfig,
   clearCodexAkmConfig,
+  cacheCodexOfficialSession,
   buildCodexPaths,
   removeTopLevelApiBaseUrl,
   extractBaseUrlFromConfigToml,
@@ -468,6 +469,139 @@ describe('applyCodexConfig with baseUrl', () => {
     await clearCodexAkmConfig();
 
     expect(await fs.readJson(authJsonPath)).toEqual(loginAuth);
+  });
+
+  test('applyCodexConfig 独立缓存 Codex 官方网页登录态', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    const loginAuth = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'existing-session' },
+      last_refresh: '2026-08-20T00:00:00.000Z'
+    };
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, loginAuth);
+
+    await applyCodexConfig({ authToken: 'proxy-key', name: 'proxy' });
+
+    const cacheAuthPath = path.join(codexHome, 'akm-session-cache', 'auth.json');
+    expect(await fs.readJson(cacheAuthPath)).toEqual(loginAuth);
+  });
+
+  test('clearCodexAkmConfig 优先从独立缓存恢复 Codex 官方网页登录态', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    const loginAuth = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'cached-session' },
+      last_refresh: '2026-08-20T00:00:00.000Z'
+    };
+    const cacheAuthPath = path.join(codexHome, 'akm-session-cache', 'auth.json');
+    await fs.ensureDir(path.dirname(cacheAuthPath));
+    await fs.writeJson(cacheAuthPath, loginAuth);
+    await fs.writeJson(authJsonPath, { auth_mode: 'apikey', OPENAI_API_KEY: 'proxy-key' });
+
+    await clearCodexAkmConfig();
+
+    expect(await fs.readJson(authJsonPath)).toEqual(loginAuth);
+  });
+
+  test('cacheCodexOfficialSession 按供应商名称隔离官方网页登录态', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    const accountA = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'account-a' },
+      last_refresh: '2026-08-20T00:00:00.000Z'
+    };
+    const accountB = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'account-b' },
+      last_refresh: '2026-08-20T01:00:00.000Z'
+    };
+    await fs.ensureDir(codexHome);
+
+    await fs.writeJson(authJsonPath, accountA);
+    await cacheCodexOfficialSession({ codexHome, sessionKey: 'openai-personal' });
+
+    await fs.writeJson(authJsonPath, accountB);
+    await cacheCodexOfficialSession({ codexHome, sessionKey: 'openai-work' });
+
+    await fs.writeJson(authJsonPath, { auth_mode: 'apikey', OPENAI_API_KEY: 'proxy-key' });
+    await clearCodexAkmConfig({ codexHome, sessionKey: 'openai-personal' });
+    expect(await fs.readJson(authJsonPath)).toEqual(accountA);
+
+    await fs.writeJson(authJsonPath, { auth_mode: 'apikey', OPENAI_API_KEY: 'proxy-key' });
+    await clearCodexAkmConfig({ codexHome, sessionKey: 'openai-work' });
+    expect(await fs.readJson(authJsonPath)).toEqual(accountB);
+  });
+
+  test('clearCodexAkmConfig 有供应商名时不复用其他官方账号缓存', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    const accountA = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'account-a' }
+    };
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, accountA);
+    await cacheCodexOfficialSession({ codexHome, sessionKey: 'openai-personal' });
+
+    await fs.writeJson(authJsonPath, { auth_mode: 'apikey', OPENAI_API_KEY: 'proxy-key' });
+    await clearCodexAkmConfig({ codexHome, sessionKey: 'openai-work' });
+
+    expect(await fs.pathExists(authJsonPath)).toBe(false);
+  });
+
+  test('clearCodexAkmConfig 新官方账号首次启动不复用当前活跃官方 Session', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    const accountA = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'account-a' }
+    };
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, accountA);
+    await cacheCodexOfficialSession({ codexHome, sessionKey: 'openai-personal' });
+
+    await clearCodexAkmConfig({ codexHome, sessionKey: 'openai-work' });
+
+    expect(await fs.pathExists(authJsonPath)).toBe(false);
+    const cacheEntries = await fs.readdir(path.join(codexHome, 'akm-session-cache'));
+    expect(cacheEntries.some(name => name.startsWith('openai-work-'))).toBe(false);
+  });
+
+  test('clearCodexAkmConfig 当前 auth 缺失时恢复指定官方账号缓存', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    const accountA = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'account-a' }
+    };
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, accountA);
+    await cacheCodexOfficialSession({ codexHome, sessionKey: 'openai-personal' });
+    await fs.remove(authJsonPath);
+
+    await clearCodexAkmConfig({ codexHome, sessionKey: 'openai-personal' });
+
+    expect(await fs.readJson(authJsonPath)).toEqual(accountA);
+  });
+
+  test('clearCodexAkmConfig forceRelogin 清理指定官方账号 Session', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    const loginAuth = {
+      auth_mode: 'chatgpt',
+      tokens: { access_token: 'cached-session' }
+    };
+    await fs.ensureDir(codexHome);
+    await fs.writeJson(authJsonPath, loginAuth);
+    await cacheCodexOfficialSession({ codexHome, sessionKey: 'openai-work' });
+
+    await clearCodexAkmConfig({
+      codexHome,
+      sessionKey: 'openai-work',
+      forceRelogin: true
+    });
+
+    expect(await fs.pathExists(authJsonPath)).toBe(false);
+    await fs.writeJson(authJsonPath, { auth_mode: 'apikey', OPENAI_API_KEY: 'proxy-key' });
+    await clearCodexAkmConfig({ codexHome, sessionKey: 'openai-work' });
+    expect(await fs.pathExists(authJsonPath)).toBe(false);
   });
 
   test('clearCodexAkmConfig 移除 API Key 认证文件', async () => {

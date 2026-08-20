@@ -34,6 +34,7 @@ class EnvSwitcher extends BaseCommand {
     this.activeStatusRefresh = null;
     this.filter = null;
     this.filteredProviders = null;
+    this.forceRelogin = false;
     this._refreshTimer = null;
     this.providerManager = new ProviderManager(this);
   }
@@ -188,7 +189,9 @@ class EnvSwitcher extends BaseCommand {
 
         console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}...`, UIHelper.icons.success));
         console.log();
-        await launchProviderProcess(launchProvider, selectedLaunchArgs);
+        await launchProviderProcess(launchProvider, selectedLaunchArgs, {
+          forceRelogin: this.forceRelogin
+        });
 
       } catch (error) {
         UIHelper.clearLoadingAnimation(loadingInterval);
@@ -209,7 +212,9 @@ class EnvSwitcher extends BaseCommand {
 
             console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
             console.log();
-            await launchProviderProcess(retryProvider, retryArgs);
+            await launchProviderProcess(retryProvider, retryArgs, {
+              forceRelogin: this.forceRelogin
+            });
             return;
           } catch (retryError) {
             UIHelper.clearLoadingAnimation(retryLoadingInterval);
@@ -233,7 +238,9 @@ class EnvSwitcher extends BaseCommand {
 
             console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
             console.log();
-            await launchProviderProcess(retryProvider, retryArgs);
+            await launchProviderProcess(retryProvider, retryArgs, {
+              forceRelogin: this.forceRelogin
+            });
             return;
           } catch (retryError) {
             UIHelper.clearLoadingAnimation(retryLoadingInterval);
@@ -1017,6 +1024,7 @@ class EnvSwitcher extends BaseCommand {
 async function switchCommand(providerName, options = {}) {
   const switcher = new EnvSwitcher();
   switcher.filter = options.filter || null;
+  switcher.forceRelogin = options.relogin === true;
 
   try {
     if (providerName) {

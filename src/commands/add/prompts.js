@@ -40,17 +40,7 @@ async function promptProviderInfo(adder) {
           { name: UI_MESSAGES.AUTH_MODE_CODEX_CHATGPT_LOGIN, value: 'chatgpt_login' }
         ],
         default: 'api_key',
-        when: async answers => {
-          const isCodex = (answers.ideName || adder.presetIdeName) === 'codex';
-          if (!isCodex) return false;
-          try {
-            await adder.configManager.ensureLoaded();
-            const hasOfficialConfig = adder.configManager.getProvider('openai-official');
-            return !hasOfficialConfig;
-          } catch {
-            return true;
-          }
-        }
+        when: answers => (answers.ideName || adder.presetIdeName) === 'codex'
       },
       {
         type: 'input',
@@ -60,15 +50,7 @@ async function promptProviderInfo(adder) {
           const err = validator.validateName(input);
           return err || true;
         },
-        when: answers => {
-          // 如果选择了官方登录，直接用 "openai-official"，不需要输入名称
-          if ((answers.ideName || adder.presetIdeName) === 'codex' && answers.authMode === 'chatgpt_login') {
-            return false;
-          }
-          return true;
-        },
         default: answers => {
-          // 官方登录模式下返回默认名称
           if ((answers.ideName || adder.presetIdeName) === 'codex' && answers.authMode === 'chatgpt_login') {
             return 'openai-official';
           }
@@ -138,7 +120,7 @@ async function promptProviderInfo(adder) {
       {
         type: 'confirm',
         name: 'confirmCodexLogin',
-        message: 'Codex 将使用官方 OpenAI 网页登录方式，启动时需要在浏览器中登录。确认继续?',
+        message: 'Codex 将使用官方 OpenAI 网页登录方式；首次启动或 Session 失效时需要浏览器登录。确认继续?',
         default: true,
         when: answers => (answers.ideName || adder.presetIdeName) === 'codex' && answers.authMode === 'chatgpt_login'
       },

@@ -1,9 +1,9 @@
 const { executeWithEnv } = require('../../utils/env-launcher');
 const { executeCodexWithEnv } = require('../../utils/codex-launcher');
 
-async function launchProviderProcess(provider, selectedLaunchArgs) {
+async function launchProviderProcess(provider, selectedLaunchArgs, options = {}) {
   if (provider.ideName === 'codex') {
-    await executeCodexWithEnv(provider, selectedLaunchArgs);
+    await executeCodexWithEnv(provider, selectedLaunchArgs, options);
     return;
   }
 

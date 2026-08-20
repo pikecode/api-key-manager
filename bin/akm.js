@@ -104,6 +104,7 @@ program
   .argument('[provider]', '直接切换到指定供应商')
   .option('-q, --quick', '快速启动（使用默认或上次的启动参数）')
   .option('--no-args', '以空参数启动（不使用任何启动参数）')
+  .option('--relogin', 'Codex 官方登录模式下清理当前 Session 并重新网页登录')
   .action(async (provider, options) => {
     try {
       await main(provider, options);
@@ -138,13 +139,15 @@ program
   .option('--claude', '仅显示 Claude Code 供应商')
   .option('-q, --quick', '快速启动（使用默认或上次的启动参数）')
   .option('--no-args', '以空参数启动（不使用任何启动参数）')
+  .option('--relogin', 'Codex 官方登录模式下清理当前 Session 并重新网页登录')
   .action(async (provider, options) => {
     try {
       const filter = options.codex ? 'codex' : options.claude ? 'claude' : null;
       await registry.executeCommand('switch', provider, {
         filter,
         quick: options.quick,
-        noArgs: options.noArgs
+        noArgs: options.noArgs,
+        relogin: options.relogin
       });
     } catch (error) {
       console.error(chalk.red('❌ 切换失败:'), error.message);

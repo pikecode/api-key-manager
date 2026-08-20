@@ -91,8 +91,21 @@ describe('provider-launcher', () => {
 
       await launchProviderProcess(provider, args);
 
-      expect(executeCodexWithEnv).toHaveBeenCalledWith(provider, args);
+      expect(executeCodexWithEnv).toHaveBeenCalledWith(provider, args, {});
       expect(executeWithEnv).not.toHaveBeenCalled();
+    });
+
+    it('应该向 Codex launcher 透传启动选项', async () => {
+      const provider = {
+        name: 'codex-provider',
+        ideName: 'codex'
+      };
+      const args = [];
+      const options = { forceRelogin: true };
+
+      await launchProviderProcess(provider, args, options);
+
+      expect(executeCodexWithEnv).toHaveBeenCalledWith(provider, args, options);
     });
   });
 });

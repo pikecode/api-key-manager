@@ -120,6 +120,7 @@ Claude Code 支持两种认证模式：
 | Auth Token | `ANTHROPIC_AUTH_TOKEN` + `ANTHROPIC_BASE_URL` | 部分服务商       |
 
 Codex CLI 使用 `OPENAI_API_KEY` + `OPENAI_BASE_URL`。
+如果选择官方网页登录模式，AKM 会按供应商名称缓存 Codex 的官方 Session；同一个官方供应商会复用本地 Session，Session 失效时由 Codex CLI 重新触发浏览器授权。需要多个 OpenAI 官方账号时，为每个账号添加一个不同名称的 Codex 官方网页登录供应商即可。
 
 ### 切换供应商
 
@@ -145,6 +146,9 @@ akm my-provider -q
 
 # 以空参数启动
 akm my-provider --no-args
+
+# Codex 官方网页登录模式下清理当前 Session 并重新网页登录
+akm openai-work --relogin
 ```
 
 参数优先级：`--no-args` > `--quick`
@@ -332,6 +336,52 @@ Token (ANTHROPIC_AUTH_TOKEN): your-auth-token
 供应商名称: my-codex
 API Key (OPENAI_API_KEY): sk-xxxxxxxx
 基础URL (OPENAI_BASE_URL): https://api.openai.com
+```
+
+官方网页登录模式可以配置多个供应商名称，例如 `openai-work`、`openai-personal`。AKM 会把它们的 Session 分开缓存，切换时只恢复对应供应商的 Session。需要强制换号或重新授权时运行：
+
+```bash
+akm openai-work --relogin
+```
+
+### Codex 官方多账号
+
+每个官方账号都应创建一个独立的 Codex 官方网页登录供应商，供应商名称就是 Session 隔离键。
+
+```bash
+# 添加个人 OpenAI 官方账号
+akm add --codex
+# 认证方式选择: 官方网页登录
+# 供应商名称填写: openai-personal
+
+# 添加工作 OpenAI 官方账号
+akm add --codex
+# 认证方式选择: 官方网页登录
+# 供应商名称填写: openai-work
+```
+
+首次启动某个官方供应商时，如果该供应商还没有自己的 Session，Codex 会打开浏览器授权；授权完成后 AKM 会按供应商名称缓存 Session。
+
+```bash
+# 首次启动个人账号，会绑定 openai-personal 的 Session
+akm openai-personal
+
+# 首次启动工作账号，会重新网页授权，不复用 openai-personal
+akm openai-work
+```
+
+日常切换时直接使用供应商名称即可：
+
+```bash
+akm openai-personal
+akm openai-work
+```
+
+需要换号、Session 异常或希望重新网页登录时，使用 `--relogin` 清理当前供应商的 Session：
+
+```bash
+akm openai-work --relogin
+akm switch openai-work --relogin
 ```
 
 ### 多账号配置

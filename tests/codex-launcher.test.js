@@ -11,7 +11,11 @@ jest.mock('../src/utils/codex-files');
 const spawn = require('cross-spawn');
 const { executeCodexWithEnv, buildCodexEnvVariables } = require('../src/utils/codex-launcher');
 const { sanitizeEnvValue, clearTerminal } = require('../src/utils/env-utils');
-const { applyCodexConfig, clearCodexAkmConfig } = require('../src/utils/codex-files');
+const {
+  applyCodexConfig,
+  clearCodexAkmConfig,
+  cacheCodexOfficialSession
+} = require('../src/utils/codex-files');
 
 describe('Codex Launcher', () => {
   const originalEnv = process.env;
@@ -24,6 +28,8 @@ describe('Codex Launcher', () => {
     sanitizeEnvValue.mockImplementation(value => value);
     clearTerminal.mockImplementation(() => {});
     applyCodexConfig.mockResolvedValue();
+    clearCodexAkmConfig.mockResolvedValue();
+    cacheCodexOfficialSession.mockResolvedValue();
 
     // Mock spawn child process
     mockChild = {
@@ -285,8 +291,52 @@ describe('Codex Launcher', () => {
 
       await executeCodexWithEnv(config);
 
-      expect(clearCodexAkmConfig).toHaveBeenCalled();
+      expect(clearCodexAkmConfig).toHaveBeenCalledWith({
+        sessionKey: 'test-codex-official',
+        forceRelogin: false
+      });
       expect(applyCodexConfig).not.toHaveBeenCalled();
+    });
+
+    it('chatgpt_login 模式应该支持强制重新网页登录', async () => {
+      const config = {
+        name: 'openai-work',
+        ideName: 'codex',
+        authMode: 'chatgpt_login'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(0), 0);
+        }
+      });
+
+      await executeCodexWithEnv(config, [], { forceRelogin: true });
+
+      expect(clearCodexAkmConfig).toHaveBeenCalledWith({
+        sessionKey: 'openai-work',
+        forceRelogin: true
+      });
+    });
+
+    it('chatgpt_login 模式退出后应该缓存当前供应商 Session', async () => {
+      const config = {
+        name: 'openai-personal',
+        ideName: 'codex',
+        authMode: 'chatgpt_login'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(0), 0);
+        }
+      });
+
+      await executeCodexWithEnv(config);
+
+      expect(cacheCodexOfficialSession).toHaveBeenCalledWith({
+        sessionKey: 'openai-personal'
+      });
     });
 
     it('chatgpt_login 模式不需要 authToken', async () => {

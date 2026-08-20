@@ -1,6 +1,10 @@
 const spawn = require('cross-spawn');
 const { sanitizeEnvValue, clearTerminal } = require('./env-utils');
-const { applyCodexConfig, clearCodexAkmConfig } = require('./codex-files');
+const {
+  applyCodexConfig,
+  clearCodexAkmConfig,
+  cacheCodexOfficialSession
+} = require('./codex-files');
 const { assertSupportedLaunchArgs } = require('./launch-args');
 const { validator } = require('./validator');
 
@@ -53,9 +57,11 @@ function buildCodexEnvVariables(config) {
  * 使用环境变量注入方式执行 Codex CLI
  * @param {object} config - 供应商配置
  * @param {string[]} launchArgs - 启动参数
+ * @param {object} options - 启动选项
+ * @param {boolean} options.forceRelogin - 是否强制清理官方登录态并重新网页登录
  * @returns {Promise<void>}
  */
-async function executeCodexWithEnv(config, launchArgs = []) {
+async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) {
   if (!config || config.ideName !== 'codex') {
     throw new Error('无效的 Codex 供应商配置');
   }
@@ -80,7 +86,10 @@ async function executeCodexWithEnv(config, launchArgs = []) {
     await applyCodexConfig(config);
   } else if (authMode === 'chatgpt_login') {
     // chatgpt_login 模式：清理 AKM 的配置，让 Codex 使用官方登录
-    await clearCodexAkmConfig();
+    await clearCodexAkmConfig({
+      sessionKey: config.name,
+      forceRelogin: launchOptions.forceRelogin === true
+    });
   }
 
   // 处理参数：子命令放前面，选项放后面
@@ -113,8 +122,16 @@ async function executeCodexWithEnv(config, launchArgs = []) {
       process.stderr.write(data);
     });
 
-    child.on('close', (code, signal) => {
+    child.on('close', async (code, signal) => {
       if (code === 0 || code === 130 || signal === 'SIGINT') {
+        try {
+          if (authMode === 'chatgpt_login') {
+            await cacheCodexOfficialSession({ sessionKey: config.name });
+          }
+        } catch (error) {
+          reject(new Error(`保存 Codex 官方登录 Session 失败: ${error.message}`));
+          return;
+        }
         resolve();
       } else {
         // 检查是否是"会话被锁定"或"已有活跃写入者"的错误
