@@ -311,6 +311,23 @@ describe('Environment Launcher', () => {
       }
     });
 
+    it('使用 --continue 以 1 退出但未捕获错误文本时也应该允许上层重试', async () => {
+      const config = {
+        name: 'test-provider',
+        authMode: 'auth_token',
+        authToken: 'sk-xxxxx'
+      };
+
+      mockChild.on.mockImplementation((event, callback) => {
+        if (event === 'close') {
+          setTimeout(() => callback(1), 0);
+        }
+      });
+
+      await expect(executeWithEnv(config, ['--continue']))
+        .rejects.toMatchObject({ code: 'NO_CONVERSATION_FOUND' });
+    });
+
     it('应该检测 stderr 中的"no deferred tool marker"错误', async () => {
       const config = {
         name: 'test-provider',
