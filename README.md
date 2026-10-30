@@ -594,6 +594,7 @@ MIT License
 
 ## 链接
 
+- [修改记录](CHANGELOG.md)
 - [NPM](https://www.npmjs.com/package/@pikecode/api-key-manager)
 - [GitHub](https://github.com/pikecode/api-key-manager)
 - [Issues](https://github.com/pikecode/api-key-manager/issues)
