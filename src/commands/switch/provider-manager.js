@@ -187,7 +187,7 @@ class ProviderManager {
           {
             type: 'confirm',
             name: 'confirmed',
-            message: `确定要删除供应商 '${provider.displayName || providerName}' 吗?`,
+            message: `确定要删除供应商 '${provider.displayName || providerName}' 吗?（官方 Codex 配置会同时清理该名称的 Session 缓存）`,
             default: false
           }
         ], '取消删除', () => {

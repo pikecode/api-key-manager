@@ -96,7 +96,8 @@ program.configureHelp({
 
 // Check for updates before any command runs
 program.hook('preAction', async () => {
-  await checkForUpdates({ packageName: pkg.name, currentVersion: pkg.version });
+  const exitCode = await checkForUpdates({ packageName: pkg.name, currentVersion: pkg.version });
+  if (Number.isInteger(exitCode)) process.exit(exitCode);
 });
 
 // Default command - show provider selection

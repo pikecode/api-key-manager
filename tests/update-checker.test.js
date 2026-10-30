@@ -4,6 +4,8 @@ jest.mock('fs-extra');
 jest.mock('../src/utils/atomic-file');
 
 const spawn = require('cross-spawn');
+const { EventEmitter } = require('events');
+const inquirer = require('inquirer');
 const fs = require('fs-extra');
 const { writeJsonAtomic } = require('../src/utils/atomic-file');
 const { checkForUpdates } = require('../src/utils/update-checker');
@@ -93,5 +95,69 @@ describe('更新检查器', () => {
     writeJsonAtomic.mockRejectedValue(new Error('只读目录'));
     await expect(checkForUpdates({ packageName: 'akm', currentVersion: '1.0.0' })).resolves.toBeUndefined();
     expect(writeJsonAtomic).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ latest: null }));
+  });
+});
+
+describe('更新后的命令交接', () => {
+  const originalEnv = process.env;
+  const inputTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+  const outputTTY = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+  let install;
+  let restart;
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    delete process.env.NODE_ENV;
+    delete process.env.CI;
+    delete process.env.CC_NO_UPDATE_CHECK;
+    Object.defineProperty(process.stdin, 'isTTY', { value: true, configurable: true });
+    Object.defineProperty(process.stdout, 'isTTY', { value: true, configurable: true });
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    fs.readJson.mockResolvedValue({ packageName: 'akm', checkedAt: Date.now(), latest: '2.0.0' });
+    inquirer.prompt.mockResolvedValue({ doUpdate: true });
+    install = new EventEmitter();
+    restart = new EventEmitter();
+    spawn.mockReturnValueOnce(install).mockReturnValueOnce(restart);
+  });
+  afterEach(() => {
+    process.env = originalEnv;
+    if (inputTTY) Object.defineProperty(process.stdin, 'isTTY', inputTTY);
+    else delete process.stdin.isTTY;
+    if (outputTTY) Object.defineProperty(process.stdout, 'isTTY', outputTTY);
+    else delete process.stdout.isTTY;
+    jest.restoreAllMocks();
+    spawn.mockReset();
+  });
+  const tick = () => new Promise(resolve => setTimeout(resolve, 0));
+
+  test('新版进程结束前不返回，结束后传递退出码', async () => {
+    let completed = false;
+    const result = checkForUpdates({ packageName: 'akm', currentVersion: '1.0.0' }).then(code => {
+      completed = true;
+      return code;
+    });
+    await tick();
+    install.emit('close', 0);
+    await tick();
+    expect(completed).toBe(false);
+    expect(spawn).toHaveBeenLastCalledWith(process.execPath, [process.argv[1], ...process.argv.slice(2)], { shell: false, stdio: 'inherit' });
+    restart.emit('close', 7);
+    await expect(result).resolves.toBe(7);
+  });
+
+  test('安装进程错误时跳过重启', async () => {
+    const result = checkForUpdates({ packageName: 'akm', currentVersion: '1.0.0' });
+    await tick();
+    install.emit('error', new Error('npm 不存在'));
+    await expect(result).resolves.toBeUndefined();
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  test('重启进程错误时返回失败退出码，不能继续旧命令', async () => {
+    const result = checkForUpdates({ packageName: 'akm', currentVersion: '1.0.0' });
+    await tick();
+    install.emit('close', 0);
+    await tick();
+    restart.emit('error', new Error('启动失败'));
+    await expect(result).resolves.toBe(1);
   });
 });

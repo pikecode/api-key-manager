@@ -132,31 +132,33 @@ async function checkForUpdates({ packageName, currentVersion }) {
       if (!doUpdate) return;
 
       console.log(chalk.yellow('开始更新，请稍候...'));
-      await new Promise((resolve) => {
+      const installed = await new Promise((resolve) => {
         const child = spawn('npm', ['i', '-g', `${packageName}@latest`], {
           shell: false,
           stdio: 'inherit'
         });
         child.on('close', (code) => resolve(code === 0));
-      }).then((ok) => {
-        if (!ok) {
-          console.log(chalk.red('更新失败，请稍后重试或手动执行: ') + chalk.cyan(installCmd));
-          return;
-        }
-        console.log(chalk.green('更新成功，正在重启...'));
-        const scriptPath = process.argv[1];
-        const restartCommand = scriptPath ? process.execPath : packageName;
-        const restartArgs = scriptPath
-          ? [scriptPath, ...process.argv.slice(2)]
-          : process.argv.slice(2);
+        child.on('error', () => resolve(false));
+      });
+      if (!installed) {
+        console.log(chalk.red('更新失败，请稍后重试或手动执行: ') + chalk.cyan(installCmd));
+        return;
+      }
+      console.log(chalk.green('更新成功，正在重启...'));
+      const scriptPath = process.argv[1];
+      const restartCommand = scriptPath ? process.execPath : packageName;
+      const restartArgs = scriptPath
+        ? [scriptPath, ...process.argv.slice(2)]
+        : process.argv.slice(2);
 
-        const child = spawn(restartCommand, restartArgs, {
-          shell: false,
-          stdio: 'inherit'
-        });
-        child.on('close', (code) => {
-          process.exit(code || 0);
-        });
+      // 等新版命令完成，由入口退出旧进程，防止原命令执行两次。
+      return await new Promise((resolve, reject) => {
+        const child = spawn(restartCommand, restartArgs, { shell: false, stdio: 'inherit' });
+        child.on('error', reject);
+        child.on('close', (code, signal) => resolve(code ?? (signal === 'SIGINT' ? 130 : 1)));
+      }).catch(error => {
+        console.log(chalk.red(`重启失败，请手动重新运行命令: ${error.message}`));
+        return 1;
       });
     }
   } catch {

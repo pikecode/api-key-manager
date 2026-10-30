@@ -5,6 +5,8 @@ const chalk = require('chalk');
 const { writeJsonAtomic } = require('./utils/atomic-file');
 const { validateAndNormalizeConfigData } = require('./utils/import-validator');
 const { validator } = require('./utils/validator');
+const { acquireFileLock } = require('./utils/file-lock');
+const { withCodexSessionRemoval } = require('./utils/codex-files');
 
 /**
  * @typedef {Object} ProviderConfig
@@ -43,6 +45,7 @@ class ConfigManager {
     this.isLoaded = false;
     /** @type {Date|null} 最后修改时间 */
     this.lastModified = null;
+    this.lastSavedContent = null;
     /** @type {Promise<Config>|null} 加载 Promise，防止并发加载 */
     this.loadPromise = null;
   }
@@ -109,6 +112,7 @@ class ConfigManager {
   }
 
   async _performLoad() {
+    const release = await acquireFileLock(`${this.configPath}.lock`, '配置正在被其他进程读写，请稍后重试。');
     try {
       if (await fs.pathExists(this.configPath)) {
         // 检查并修复文件权限（仅 Unix 系统）
@@ -117,6 +121,7 @@ class ConfigManager {
         let data;
         try {
           data = await fs.readJSON(this.configPath);
+          this.lastSavedContent = JSON.stringify(data);
         } catch {
           // 配置文件损坏，创建备份并重置
           const backupPath = `${this.configPath}.corrupted.${Date.now()}`;
@@ -124,7 +129,7 @@ class ConfigManager {
           console.log(chalk.yellow('⚠️  配置文件损坏，已备份到:'), backupPath);
 
           this.config = this.getDefaultConfig();
-          await this._performSave(this.config, { skipConflictCheck: true });
+          await this._performSave(this.config, { skipConflictCheck: true, lockHeld: true });
           this.isLoaded = true;
           return this.config;
         }
@@ -132,7 +137,7 @@ class ConfigManager {
         if (!data || typeof data !== 'object' || Array.isArray(data)) {
           // 配置文件被写成非对象内容时，重置为默认配置
           this.config = this.getDefaultConfig();
-          await this._performSave(this.config, { skipConflictCheck: true });
+          await this._performSave(this.config, { skipConflictCheck: true, lockHeld: true });
         } else {
           this.config = validateAndNormalizeConfigData({ ...this.getDefaultConfig(), ...data });
           this._warnAboutInsecureRemoteHttpProviders();
@@ -147,7 +152,7 @@ class ConfigManager {
         this.lastModified = stat.mtime;
       } else {
         this.config = this.getDefaultConfig();
-        await this._performSave(this.config, { skipConflictCheck: true });
+        await this._performSave(this.config, { skipConflictCheck: true, lockHeld: true });
       }
       this.isLoaded = true;
       return this.config;
@@ -155,12 +160,14 @@ class ConfigManager {
       if (error.message.includes('Unexpected end of JSON input')) {
         // 处理空文件或损坏的JSON文件
         this.config = this.getDefaultConfig();
-        await this._performSave(this.config, { skipConflictCheck: true });
+        await this._performSave(this.config, { skipConflictCheck: true, lockHeld: true });
         this.isLoaded = true;
         return this.config;
       }
       console.error(chalk.red('❌ 加载配置失败:'), error.message);
       throw error;
+    } finally {
+      await release();
     }
   }
 
@@ -248,6 +255,7 @@ class ConfigManager {
   }
 
   async _performSave(config = this.config, options = {}) {
+    const release = options.lockHeld ? null : await acquireFileLock(`${this.configPath}.lock`, '配置正在被其他进程保存，请稍后重试。');
     try {
       const normalizedConfig = validateAndNormalizeConfigData(config);
       if (!options.skipConflictCheck) {
@@ -255,6 +263,7 @@ class ConfigManager {
       }
       await writeJsonAtomic(this.configPath, normalizedConfig, { spaces: 2, mode: 0o600 });
       this.config = normalizedConfig;
+      this.lastSavedContent = JSON.stringify(normalizedConfig);
 
       // 更新最后修改时间
       const stat = await fs.stat(this.configPath);
@@ -263,6 +272,8 @@ class ConfigManager {
     } catch (error) {
       console.error(chalk.red('❌ 保存配置失败:'), error.message);
       throw error;
+    } finally {
+      if (release) await release();
     }
   }
 
@@ -276,7 +287,8 @@ class ConfigManager {
     }
 
     const stat = await fs.stat(this.configPath);
-    if (stat.mtime.getTime() !== this.lastModified.getTime()) {
+    if (stat.mtime.getTime() !== this.lastModified.getTime() ||
+        (this.lastSavedContent !== null && JSON.stringify(await fs.readJSON(this.configPath)) !== this.lastSavedContent)) {
       throw new Error('配置文件已被其他进程修改，请重新执行当前操作以避免覆盖最新配置');
     }
   }
@@ -422,6 +434,8 @@ class ConfigManager {
       throw new Error(`供应商 '${name}' 不存在\n使用 'akm list' 查看所有已配置的供应商`);
     }
 
+    const provider = this.config.providers[name];
+    const previousConfig = this.config;
     // 创建新的 providers 对象，排除要删除的供应商
     const remainingProviders = { ...this.config.providers };
     delete remainingProviders[name];
@@ -431,13 +445,22 @@ class ConfigManager {
       this.config.currentProvider === name ? null : this.config.currentProvider;
 
     // 使用不可变方式更新 config
-    this.config = {
+    const nextConfig = {
       ...this.config,
       currentProvider: newCurrentProvider,
       providers: remainingProviders
     };
 
-    return await this.save();
+    const saveRemoval = () => this.save(nextConfig);
+    try {
+      if (provider.ideName === 'codex' && provider.authMode === 'chatgpt_login') {
+        return await withCodexSessionRemoval(name, saveRemoval);
+      }
+      return await saveRemoval();
+    } catch (error) {
+      this.config = previousConfig;
+      throw error;
+    }
   }
 
   async activateProvider(name, lastUsedArgs = []) {

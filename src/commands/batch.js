@@ -250,7 +250,7 @@ async function batchDelete(options = {}) {
       {
         type: 'input',
         name: 'confirmAgain',
-        message: '请输入 "DELETE" 以确认删除:',
+        message: '请输入 "DELETE" 以确认删除（官方 Codex 配置会同时清理对应的 Session 缓存）:',
         validate: (input) => {
           if (input !== 'DELETE') {
             return '请输入 "DELETE" 以确认';

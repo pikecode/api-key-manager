@@ -1,191 +1,40 @@
-/**
- * Switch Command Tests
- * 测试供应商选择和切换的核心功能
- */
-
-// 不直接导入命令类，而是测试相关逻辑
-
-const { AUTH_MODE_DISPLAY, BASE_URL } = require('../src/constants');
-
-// Mock modules
 jest.mock('../src/config');
 
-describe('Switch Command Logic', () => {
+const { configManager } = require('../src/config');
+const { EnvSwitcher } = require('../src/commands/switch');
+
+describe('供应商查找入口', () => {
+  let switcher;
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
+    configManager.load.mockResolvedValue();
+    switcher = new EnvSwitcher();
+  });
+  afterEach(() => switcher.destroy());
+
+  test('按名称查找前加载配置，返回实际供应商', async () => {
+    const provider = { name: 'work', ideName: 'codex' };
+    configManager.getProvider.mockReturnValue(provider);
+    await expect(switcher.validateProvider('work')).resolves.toBe(provider);
+    expect(configManager.load).toHaveBeenCalledTimes(1);
+    expect(configManager.getProvider).toHaveBeenCalledWith('work');
+    expect(configManager.getProviderByNameOrAlias).not.toHaveBeenCalled();
   });
 
-  describe('Provider Selection', () => {
-    it('应该列出所有可用供应商', async () => {
-      const mockProviders = [
-        {
-          name: 'test-provider-1',
-          displayName: 'Test Provider 1',
-          ideName: 'claude',
-          authMode: 'api_key',
-          authToken: 'sk-ant-oat01-xxx',
-          current: true,
-          usageCount: 5,
-          lastUsed: new Date().toISOString()
-        },
-        {
-          name: 'test-provider-2',
-          displayName: 'Test Provider 2',
-          ideName: 'codex',
-          authMode: 'api_key',
-          authToken: 'sk-xxx',
-          current: false,
-          usageCount: 2,
-          lastUsed: new Date().toISOString()
-        }
-      ];
-
-      const providers = mockProviders;
-
-      expect(providers).toHaveLength(2);
-      expect(providers[0].name).toBe('test-provider-1');
-      expect(providers[0].current).toBe(true);
-    });
-
-    it('应该过滤 Claude Code 供应商', () => {
-      const mockProviders = [
-        { name: 'claude-provider', ideName: 'claude', current: true },
-        { name: 'codex-provider', ideName: 'codex', current: false }
-      ];
-
-      const filtered = mockProviders.filter(p => p.ideName !== 'codex');
-
-      expect(filtered).toHaveLength(1);
-      expect(filtered[0].ideName).toBe('claude');
-    });
-
-    it('应该过滤 Codex 供应商', () => {
-      const mockProviders = [
-        { name: 'claude-provider', ideName: 'claude', current: false },
-        { name: 'codex-provider', ideName: 'codex', current: true }
-      ];
-
-      const filtered = mockProviders.filter(p => p.ideName === 'codex');
-
-      expect(filtered).toHaveLength(1);
-      expect(filtered[0].ideName).toBe('codex');
-    });
-
-    it('应该找到当前活跃的供应商', () => {
-      const mockProviders = [
-        { name: 'provider-1', current: false },
-        { name: 'provider-2', current: true },
-        { name: 'provider-3', current: false }
-      ];
-
-      const currentProvider = mockProviders.find(p => p.current);
-
-      expect(currentProvider).toBeDefined();
-      expect(currentProvider.name).toBe('provider-2');
-    });
+  test('名称不存在时使用别名查找', async () => {
+    const provider = { name: 'work', alias: 'w' };
+    configManager.getProviderByNameOrAlias.mockReturnValue(provider);
+    await expect(switcher.validateProvider('w')).resolves.toBe(provider);
+    expect(configManager.getProviderByNameOrAlias).toHaveBeenCalledWith('w');
   });
 
-  describe('Provider Information Formatting', () => {
-    it('应该正确显示认证模式信息', () => {
-      const provider = { authMode: 'api_key' };
-      const display = AUTH_MODE_DISPLAY[provider.authMode];
-
-      expect(display).toBe('API Key 模式');
-    });
-
-    it('应该正确显示 Auth Token 模式信息', () => {
-      const provider = { authMode: 'auth_token' };
-      const display = AUTH_MODE_DISPLAY[provider.authMode];
-
-      expect(display).toBe('Auth Token 模式');
-    });
-
-    it('应该显示默认 URL 信息', () => {
-      const provider = { baseUrl: null, authMode: 'auth_token' };
-      const baseUrlDisplay = provider.baseUrl || BASE_URL.OFFICIAL_DEFAULT;
-
-      expect(baseUrlDisplay).toBe(BASE_URL.OFFICIAL_DEFAULT);
-    });
+  test('名称和别名均不存在时返回可操作的错误', async () => {
+    await expect(switcher.validateProvider('missing')).rejects.toThrow("供应商 'missing' 不存在");
   });
 
-  describe('Usage Statistics', () => {
-    it('应该更新供应商使用计数', () => {
-      const provider = {
-        name: 'test-provider',
-        usageCount: 5,
-        lastUsed: '2025-01-20T10:00:00.000Z'
-      };
-
-      provider.usageCount = (provider.usageCount || 0) + 1;
-      provider.lastUsed = new Date().toISOString();
-
-      expect(provider.usageCount).toBe(6);
-      expect(provider.lastUsed).toBeDefined();
-    });
-
-    it('应该追踪最后使用时间', () => {
-      const providers = [
-        { name: 'provider-1', lastUsed: '2025-01-15T10:00:00.000Z' },
-        { name: 'provider-2', lastUsed: '2025-01-20T15:30:00.000Z' },
-        { name: 'provider-3', lastUsed: '2025-01-18T12:00:00.000Z' }
-      ];
-
-      const mostRecent = providers.reduce((latest, current) => {
-        if (!latest || !latest.lastUsed) return current;
-        return new Date(current.lastUsed) > new Date(latest.lastUsed) ? current : latest;
-      }, null);
-
-      expect(mostRecent.name).toBe('provider-2');
-    });
-  });
-
-  describe('IDE Detection', () => {
-    it('应该识别 Claude Code IDE', () => {
-      const provider = { ideName: 'claude' };
-      const isCodex = provider.ideName === 'codex';
-
-      expect(isCodex).toBe(false);
-    });
-
-    it('应该识别 Codex IDE', () => {
-      const provider = { ideName: 'codex' };
-      const isCodex = provider.ideName === 'codex';
-
-      expect(isCodex).toBe(true);
-    });
-  });
-
-  describe('Validation', () => {
-    it('应该验证供应商名称存在', () => {
-      const mockProviders = [
-        { name: 'test-provider' },
-        { name: 'another-provider' }
-      ];
-
-      const exists = mockProviders.some(p => p.name === 'test-provider');
-      expect(exists).toBe(true);
-    });
-
-    it('应该验证不存在的供应商', () => {
-      const mockProviders = [
-        { name: 'test-provider' },
-        { name: 'another-provider' }
-      ];
-
-      const exists = mockProviders.some(p => p.name === 'non-existent');
-      expect(exists).toBe(false);
-    });
-  });
-
-  describe('Constants', () => {
-    it('应该定义所有认证模式', () => {
-      expect(AUTH_MODE_DISPLAY).toHaveProperty('api_key');
-      expect(AUTH_MODE_DISPLAY).toHaveProperty('auth_token');
-    });
-
-    it('应该定义 URL 显示信息', () => {
-      expect(BASE_URL).toHaveProperty('OFFICIAL_DEFAULT');
-      expect(BASE_URL).toHaveProperty('NOT_SET');
-    });
+  test('配置加载失败时不使用旧供应商', async () => {
+    configManager.load.mockRejectedValueOnce(new Error('读取失败'));
+    await expect(switcher.validateProvider('work')).rejects.toThrow('读取失败');
+    expect(configManager.getProvider).not.toHaveBeenCalled();
   });
 });

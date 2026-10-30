@@ -50,7 +50,7 @@ class ProviderRemover extends BaseCommand {
           {
             type: 'confirm',
             name: 'confirm',
-            message: `确定要删除供应商 '${provider.displayName}' 吗?`,
+            message: `确定要删除供应商 '${provider.displayName}' 吗?（官方 Codex 配置会同时清理该名称的 Session 缓存）`,
             default: false
           }
         ]);
@@ -157,7 +157,7 @@ class ProviderRemover extends BaseCommand {
           {
             type: 'confirm',
             name: 'confirm',
-            message: `确定要删除这 ${answer.providers.length} 个供应商吗？`,
+            message: `确定要删除这 ${answer.providers.length} 个供应商吗？（官方 Codex 配置会同时清理对应的 Session 缓存）`,
             default: false
           }
         ]);

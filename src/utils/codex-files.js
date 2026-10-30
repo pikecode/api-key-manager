@@ -668,6 +668,28 @@ async function cacheCodexOfficialSession(options = {}) {
   return await cacheCurrentChatGptLoginAuth(codexHome, authJsonPath, options.sessionKey);
 }
 
+async function withCodexSessionRemoval(sessionKey, removeProvider) {
+  const { acquireCodexLock } = require('./codex-lock');
+  const release = await acquireCodexLock();
+  try {
+    const cachePath = buildSessionCacheAuthPath(resolveCodexHome(), sessionKey);
+    const snapshot = await readFileSnapshot(cachePath);
+    try {
+      await fs.remove(cachePath);
+      return await removeProvider();
+    } catch (error) {
+      try {
+        await restoreFileSnapshot(cachePath, snapshot);
+      } catch (rollbackError) {
+        throw new Error(`删除失败且 Session 缓存恢复失败: ${error.message}; ${rollbackError.message}`, { cause: error });
+      }
+      throw error;
+    }
+  } finally {
+    await release();
+  }
+}
+
 module.exports = {
   resolveCodexHome,
   buildCodexPaths,
@@ -675,6 +697,7 @@ module.exports = {
   applyCodexConfig,
   clearCodexAkmConfig,
   cacheCodexOfficialSession,
+  withCodexSessionRemoval,
   backupCodexFiles,
   removeTopLevelApiBaseUrl,
   removeAkmModelProvider,
