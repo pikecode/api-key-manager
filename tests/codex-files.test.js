@@ -404,6 +404,25 @@ describe('applyCodexConfig with baseUrl', () => {
     expect(await fs.pathExists(authJsonPath)).toBe(false);
   });
 
+  test('官方模式切换失败时恢复认证、路由和被清除的 Session 缓存', async () => {
+    const { authJsonPath, configTomlPath } = buildCodexPaths(codexHome);
+    await fs.ensureDir(codexHome);
+    const auth = { auth_mode: 'chatgpt', tokens: { access_token: 'old-session' } };
+    const toml = 'model_provider = "akm"\n[model_providers.akm]\nname = "AKM"\n';
+    await fs.writeJson(authJsonPath, auth);
+    await fs.writeFile(configTomlPath, toml);
+    await cacheCodexOfficialSession({ codexHome, sessionKey: 'personal' });
+    const cacheDir = path.join(codexHome, 'akm-session-cache');
+    const [cacheFile] = await fs.readdir(cacheDir);
+    await expect(clearCodexAkmConfig({
+      codexHome, sessionKey: 'personal', forceRelogin: true,
+      writeFile: async () => { throw new Error('模拟写入失败'); }
+    })).rejects.toThrow('模拟写入失败');
+    expect(await fs.readJson(authJsonPath)).toEqual(auth);
+    expect(await fs.readFile(configTomlPath, 'utf8')).toBe(toml);
+    expect(await fs.readJson(path.join(cacheDir, cacheFile))).toEqual(auth);
+  });
+
   test('clearCodexAkmConfig 清理 config.toml 中的 AKM provider', async () => {
     const { configTomlPath } = buildCodexPaths(codexHome);
     await fs.ensureDir(codexHome);

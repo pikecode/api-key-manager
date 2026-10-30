@@ -195,6 +195,17 @@ class EnvSwitcher extends BaseCommand {
 
       } catch (error) {
         UIHelper.clearLoadingAnimation(loadingInterval);
+        if (error.code === 'RESUME_FAILED') {
+          if (!process.stdin.isTTY || !process.stdout.isTTY) throw error;
+          const { startNew } = await this.prompt({
+            type: 'confirm',
+            name: 'startNew',
+            message: `${error.message}\n是否不恢复历史，改为启动新会话？`,
+            default: false
+          });
+          if (!startNew) throw error;
+          error.code = isCodex ? 'SESSION_LOCKED' : 'NO_CONVERSATION_FOUND';
+        }
 
         // Claude Code: 如果是"没有可恢复的会话"错误，自动移除 --continue 参数并重试
         if (!isCodex &&
@@ -213,7 +224,7 @@ class EnvSwitcher extends BaseCommand {
             console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
             console.log();
             await launchProviderProcess(retryProvider, retryArgs, {
-              forceRelogin: this.forceRelogin
+              forceRelogin: false
             });
             return;
           } catch (retryError) {
@@ -239,7 +250,7 @@ class EnvSwitcher extends BaseCommand {
             console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
             console.log();
             await launchProviderProcess(retryProvider, retryArgs, {
-              forceRelogin: this.forceRelogin
+              forceRelogin: false
             });
             return;
           } catch (retryError) {

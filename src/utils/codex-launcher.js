@@ -7,6 +7,7 @@ const {
 } = require('./codex-files');
 const { assertSupportedLaunchArgs } = require('./launch-args');
 const { validator } = require('./validator');
+const { acquireCodexLock } = require('./codex-lock');
 
 /**
  * 构建 Codex CLI 环境变量
@@ -78,52 +79,62 @@ async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) 
 
   // 在写入 Codex 配置文件前完成全部输入校验。
   const env = buildCodexEnvVariables(config);
+  const releaseLock = await acquireCodexLock();
+  try {
+    // 根据认证模式处理配置文件
+    if (authMode === 'api_key') {
+      // 写入 ~/.codex/config.toml 和 ~/.codex/auth.json。
+      await applyCodexConfig(config);
+    } else if (authMode === 'chatgpt_login') {
+      // 清理 AKM 的配置，让 Codex 使用官方登录。
+      await clearCodexAkmConfig({
+        sessionKey: config.name,
+        forceRelogin: launchOptions.forceRelogin === true
+      });
+    }
 
-  // 根据认证模式处理配置文件
-  if (authMode === 'api_key') {
-    // 写入 ~/.codex/config.toml 和 ~/.codex/auth.json
-    // 确保 Codex CLI 使用 API Key 认证方式
-    await applyCodexConfig(config);
-  } else if (authMode === 'chatgpt_login') {
-    // chatgpt_login 模式：清理 AKM 的配置，让 Codex 使用官方登录
-    await clearCodexAkmConfig({
-      sessionKey: config.name,
-      forceRelogin: launchOptions.forceRelogin === true
-    });
-  }
+    // 处理参数：子命令放前面，选项放后面
+    const rawArgs = Array.isArray(launchArgs) ? [...launchArgs] : [];
+    const subcommands = rawArgs.filter(arg => !arg.startsWith('-'));
+    const options = rawArgs.filter(arg => arg.startsWith('-'));
+    const args = [...subcommands, ...options];
 
-  // 处理参数：子命令放前面，选项放后面
-  const rawArgs = Array.isArray(launchArgs) ? [...launchArgs] : [];
-  const subcommands = rawArgs.filter(arg => !arg.startsWith('-'));
-  const options = rawArgs.filter(arg => arg.startsWith('-'));
-  const args = [...subcommands, ...options];
+    clearTerminal();
 
-  clearTerminal();
+    if (authMode === 'chatgpt_login') {
+      console.log('\n启动 Codex CLI (官方网页登录)...\n');
+    } else {
+      console.log('\n启动 Codex CLI...\n');
+    }
 
-  if (authMode === 'chatgpt_login') {
-    console.log('\n启动 Codex CLI (官方网页登录)...\n');
-  } else {
-    console.log('\n启动 Codex CLI...\n');
-  }
+    return await new Promise((resolve, reject) => {
+      const child = spawn('codex', args, {
+        stdio: ['inherit', 'inherit', 'pipe'],
+        env,
+        shell: false
+      });
 
-  return new Promise((resolve, reject) => {
-    const child = spawn('codex', args, {
-      stdio: ['inherit', 'inherit', 'pipe'],
-      env,
-      shell: false
-    });
+      let stderrOutput = '';
+      let spawnFailed = false;
+      const forwardInterrupt = () => child.kill('SIGINT');
+      const forwardTerminate = () => child.kill('SIGTERM');
+      process.on('SIGINT', forwardInterrupt);
+      process.on('SIGTERM', forwardTerminate);
+      const cleanupSignals = () => {
+        process.removeListener('SIGINT', forwardInterrupt);
+        process.removeListener('SIGTERM', forwardTerminate);
+      };
 
-    let stderrOutput = '';
+      // 捕获 stderr 用于检查错误信息
+      child.stderr.on('data', (data) => {
+        const output = data.toString();
+        stderrOutput += output;
+        process.stderr.write(data);
+      });
 
-    // 捕获 stderr 用于检查错误信息
-    child.stderr.on('data', (data) => {
-      const output = data.toString();
-      stderrOutput += output;
-      process.stderr.write(data);
-    });
-
-    child.on('close', async (code, signal) => {
-      if (code === 0 || code === 130 || signal === 'SIGINT') {
+      child.on('close', async (code, signal) => {
+        cleanupSignals();
+        if (spawnFailed) return;
         try {
           if (authMode === 'chatgpt_login') {
             await cacheCodexOfficialSession({ sessionKey: config.name });
@@ -132,34 +143,41 @@ async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) 
           reject(new Error(`保存 Codex 官方登录 Session 失败: ${error.message}`));
           return;
         }
-        resolve();
-      } else {
-        // 检查是否是"会话被锁定"或"已有活跃写入者"的错误
-        const errorOutput = stderrOutput.toLowerCase();
-        const isResumeLaunch = rawArgs.includes('resume');
-        const isSessionLockedError =
+        if (code === 0 || code === 130 || signal === 'SIGINT') {
+          resolve();
+        } else {
+          // 只对明确的历史错误自动回退，未知错误交给用户决定。
+          const errorOutput = stderrOutput.toLowerCase();
+          const isSessionLockedError =
           errorOutput.includes('already has an active writer') ||
           errorOutput.includes('failed to resume session') ||
           errorOutput.includes('thread already has an active');
 
-        if (isSessionLockedError || (isResumeLaunch && code === 1)) {
-          const error = new Error('Codex 会话被锁定或无法恢复\n提示: 已尝试不带 resume 参数重新开始');
-          error.code = 'SESSION_LOCKED';
-          reject(error);
-        } else {
-          reject(new Error(`Codex CLI 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
+          if (isSessionLockedError) {
+            const error = new Error('Codex 会话被锁定或无法恢复');
+            error.code = 'SESSION_LOCKED';
+            reject(error);
+          } else {
+            const error = new Error(`Codex CLI 异常退出，退出代码: ${code}${stderrOutput.trim() ? `\n${stderrOutput.trim()}` : ''}`);
+            if (rawArgs.includes('resume') && code === 1) error.code = 'RESUME_FAILED';
+            reject(error);
+          }
         }
-      }
-    });
+      });
 
-    child.on('error', (error) => {
-      if (error.code === 'ENOENT') {
-        reject(new Error('找不到 codex 命令\n请先安装 Codex CLI: npm i -g @openai/codex 或 brew install --cask codex'));
-      } else {
-        reject(new Error(`启动 Codex CLI 失败: ${error.message}`));
-      }
+      child.on('error', (error) => {
+        spawnFailed = true;
+        cleanupSignals();
+        if (error.code === 'ENOENT') {
+          reject(new Error('找不到 codex 命令\n请先安装 Codex CLI: npm i -g @openai/codex 或 brew install --cask codex'));
+        } else {
+          reject(new Error(`启动 Codex CLI 失败: ${error.message}`));
+        }
+      });
     });
-  });
+  } finally {
+    await releaseLock();
+  }
 }
 
 module.exports = { executeCodexWithEnv, buildCodexEnvVariables };

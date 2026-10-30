@@ -211,7 +211,10 @@ class BaseCommand {
     if (this.isEscCancelled(error)) {
       return;
     }
-    Logger.error(`${context}失败: ${error.message}`);
+    if (!error.commandContext) {
+      error.commandContext = context;
+      error.message = `${context}失败: ${error.message}`;
+    }
     throw error;
   }
 

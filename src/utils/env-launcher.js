@@ -80,18 +80,19 @@ async function executeWithEnv(config, launchArgs = []) {
         // 检查是否是"没有可恢复会话"的错误
         // 检查 stderr 中是否包含各种格式的错误消息
         const errorOutput = stderrOutput.toLowerCase();
-        const isContinueLaunch = args.includes('--continue');
         const isNoConversationError =
           errorOutput.includes('no conversation found') ||
           errorOutput.includes('no recoverable session') ||
           errorOutput.includes('no deferred tool marker');
 
-        if (isNoConversationError || (isContinueLaunch && code === 1)) {
+        if (isNoConversationError) {
           const error = new Error('没有可恢复的会话\n提示: 请选择不带 --continue 参数重新开始');
           error.code = 'NO_CONVERSATION_FOUND';
           reject(error);
         } else {
-          reject(new Error(`Claude Code 异常退出，退出代码: ${code}\n提示: 请检查 API 配置是否正确`));
+          const error = new Error(`Claude Code 异常退出，退出代码: ${code}${stderrOutput.trim() ? `\n${stderrOutput.trim()}` : ''}`);
+          if (args.includes('--continue') && code === 1) error.code = 'RESUME_FAILED';
+          reject(error);
         }
       }
     });

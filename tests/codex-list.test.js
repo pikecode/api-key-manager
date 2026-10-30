@@ -12,7 +12,9 @@ describe('Codex Official Config in List', () => {
     tmpDir = path.join(os.tmpdir(), `akm-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
     fs.ensureDirSync(tmpDir);
     configPath = path.join(tmpDir, '.akm.json');
-    configManager = new ConfigManager(configPath);
+    configManager = new ConfigManager();
+    configManager.configPath = configPath;
+    expect(path.dirname(configManager.configPath)).toBe(tmpDir);
     await configManager.ensureLoaded();
   });
 

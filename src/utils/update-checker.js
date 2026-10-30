@@ -7,6 +7,10 @@
 const chalk = require('chalk');
 const inquirer = require('inquirer');
 const spawn = require('cross-spawn');
+const fs = require('fs-extra');
+const os = require('os');
+const path = require('path');
+const { writeJsonAtomic } = require('./atomic-file');
 
 /**
  * 比较两个版本号
@@ -91,7 +95,20 @@ async function checkForUpdates({ packageName, currentVersion }) {
       return;
     }
 
-    const latest = await getLatestVersion(packageName);
+    const cachePath = path.join(os.homedir(), '.akm-update-check.json');
+    let cache;
+    try {
+      cache = await fs.readJson(cachePath);
+    } catch {
+      // 缓存缺失或损坏时重新检查。
+    }
+    const age = Date.now() - cache?.checkedAt;
+    const cached = cache?.packageName === packageName && Number.isFinite(age) && age >= 0 && age < 86400000;
+    const latest = cached ? cache.latest : await getLatestVersion(packageName);
+    if (!cached) {
+      // 失败也记录检查时间，离线时不重复阻塞每次启动。
+      await writeJsonAtomic(cachePath, { packageName, checkedAt: Date.now(), latest }).catch(() => {});
+    }
     if (!latest) return;
 
     if (compareVersions(latest, currentVersion) > 0) {

@@ -598,22 +598,35 @@ async function applyCodexConfig(config, options = {}) {
  * @returns {Promise<{codexHome: string}>}
  */
 async function clearCodexAkmConfig(options = {}) {
+  let snapshots;
   try {
     const codexHome = await ensureCodexHome(options.codexHome);
     const { configTomlPath, authJsonPath } = buildCodexPaths(codexHome);
     const sessionKey = normalizeSessionKey(options.sessionKey);
     const forceRelogin = options.forceRelogin === true;
     const cachedAuthPath = forceRelogin ? null : await findChatGptLoginAuthSource(codexHome, sessionKey);
+    const changedPaths = [...new Set([
+      authJsonPath, configTomlPath,
+      buildSessionCacheAuthPath(codexHome, sessionKey),
+      buildSessionCacheAuthPath(codexHome)
+    ])];
+    const originals = await Promise.all(changedPaths.map(readFileSnapshot));
+    await readExistingAuthJson(authJsonPath);
+    const existingToml = originals[1].exists ? originals[1].content.toString('utf8') : '';
+    const cleanedToml = removeAkmModelProvider(removeTopLevelApiBaseUrl(existingToml));
+    const cachedAuth = cachedAuthPath ? await fs.readFile(cachedAuthPath) : null;
+    const writeFile = options.writeFile || writeFileAtomic;
 
     // 备份当前配置
     await backupCodexFiles(codexHome);
+    snapshots = changedPaths.map((filePath, index) => [filePath, originals[index]]);
     if (forceRelogin) {
       await clearCachedChatGptLoginAuth(codexHome, sessionKey);
     } else if (!sessionKey) {
       await cacheCurrentChatGptLoginAuth(codexHome, authJsonPath, sessionKey);
     }
 
-    // 只移除 API Key 认证文件，避免破坏 Codex 官方网页登录态。
+    // 指定账号时替换当前认证，未指定账号时保留现有官方认证。
     const shouldRemoveAuthJson = forceRelogin
       ? await shouldRemoveAuthJsonForRelogin(authJsonPath)
       : sessionKey
@@ -624,8 +637,7 @@ async function clearCodexAkmConfig(options = {}) {
 
     if (shouldRemoveAuthJson || shouldRestoreCachedAuth) {
       if (shouldRestoreCachedAuth) {
-        await fs.copy(cachedAuthPath, authJsonPath);
-        await setSecurePermissions(authJsonPath);
+        await writeFile(authJsonPath, cachedAuth, { mode: 0o600 });
         await cacheCurrentChatGptLoginAuth(codexHome, authJsonPath, sessionKey);
       } else {
         await fs.remove(authJsonPath);
@@ -633,18 +645,19 @@ async function clearCodexAkmConfig(options = {}) {
     }
 
     // 清理 config.toml 中的 AKM 配置
-    if (await fs.pathExists(configTomlPath)) {
-      const existingToml = await fs.readFile(configTomlPath, 'utf8');
-      const cleanedToml = removeAkmModelProvider(removeTopLevelApiBaseUrl(existingToml));
-
-      if (cleanedToml !== existingToml) {
-        await writeFileAtomic(configTomlPath, cleanedToml, { encoding: 'utf8', mode: 0o600 });
-        await setSecurePermissions(configTomlPath);
-      }
+    if (cleanedToml !== existingToml) {
+      await writeFile(configTomlPath, cleanedToml, { encoding: 'utf8', mode: 0o600 });
     }
 
     return { codexHome };
   } catch (error) {
+    if (snapshots) {
+      try {
+        await Promise.all(snapshots.map(([filePath, snapshot]) => restoreFileSnapshot(filePath, snapshot)));
+      } catch (rollbackError) {
+        throw new Error(`清理 Codex AKM 配置失败且回滚失败: ${error.message}; ${rollbackError.message}`, { cause: error });
+      }
+    }
     throw new Error(`清理 Codex AKM 配置失败: ${error.message}`, { cause: error });
   }
 }

@@ -82,6 +82,16 @@ describe('BaseCommand ESC 集成', () => {
     expect(callback).toHaveBeenCalledTimes(1);
   });
 
+  test('嵌套错误处理保留最内层上下文且不重复输出', async () => {
+    const { Logger } = require('../src/utils/logger');
+    Logger.error.mockClear();
+    const error = new Error('认证失败');
+    await expect(baseCommand.handleError(error, '启动供应商')).rejects.toBe(error);
+    await expect(baseCommand.handleError(error, '选择启动参数')).rejects.toBe(error);
+    expect(error.message).toBe('启动供应商失败: 认证失败');
+    expect(Logger.error).not.toHaveBeenCalled();
+  });
+
   test('移除监听器后不触发回调', () => {
     const callback = jest.fn();
     const token = baseCommand.createESCListener(callback, '返回测试');
