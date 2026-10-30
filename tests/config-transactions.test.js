@@ -3,7 +3,7 @@ const os = require('os');
 const path = require('path');
 const { ConfigManager } = require('../src/config');
 const { cacheCodexOfficialSession, clearCodexAkmConfig } = require('../src/utils/codex-files');
-const { acquireCodexLock } = require('../src/utils/codex-lock');
+const { prepareCodexRuntime } = require('../src/utils/codex-runtime');
 
 describe('配置保存和删除事务', () => {
   let directory;
@@ -65,9 +65,9 @@ describe('配置保存和删除事务', () => {
 
   test('会话运行中禁止删除，保留配置和缓存', async () => {
     await prepareSession();
-    const release = await acquireCodexLock();
+    const { release } = await prepareCodexRuntime({ name: 'official', ...official });
     try {
-      await expect(manager.removeProvider('official')).rejects.toThrow('已有 AKM 会话');
+      await expect(manager.removeProvider('official')).rejects.toThrow('仍有窗口运行');
       expect(manager.getProvider('official')).toBeDefined();
     } finally {
       await release();

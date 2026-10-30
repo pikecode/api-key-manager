@@ -1,560 +1,153 @@
-/**
- * Codex Launcher Tests
- * 测试 Codex CLI 环境变量启动器
- */
-
-// Mock dependencies
 jest.mock('cross-spawn');
 jest.mock('../src/utils/env-utils');
-jest.mock('../src/utils/codex-files');
-jest.mock('../src/utils/codex-lock');
-const { acquireCodexLock } = require('../src/utils/codex-lock');
-const releaseLock = jest.fn();
-
+jest.mock('../src/utils/codex-runtime');
+jest.mock('../src/utils/codex-history');
+const { EventEmitter } = require('events');
 const spawn = require('cross-spawn');
+const { prepareCodexRuntime } = require('../src/utils/codex-runtime');
+const { selectCodexHistory } = require('../src/utils/codex-history');
+const { sanitizeEnvValue } = require('../src/utils/env-utils');
 const { executeCodexWithEnv, buildCodexEnvVariables } = require('../src/utils/codex-launcher');
-const { sanitizeEnvValue, clearTerminal } = require('../src/utils/env-utils');
-const {
-  applyCodexConfig,
-  clearCodexAkmConfig,
-  cacheCodexOfficialSession
-} = require('../src/utils/codex-files');
 
-describe('Codex Launcher', () => {
+const config = { name: 'work', ideName: 'codex', authMode: 'api_key', authToken: 'fake-key', baseUrl: 'https://example.com/v1' };
+const official = { name: 'official', ideName: 'codex', authMode: 'chatgpt_login' };
+
+describe('Codex 隔离启动', () => {
+  let child;
+  let release;
   const originalEnv = process.env;
-  let mockChild;
-
+  const tick = () => new Promise(resolve => setTimeout(resolve, 0));
   beforeEach(() => {
-    acquireCodexLock.mockResolvedValue(releaseLock);
+    jest.resetAllMocks();
     process.env = { ...originalEnv };
-
-    // Mock sanitizeEnvValue to return the value as-is
+    jest.spyOn(console, 'log').mockImplementation(() => {});
     sanitizeEnvValue.mockImplementation(value => value);
-    clearTerminal.mockImplementation(() => {});
-    applyCodexConfig.mockResolvedValue();
-    clearCodexAkmConfig.mockResolvedValue();
-    cacheCodexOfficialSession.mockResolvedValue();
-
-    // Mock spawn child process
-    mockChild = {
-      on: jest.fn(),
-      stderr: {
-        on: jest.fn()
-      }
-    };
-    spawn.mockReturnValue(mockChild);
-
-    // Mock console.log
-    console.log = jest.fn();
+    selectCodexHistory.mockImplementation(async (_config, args) => args);
+    release = jest.fn().mockResolvedValue();
+    prepareCodexRuntime.mockResolvedValue({ home: '/isolated/work', release });
+    child = new EventEmitter();
+    child.stderr = new EventEmitter();
+    child.kill = jest.fn();
+    spawn.mockReturnValue(child);
   });
-
   afterEach(() => {
     process.env = originalEnv;
-    jest.clearAllMocks();
+    jest.restoreAllMocks();
   });
 
-  describe('buildCodexEnvVariables', () => {
-    it('应该构建基本的环境变量', () => {
-      const config = {
-        name: 'test-codex',
-        authToken: 'sk-xxxxx',
-        baseUrl: 'https://api.openai.com'
-      };
-
-      const env = buildCodexEnvVariables(config);
-
-      expect(env.OPENAI_API_KEY).toBe('sk-xxxxx');
-      expect(env.OPENAI_BASE_URL).toBe('https://api.openai.com');
-    });
-
-    it('应该设置自定义模型', () => {
-      const config = {
-        name: 'test-codex',
-        authToken: 'sk-xxxxx',
-        models: {
-          primary: 'gpt-4'
-        }
-      };
-
-      const env = buildCodexEnvVariables(config);
-
-      expect(env.OPENAI_MODEL).toBe('gpt-4');
-    });
-
-    it('应该处理缺少 baseUrl 的情况', () => {
-      process.env.OPENAI_BASE_URL = 'https://stale.example.com';
-      process.env.OPENAI_MODEL = 'stale-model';
-      const config = {
-        name: 'test-codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      const env = buildCodexEnvVariables(config);
-
-      expect(env.OPENAI_API_KEY).toBe('sk-xxxxx');
-      expect(env.OPENAI_BASE_URL).toBeUndefined();
-      expect(env.OPENAI_MODEL).toBeUndefined();
-    });
+  test('只修改子进程环境，使用供应商独立目录及文件认证', async () => {
+    process.env.CODEX_HOME = '/original';
+    const run = executeCodexWithEnv(config, ['--search', 'resume']);
+    await tick();
+    const [command, args, options] = spawn.mock.calls[0];
+    expect(command).toBe('codex');
+    expect(args.slice(0, 2)).toEqual(['resume', '--search']);
+    expect(args).toContain('cli_auth_credentials_store="file"');
+    expect(options.env.CODEX_HOME).toBe('/isolated/work');
+    expect(options.env.OPENAI_API_KEY).toBe('fake-key');
+    expect(options.shell).toBe(false);
+    expect(process.env.CODEX_HOME).toBe('/original');
+    child.emit('close', 0);
+    await run;
+    expect(release).toHaveBeenCalledTimes(1);
   });
 
-  describe('executeCodexWithEnv', () => {
-    it.each(['SIGINT', 'SIGTERM'])('转发 %s，等子进程退出后释放锁并移除监听', async signal => {
-      const handlers = {};
-      const originalCount = process.listenerCount(signal);
-      mockChild.on.mockImplementation((event, callback) => { handlers[event] = callback; });
-      mockChild.kill = jest.fn(() => {
-        handlers.close(null, signal);
-      });
-      const running = executeCodexWithEnv({ name: 'official', ideName: 'codex', authMode: 'chatgpt_login' });
-      const outcome = running.catch(error => error);
-      await new Promise(resolve => setTimeout(resolve, 0));
-      expect(releaseLock).not.toHaveBeenCalled();
-      process.emit(signal);
-      await outcome;
-      expect(mockChild.kill).toHaveBeenCalledWith(signal);
-      expect(releaseLock).toHaveBeenCalledTimes(1);
-      expect(process.listenerCount(signal)).toBe(originalCount);
-    });
-
-    it('启动失败后的 close 事件不得在释放锁后保存认证', async () => {
-      const handlers = {};
-      mockChild.on.mockImplementation((event, callback) => { handlers[event] = callback; });
-      const running = executeCodexWithEnv({ name: 'official', ideName: 'codex', authMode: 'chatgpt_login' });
-      const outcome = expect(running).rejects.toThrow('找不到 codex');
-      await new Promise(resolve => setTimeout(resolve, 0));
-      handlers.error(Object.assign(new Error('missing'), { code: 'ENOENT' }));
-      await outcome;
-      await handlers.close(-2, null);
-      expect(releaseLock).toHaveBeenCalledTimes(1);
-      expect(cacheCodexOfficialSession).not.toHaveBeenCalled();
-    });
-
-    it('获取锁失败时不改写配置或启动进程', async () => {
-      acquireCodexLock.mockRejectedValueOnce(new Error('目录已被占用'));
-      await expect(executeCodexWithEnv({ name: 'official', ideName: 'codex', authMode: 'chatgpt_login' }))
-        .rejects.toThrow('目录已被占用');
-      expect(clearCodexAkmConfig).not.toHaveBeenCalled();
-      expect(spawn).not.toHaveBeenCalled();
-    });
-
-    it('配置失败也释放目录锁', async () => {
-      clearCodexAkmConfig.mockRejectedValueOnce(new Error('写入失败'));
-      await expect(executeCodexWithEnv({ name: 'official', ideName: 'codex', authMode: 'chatgpt_login' }))
-        .rejects.toThrow('写入失败');
-      expect(releaseLock).toHaveBeenCalledTimes(1);
-    });
-
-    it('恢复失败时先保存新认证，再释放锁，并保留原始错误', async () => {
-      mockChild.stderr.on.mockImplementation((event, callback) => {
-        if (event === 'data') callback(Buffer.from('401 Unauthorized'));
-      });
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') setTimeout(() => callback(1), 0);
-      });
-      await expect(executeCodexWithEnv({ name: 'official', ideName: 'codex', authMode: 'chatgpt_login' }, ['resume']))
-        .rejects.toMatchObject({ code: 'RESUME_FAILED', message: expect.stringContaining('401 Unauthorized') });
-      expect(cacheCodexOfficialSession).toHaveBeenCalledWith({ sessionKey: 'official' });
-      expect(cacheCodexOfficialSession.mock.invocationCallOrder[0]).toBeLessThan(releaseLock.mock.invocationCallOrder[0]);
-    });
-
-    it('应该成功启动 Codex', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await executeCodexWithEnv(config);
-
-      expect(applyCodexConfig).toHaveBeenCalledWith(config);
-      expect(spawn).toHaveBeenCalledWith('codex', [], expect.any(Object));
-      const options = spawn.mock.calls[0][2];
-      expect(options.shell).toBe(false);
-      expect(options.env.OPENAI_API_KEY).toBe('sk-xxxxx');
-    });
-
-    it('应该拒绝无效的配置', async () => {
-      const config = {
-        name: 'test-invalid',
-        ideName: 'claude'
-      };
-
-      await expect(executeCodexWithEnv(config)).rejects.toThrow('无效的 Codex 供应商配置');
-    });
-
-    it('应该拒绝缺少 authToken 的配置', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex'
-      };
-
-      await expect(executeCodexWithEnv(config)).rejects.toThrow('未配置 API Key');
-    });
-
-    it('应该传递启动参数', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await executeCodexWithEnv(config, ['resume', '--search']);
-
-      expect(spawn).toHaveBeenCalledWith(
-        'codex',
-        ['resume', '--search'],
-        expect.any(Object)
-      );
-    });
-
-    it('应该正确排序子命令和选项', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      // 混合顺序的参数
-      await executeCodexWithEnv(config, ['--search', 'resume', '--full-auto']);
-
-      // 应该重新排序：子命令在前，选项在后
-      expect(spawn).toHaveBeenCalledWith(
-        'codex',
-        ['resume', '--search', '--full-auto'],
-        expect.any(Object)
-      );
-    });
-
-    it('应该拒绝未知或恶意启动参数', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      await expect(executeCodexWithEnv(config, ['resume; echo injected']))
-        .rejects.toThrow('不支持的启动参数');
-      expect(spawn).not.toHaveBeenCalled();
-    });
-
-    it('应该处理非零退出代码', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(1), 0);
-        }
-      });
-
-      await expect(executeCodexWithEnv(config)).rejects.toThrow('退出代码: 1');
-    });
-
-    it('应该处理 ENOENT 错误', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'error') {
-          setTimeout(() => callback({ code: 'ENOENT' }), 0);
-        }
-      });
-
-      await expect(executeCodexWithEnv(config)).rejects.toThrow('找不到 codex 命令');
-    });
-
-    it('应该处理其他启动错误', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'error') {
-          setTimeout(() => callback(new Error('Unknown error')), 0);
-        }
-      });
-
-      await expect(executeCodexWithEnv(config)).rejects.toThrow('启动 Codex CLI 失败');
-    });
-
-    it('应该清除终端', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await executeCodexWithEnv(config);
-
-      expect(clearTerminal).toHaveBeenCalled();
-    });
-
-    it('应该调用 applyCodexConfig', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await executeCodexWithEnv(config);
-
-      expect(applyCodexConfig).toHaveBeenCalledWith(config);
-    });
-
-    it('chatgpt_login 模式应该调用 clearCodexAkmConfig', async () => {
-      const config = {
-        name: 'test-codex-official',
-        ideName: 'codex',
-        authMode: 'chatgpt_login'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await executeCodexWithEnv(config);
-
-      expect(clearCodexAkmConfig).toHaveBeenCalledWith({
-        sessionKey: 'test-codex-official',
-        forceRelogin: false
-      });
-      expect(applyCodexConfig).not.toHaveBeenCalled();
-    });
-
-    it('chatgpt_login 模式应该支持强制重新网页登录', async () => {
-      const config = {
-        name: 'openai-work',
-        ideName: 'codex',
-        authMode: 'chatgpt_login'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await executeCodexWithEnv(config, [], { forceRelogin: true });
-
-      expect(clearCodexAkmConfig).toHaveBeenCalledWith({
-        sessionKey: 'openai-work',
-        forceRelogin: true
-      });
-    });
-
-    it('chatgpt_login 模式退出后应该缓存当前供应商 Session', async () => {
-      const config = {
-        name: 'openai-personal',
-        ideName: 'codex',
-        authMode: 'chatgpt_login'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await executeCodexWithEnv(config);
-
-      expect(cacheCodexOfficialSession).toHaveBeenCalledWith({
-        sessionKey: 'openai-personal'
-      });
-    });
-
-    it('chatgpt_login 模式不需要 authToken', async () => {
-      const config = {
-        name: 'test-official',
-        ideName: 'codex',
-        authMode: 'chatgpt_login',
-        authToken: null
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      await expect(executeCodexWithEnv(config)).resolves.toBeUndefined();
-    });
+  test('官方启动清理继承的 API 环境变量，转发重新登录选项', async () => {
+    process.env.OPENAI_API_KEY = 'stale';
+    process.env.OPENAI_BASE_URL = 'stale';
+    process.env.OPENAI_MODEL = 'stale';
+    const run = executeCodexWithEnv(official, [], { forceRelogin: true });
+    await tick();
+    expect(prepareCodexRuntime).toHaveBeenCalledWith(official, { forceRelogin: true });
+    const [, args, { env }] = spawn.mock.calls[0];
+    expect(args).toContain('model_provider="openai"');
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.OPENAI_BASE_URL).toBeUndefined();
+    expect(env.OPENAI_MODEL).toBeUndefined();
+    child.emit('close', 0);
+    await run;
   });
 
-  describe('authMode handling', () => {
-    it('chatgpt_login 模式不设置环境变量', () => {
-      process.env.OPENAI_API_KEY = 'existing-key';
-      const config = {
-        name: 'test-official',
-        authMode: 'chatgpt_login'
-      };
-
-      const env = buildCodexEnvVariables(config);
-
-      expect(env.OPENAI_API_KEY).toBeUndefined();
-      expect(env.OPENAI_BASE_URL).toBeUndefined();
-    });
-
-    it('缺少 authMode 时默认为 api_key', () => {
-      const config = {
-        name: 'test-codex',
-        authToken: 'sk-legacy-key'
-        // authMode 未设置
-      };
-
-      const env = buildCodexEnvVariables(config);
-
-      expect(env.OPENAI_API_KEY).toBe('sk-legacy-key');
-    });
-
-    it('从 api_key 模式切换到 chatgpt_login 时清理旧文件', async () => {
-      const config1 = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authMode: 'api_key',
-        authToken: 'sk-old-key'
-      };
-
-      const config2 = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authMode: 'chatgpt_login'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(0), 0);
-        }
-      });
-
-      // 先用 api_key 模式启动
-      await executeCodexWithEnv(config1);
-      expect(applyCodexConfig).toHaveBeenCalledWith(config1);
-
-      // 重置 mock
-      applyCodexConfig.mockClear();
-      clearCodexAkmConfig.mockClear();
-
-      // 然后切换到 chatgpt_login 模式
-      await executeCodexWithEnv(config2);
-      expect(clearCodexAkmConfig).toHaveBeenCalled();
-      expect(applyCodexConfig).not.toHaveBeenCalled();
-    });
+  test('选择历史后启动指定分支，保留当前供应商配置', async () => {
+    selectCodexHistory.mockResolvedValue(['fork', 'selected-id', '--search']);
+    const run = executeCodexWithEnv(config, ['resume', '--search']);
+    await tick();
+    expect(spawn.mock.calls[0][1].slice(0, 3)).toEqual(['fork', 'selected-id', '--search']);
+    expect(spawn.mock.calls[0][1]).toContain('model_provider="akm"');
+    child.emit('close', 0);
+    await run;
   });
 
-  describe('Error Handling', () => {
-    it('应该检测"already has an active writer"错误', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authMode: 'api_key',
-        authToken: 'sk-xxxxx'
-      };
+  test('取消历史选择不创建目录或进程', async () => {
+    selectCodexHistory.mockResolvedValue(null);
+    await executeCodexWithEnv(config, ['resume']);
+    expect(prepareCodexRuntime).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+  });
 
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(1), 0);
-        }
-      });
-
-      mockChild.stderr.on.mockImplementation((event, callback) => {
-        if (event === 'data') {
-          setTimeout(() => callback(Buffer.from('Error: thread already has an active writer')), 0);
-        }
-      });
-
-      try {
-        await executeCodexWithEnv(config, ['resume']);
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error.code).toBe('SESSION_LOCKED');
-        expect(error.message).toContain('会话被锁定');
-      }
-    });
-
-    it('应该检测"failed to resume session"错误', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authMode: 'api_key',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(1), 0);
-        }
-      });
-
-      mockChild.stderr.on.mockImplementation((event, callback) => {
-        if (event === 'data') {
-          setTimeout(() => callback(Buffer.from('Error: Failed to resume session')), 0);
-        }
-      });
-
-      try {
-        await executeCodexWithEnv(config, ['resume']);
-        expect(true).toBe(false);
-      } catch (error) {
-        expect(error.code).toBe('SESSION_LOCKED');
-      }
-    });
-
-    it('resume 原因不明的失败需要用户决定是否重试', async () => {
-      const config = {
-        name: 'test-codex',
-        ideName: 'codex',
-        authMode: 'api_key',
-        authToken: 'sk-xxxxx'
-      };
-
-      mockChild.on.mockImplementation((event, callback) => {
-        if (event === 'close') {
-          setTimeout(() => callback(1), 0);
-        }
-      });
-
-      await expect(executeCodexWithEnv(config, ['resume']))
-        .rejects.toMatchObject({ code: 'RESUME_FAILED' });
-    });
+  test.each([null, { ideName: 'claude' }])('拒绝无效供应商 %j', async value => {
+    await expect(executeCodexWithEnv(value)).rejects.toThrow('无效');
+  });
+  test('缺失密钥和不支持的参数在初始化前失败', async () => {
+    await expect(executeCodexWithEnv({ ...config, authToken: '' })).rejects.toThrow('未配置');
+    await expect(executeCodexWithEnv(config, ['unknown'])).rejects.toThrow('不支持');
+    expect(prepareCodexRuntime).not.toHaveBeenCalled();
+  });
+  test('初始化失败不启动进程', async () => {
+    prepareCodexRuntime.mockRejectedValue(new Error('初始化失败'));
+    await expect(executeCodexWithEnv(config)).rejects.toThrow('初始化失败');
+    expect(spawn).not.toHaveBeenCalled();
+  });
+  test.each(['ENOENT', 'EACCES'])('启动失败 %s 后释放运行记录', async code => {
+    const run = executeCodexWithEnv(config);
+    const expected = expect(run).rejects.toThrow(code === 'ENOENT' ? '找不到 codex' : '启动 Codex CLI 失败');
+    await tick();
+    child.emit('error', Object.assign(new Error('spawn failed'), { code }));
+    child.emit('close', -1);
+    await expected;
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+  test.each(['SIGINT', 'SIGTERM'])('转发 %s 并清理监听', async signal => {
+    const listeners = process.listenerCount(signal);
+    const run = executeCodexWithEnv(config).catch(error => error);
+    await tick();
+    process.emit(signal);
+    expect(child.kill).toHaveBeenCalledWith(signal);
+    child.emit('close', null, signal);
+    await run;
+    expect(process.listenerCount(signal)).toBe(listeners);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+  test('退出码 130 视为正常中断', async () => {
+    const run = executeCodexWithEnv(config);
+    await tick();
+    child.emit('close', 130);
+    await expect(run).resolves.toBeUndefined();
+  });
+  test.each([
+    [['resume'], 'thread already has an active writer', 'SESSION_LOCKED'],
+    [['resume'], '401 Unauthorized', 'RESUME_FAILED'],
+    [[], '', undefined]
+  ])('保留实际错误并区分恢复错误 %#', async (args, output, code) => {
+    const run = executeCodexWithEnv(config, args);
+    const expected = expect(run).rejects.toMatchObject(code ? { code } : { message: expect.stringContaining('退出代码: 1') });
+    await tick();
+    child.stderr.emit('data', Buffer.from(output));
+    child.emit('close', 1);
+    await expected;
+  });
+  test('分叉失败不能静默丢弃历史', async () => {
+    selectCodexHistory.mockResolvedValue(['fork', 'selected-id']);
+    const run = executeCodexWithEnv(config, ['resume']);
+    const expected = expect(run).rejects.toMatchObject({ code: 'RESUME_FAILED' });
+    await tick();
+    child.stderr.emit('data', Buffer.from('failed to resume session'));
+    child.emit('close', 1);
+    await expected;
+  });
+  test('环境变量支持模型配置、缺省认证模式与空 URL', () => {
+    expect(buildCodexEnvVariables({ name: 'test', authToken: 'key', models: { primary: 'model' } })).toMatchObject({ OPENAI_API_KEY: 'key', OPENAI_MODEL: 'model' });
+    expect(buildCodexEnvVariables({}).OPENAI_API_KEY).toBeUndefined();
+    expect(() => buildCodexEnvVariables({ name: 'test', baseUrl: 'invalid' })).toThrow('配置验证失败');
   });
 });

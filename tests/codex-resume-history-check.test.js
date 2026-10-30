@@ -131,7 +131,7 @@ describe('Session History Detection', () => {
 
         expect(resumeArg).toBeDefined();
         expect(resumeArg.disabled).toBeFalsy();
-        expect(resumeArg.description).toBe('恢复之前的会话');
+        expect(resumeArg.description).toBe('选择历史并创建新分支，保留原对话');
       } finally {
         fs.removeSync(tmpDir);
       }
@@ -148,7 +148,7 @@ describe('Session History Detection', () => {
 
         expect(resumeArg).toBeDefined();
         expect(resumeArg.disabled).toBeFalsy();
-        expect(resumeArg.description).toBe('恢复之前的会话');
+        expect(resumeArg.description).toBe('选择历史并创建新分支，保留原对话');
       } finally {
         fs.removeSync(tmpDir);
       }

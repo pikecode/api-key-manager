@@ -1,13 +1,9 @@
 const spawn = require('cross-spawn');
 const { sanitizeEnvValue, clearTerminal } = require('./env-utils');
-const {
-  applyCodexConfig,
-  clearCodexAkmConfig,
-  cacheCodexOfficialSession
-} = require('./codex-files');
+const { prepareCodexRuntime } = require('./codex-runtime');
+const { selectCodexHistory } = require('./codex-history');
 const { assertSupportedLaunchArgs } = require('./launch-args');
 const { validator } = require('./validator');
-const { acquireCodexLock } = require('./codex-lock');
 
 /**
  * 构建 Codex CLI 环境变量
@@ -79,25 +75,20 @@ async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) 
 
   // 在写入 Codex 配置文件前完成全部输入校验。
   const env = buildCodexEnvVariables(config);
-  const releaseLock = await acquireCodexLock();
+  const selectedArgs = await selectCodexHistory(config, launchArgs);
+  if (!selectedArgs) return;
+  const runtime = await prepareCodexRuntime(config, launchOptions);
+  env.CODEX_HOME = runtime.home;
   try {
-    // 根据认证模式处理配置文件
-    if (authMode === 'api_key') {
-      // 写入 ~/.codex/config.toml 和 ~/.codex/auth.json。
-      await applyCodexConfig(config);
-    } else if (authMode === 'chatgpt_login') {
-      // 清理 AKM 的配置，让 Codex 使用官方登录。
-      await clearCodexAkmConfig({
-        sessionKey: config.name,
-        forceRelogin: launchOptions.forceRelogin === true
-      });
-    }
-
     // 处理参数：子命令放前面，选项放后面
-    const rawArgs = Array.isArray(launchArgs) ? [...launchArgs] : [];
+    const rawArgs = [...selectedArgs];
     const subcommands = rawArgs.filter(arg => !arg.startsWith('-'));
     const options = rawArgs.filter(arg => arg.startsWith('-'));
-    const args = [...subcommands, ...options];
+    const args = [...subcommands, ...options,
+      '-c', 'cli_auth_credentials_store="file"',
+      '-c', `sqlite_home=${JSON.stringify(runtime.home)}`,
+      '-c', `model_provider="${authMode === 'chatgpt_login' || !config.baseUrl ? 'openai' : 'akm'}"`
+    ];
 
     clearTerminal();
 
@@ -135,14 +126,6 @@ async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) 
       child.on('close', async (code, signal) => {
         cleanupSignals();
         if (spawnFailed) return;
-        try {
-          if (authMode === 'chatgpt_login') {
-            await cacheCodexOfficialSession({ sessionKey: config.name });
-          }
-        } catch (error) {
-          reject(new Error(`保存 Codex 官方登录 Session 失败: ${error.message}`));
-          return;
-        }
         if (code === 0 || code === 130 || signal === 'SIGINT') {
           resolve();
         } else {
@@ -153,13 +136,13 @@ async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) 
           errorOutput.includes('failed to resume session') ||
           errorOutput.includes('thread already has an active');
 
-          if (isSessionLockedError) {
+          if (isSessionLockedError && !rawArgs.includes('fork')) {
             const error = new Error('Codex 会话被锁定或无法恢复');
             error.code = 'SESSION_LOCKED';
             reject(error);
           } else {
             const error = new Error(`Codex CLI 异常退出，退出代码: ${code}${stderrOutput.trim() ? `\n${stderrOutput.trim()}` : ''}`);
-            if (rawArgs.includes('resume') && code === 1) error.code = 'RESUME_FAILED';
+            if (launchArgs.includes('resume') && code === 1) error.code = 'RESUME_FAILED';
             reject(error);
           }
         }
@@ -176,7 +159,7 @@ async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) 
       });
     });
   } finally {
-    await releaseLock();
+    await runtime.release();
   }
 }
 

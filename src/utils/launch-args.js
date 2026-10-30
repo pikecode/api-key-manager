@@ -25,8 +25,8 @@ const claudeLaunchArgs = [
 const codexLaunchArgs = [
   {
     name: 'resume',
-    label: '继续上次对话',
-    description: '恢复之前的会话',
+    label: '从历史继续',
+    description: '选择历史并创建新分支，保留原对话',
     checked: false,
     isSubcommand: true
   },
@@ -157,11 +157,11 @@ async function hasCodexSessionHistory() {
     const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), '.codex');
 
     // 检查会话目录中是否有实际的会话数据
-    const sessionsDir = path.join(codexHome, 'sessions');
-    if (await fs.pathExists(sessionsDir)) {
-      const entries = await fs.readdir(sessionsDir);
-      if (entries.length > 0) {
-        return true;
+    for (const directory of ['sessions', 'archived_sessions']) {
+      const sessionsDir = path.join(codexHome, directory);
+      if (await fs.pathExists(sessionsDir)) {
+        const entries = await fs.readdir(sessionsDir);
+        if (entries.length > 0) return true;
       }
     }
 

@@ -669,9 +669,8 @@ async function cacheCodexOfficialSession(options = {}) {
 }
 
 async function withCodexSessionRemoval(sessionKey, removeProvider) {
-  const { acquireCodexLock } = require('./codex-lock');
-  const release = await acquireCodexLock();
-  try {
+  const { removeProviderRuntime } = require('./codex-runtime');
+  return removeProviderRuntime(sessionKey, async () => {
     const cachePath = buildSessionCacheAuthPath(resolveCodexHome(), sessionKey);
     const snapshot = await readFileSnapshot(cachePath);
     try {
@@ -685,14 +684,13 @@ async function withCodexSessionRemoval(sessionKey, removeProvider) {
       }
       throw error;
     }
-  } finally {
-    await release();
-  }
+  });
 }
 
 module.exports = {
   resolveCodexHome,
   buildCodexPaths,
+  buildSessionCacheAuthPath,
   readCodexFiles,
   applyCodexConfig,
   clearCodexAkmConfig,

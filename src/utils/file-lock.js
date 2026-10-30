@@ -6,7 +6,9 @@ async function acquireFileLock(lockPath, busyMessage) {
     handle = await fs.open(lockPath, 'wx', 0o600);
   } catch (error) {
     if (error.code !== 'EEXIST') throw error;
-    throw new Error(`${busyMessage}\n若进程异常终止，请确认相关进程均已退出后手动删除锁文件：${lockPath}`);
+    const busy = new Error(`${busyMessage}\n若进程异常终止，请确认相关进程均已退出后手动删除锁文件：${lockPath}`);
+    busy.code = 'LOCK_BUSY';
+    throw busy;
   }
   try {
     await fs.write(handle, String(process.pid));
