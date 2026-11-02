@@ -86,6 +86,21 @@ describe('EscNavigationManager', () => {
     expect(input.setRawModeCalls).toEqual([true, false]);
   });
 
+  test.each([null, false, true])('清理时恢复输入流状态：%s', flowing => {
+    const input = new FakeInput();
+    input.readableFlowing = flowing;
+    input.resume = jest.fn(() => { input.readableFlowing = true; });
+    input.pause = jest.fn(() => { input.readableFlowing = false; });
+    const manager = new EscNavigationManager(input);
+    const handler = manager.register();
+    expect(input.readableFlowing).toBe(true);
+    manager.unregister(handler);
+    expect(input.pause).toHaveBeenCalledTimes(flowing === true ? 0 : 1);
+    expect(input.readableFlowing).toBe(flowing === true);
+    manager.reset();
+    expect(input.pause).toHaveBeenCalledTimes(flowing === true ? 0 : 1);
+  });
+
   test('方向键组合不会触发ESC回退', () => {
     const input = new FakeInput();
     const manager = new EscNavigationManager(input, { triggerDelay: 100, postCallbackDelay: 5 });

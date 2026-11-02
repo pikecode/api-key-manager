@@ -10,6 +10,7 @@ class EscNavigationManager {
     this.listenerBound = false;
     this.rawModeEnabled = false;
     this.previousRawMode = null;
+    this.previousFlowing = null;
 
     this.supported = Boolean(
       this.input &&
@@ -170,6 +171,7 @@ class EscNavigationManager {
 
     if (typeof this.input.resume === 'function') {
       try {
+        this.previousFlowing = this.input.readableFlowing;
         this.input.resume();
       } catch {
         // 某些输入流不支持 resume，忽略即可
@@ -189,6 +191,10 @@ class EscNavigationManager {
     if (this.listenerBound) {
       this.input.removeListener('data', this.handleData);
       this.listenerBound = false;
+      // 只恢复本管理器启动的输入流，避免退出后 stdin 仍阻止进程结束。
+      if (this.previousFlowing !== true && typeof this.input.pause === 'function') {
+        this.input.pause();
+      }
     }
 
     this.cancelPending();
