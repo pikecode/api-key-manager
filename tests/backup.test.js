@@ -41,7 +41,11 @@ describe('备份与导入导出命令', () => {
       configPath: path.join(tempDir, '.akm-config.json'),
       ensureLoaded: jest.fn().mockResolvedValue(),
       getProvider: jest.fn(name => config.providers[name]),
-      save: jest.fn().mockResolvedValue(true)
+      save: jest.fn(async nextConfig => {
+        config = nextConfig;
+        fakeConfigManager.config = nextConfig;
+        return true;
+      })
     };
     manager = new BackupManager(fakeConfigManager);
     logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -52,6 +56,15 @@ describe('备份与导入导出命令', () => {
     logSpy.mockRestore();
     errorSpy.mockRestore();
     await fs.remove(tempDir);
+  });
+
+  test('导入保存失败不修改已加载的配置', async () => {
+    const before = JSON.parse(JSON.stringify(config));
+    const inputPath = path.join(tempDir, 'failed-import.json');
+    await fs.writeJson(inputPath, { version: '2.0', providers: { imported: createProvider({ name: 'imported' }) } });
+    fakeConfigManager.save.mockRejectedValueOnce(new Error('保存失败'));
+    await expect(manager.import(inputPath)).rejects.toThrow('保存失败');
+    expect(fakeConfigManager.config).toEqual(before);
   });
 
   test('默认导出彻底移除 Token 并设置安全权限', async () => {

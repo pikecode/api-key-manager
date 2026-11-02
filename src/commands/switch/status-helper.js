@@ -4,6 +4,7 @@
  */
 
 const chalk = require('chalk');
+const { compactTerminalText } = require('../../utils/terminal-format');
 
 class StatusHelper {
   /**
@@ -48,7 +49,7 @@ class StatusHelper {
     const color = colorMap[availability.state] || chalk.gray;
     const label = availability.label || defaultLabelMap[availability.state] || '未知';
 
-    return color(label);
+    return color(compactTerminalText(label, 24));
   }
 
   /**

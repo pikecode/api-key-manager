@@ -34,6 +34,17 @@ describe('codex-files', () => {
     expect(result.authJson).toBeNull();
   });
 
+  test('强制重新登录备份并移除损坏认证，普通启动仍拒绝', async () => {
+    const { authJsonPath } = buildCodexPaths(codexHome);
+    await fs.outputFile(authJsonPath, '{broken-auth');
+    await expect(clearCodexAkmConfig({ codexHome })).rejects.toThrow('格式无效');
+    expect(await fs.readFile(authJsonPath, 'utf8')).toBe('{broken-auth');
+    await clearCodexAkmConfig({ codexHome, forceRelogin: true });
+    expect(await fs.pathExists(authJsonPath)).toBe(false);
+    const [backup] = await fs.readdir(path.join(codexHome, 'akm-backups'));
+    expect(await fs.readFile(path.join(codexHome, 'akm-backups', backup, 'auth.json'), 'utf8')).toBe('{broken-auth');
+  });
+
   test('applyCodexConfig writes auth.json', async () => {
     const { authJsonPath } = buildCodexPaths(codexHome);
     await applyCodexConfig({ authToken: 'sk-test-key', name: 'test' });

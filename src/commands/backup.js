@@ -155,6 +155,7 @@ class BackupManager {
 
       let addedCount = 0;
       let skippedCount = 0;
+      const nextConfig = { ...this.configManager.config, providers: { ...this.configManager.config.providers } };
 
       for (const [name, provider] of Object.entries(importData.providers)) {
         const exists = this.configManager.getProvider(name);
@@ -166,7 +167,7 @@ class BackupManager {
         }
 
         // 添加或更新供应商
-        this.configManager.config.providers[name] = {
+        nextConfig.providers[name] = {
           ...provider,
           name,
           importedAt: new Date().toISOString()
@@ -177,19 +178,19 @@ class BackupManager {
       // 如果设置了 currentProvider 且该供应商存在
       if (
         importData.currentProvider &&
-        this.configManager.config.providers[importData.currentProvider]
+        nextConfig.providers[importData.currentProvider]
       ) {
-        if (!this.configManager.config.currentProvider || options.overwrite) {
-          this.configManager.config.currentProvider = importData.currentProvider;
+        if (!nextConfig.currentProvider || options.overwrite) {
+          nextConfig.currentProvider = importData.currentProvider;
         }
       }
 
-      const activeProvider = this.configManager.config.currentProvider;
-      for (const [name, provider] of Object.entries(this.configManager.config.providers)) {
-        provider.current = name === activeProvider;
+      const activeProvider = nextConfig.currentProvider;
+      for (const [name, provider] of Object.entries(nextConfig.providers)) {
+        nextConfig.providers[name] = { ...provider, current: name === activeProvider };
       }
 
-      await this.configManager.save();
+      await this.configManager.save(nextConfig);
 
       Logger.success('配置导入完成');
       console.log(chalk.gray(`  导入文件: ${absolutePath}`));

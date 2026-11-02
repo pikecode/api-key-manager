@@ -109,3 +109,24 @@ describe('Terminal Format', () => {
     });
   });
 });
+
+describe('列表尺寸', () => {
+  const { listPageSize, compactTerminalText } = require('../src/utils/terminal-format');
+  test('窄终端截断中文，并转义控制字符', () => {
+    expect(compactTerminalText('中文测试更多', 10)).toBe('中文测试..');
+    expect(compactTerminalText('hello\nworld', 80)).toBe('hello\\u000aworld');
+  });
+  test('小窗口至少一项，大窗口最多十五项', () => {
+    const descriptor = Object.getOwnPropertyDescriptor(process.stdout, 'rows');
+    try {
+      Object.defineProperty(process.stdout, 'rows', { configurable: true, value: 6 });
+      expect(listPageSize(100)).toBe(1);
+      Object.defineProperty(process.stdout, 'rows', { configurable: true, value: 80 });
+      expect(listPageSize(100)).toBe(15);
+      expect(listPageSize(3)).toBe(3);
+    } finally {
+      if (descriptor) Object.defineProperty(process.stdout, 'rows', descriptor);
+      else delete process.stdout.rows;
+    }
+  });
+});

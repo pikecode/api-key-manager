@@ -412,7 +412,7 @@ class ConfigManager {
     }
 
     // 使用不可变方式更新 config
-    this.config = {
+    const nextConfig = {
       ...this.config,
       currentProvider: newCurrentProvider,
       providers: {
@@ -422,9 +422,11 @@ class ConfigManager {
     };
 
     // 保证 current 标记与 currentProvider 一致，避免出现多个 current 或丢失 current 的情况
-    this._syncCurrentFlags();
+    for (const key of Object.keys(nextConfig.providers)) {
+      nextConfig.providers[key] = { ...nextConfig.providers[key], current: key === nextConfig.currentProvider };
+    }
 
-    return await this.save();
+    return await this.save(nextConfig);
   }
 
   async removeProvider(name) {
@@ -487,8 +489,8 @@ class ConfigManager {
       }
     });
 
-    this.config = { ...this.config, currentProvider: name, providers: updatedProviders };
-    return await this.save();
+    const nextConfig = { ...this.config, currentProvider: name, providers: updatedProviders };
+    return await this.save(nextConfig);
   }
 
   async setCurrentProvider(name) {
@@ -511,13 +513,13 @@ class ConfigManager {
     });
 
     // 使用不可变方式更新 config
-    this.config = {
+    const nextConfig = {
       ...this.config,
       currentProvider: name,
       providers: updatedProviders
     };
 
-    return await this.save();
+    return await this.save(nextConfig);
   }
 
   /**
@@ -545,7 +547,7 @@ class ConfigManager {
     };
 
     // 使用不可变方式更新 config
-    this.config = {
+    const nextConfig = {
       ...this.config,
       providers: {
         ...this.config.providers,
@@ -553,7 +555,7 @@ class ConfigManager {
       }
     };
 
-    return await this.save();
+    return await this.save(nextConfig);
   }
 
   /**
@@ -599,7 +601,7 @@ class ConfigManager {
     };
 
     // 使用不可变方式更新 config
-    this.config = {
+    const nextConfig = {
       ...this.config,
       providers: {
         ...this.config.providers,
@@ -607,7 +609,7 @@ class ConfigManager {
       }
     };
 
-    return await this.save();
+    return await this.save(nextConfig);
   }
 
   /**
@@ -765,9 +767,8 @@ class ConfigManager {
   }
 
   async reset() {
-    this.config = this.getDefaultConfig();
-    this.isLoaded = true;
-    return await this._performSave();
+    await this.ensureLoaded();
+    return await this.save(this.getDefaultConfig());
   }
 }
 

@@ -240,3 +240,13 @@ describe('StatusHelper', () => {
     });
   });
 });
+
+
+test('状态错误文字转义换行并限制长度', () => {
+  const { StatusHelper } = require('../src/commands/switch/status-helper');
+  const { stripVTControlCharacters } = require('node:util');
+  const label = stripVTControlCharacters(StatusHelper.formatAvailability({ state: 'offline', label: '错误\n' + '连接失败'.repeat(20) }));
+  expect(label).not.toContain('\n');
+  expect(label).toContain('\\u000a');
+  expect(label.endsWith('..')).toBe(true);
+});

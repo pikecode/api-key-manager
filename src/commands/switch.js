@@ -16,8 +16,9 @@ const { StatusHelper } = require('./switch/status-helper');
 const { LaunchArgsHelper } = require('./switch/launch-args-helper');
 const { ProviderChoicesHelper } = require('./switch/provider-choices-helper');
 const { ensureClaudeSettingsCompatibility } = require('./switch/claude-settings-compatibility');
-const { launchProviderProcess, markProviderAsCurrent } = require('./switch/provider-launcher');
+const { launchProviderProcess, markProviderAsCurrent, getLatestProvider } = require('./switch/provider-launcher');
 const { ProviderManager } = require('./switch/provider-manager');
+const { listPageSize } = require('../utils/terminal-format');
 
 /**
  * 环境切换器类
@@ -65,9 +66,7 @@ class EnvSwitcher extends BaseCommand {
   }
 
   _getPageSize(itemCount) {
-    const rows = process.stdout.rows || 24;
-    const reserved = 8;
-    return Math.min(itemCount, Math.max(5, rows - reserved));
+    return listPageSize(itemCount);
   }
 
   async validateProvider(providerName) {
@@ -184,13 +183,14 @@ class EnvSwitcher extends BaseCommand {
       const loadingInterval = UIHelper.createLoadingAnimation('正在设置环境...');
 
       try {
-        const launchProvider = await markProviderAsCurrent(this.configManager, provider, selectedLaunchArgs);
+        const launchProvider = await getLatestProvider(this.configManager, provider);
         UIHelper.clearLoadingAnimation(loadingInterval);
 
         console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}...`, UIHelper.icons.success));
         console.log();
         await launchProviderProcess(launchProvider, selectedLaunchArgs, {
-          forceRelogin: this.forceRelogin
+          forceRelogin: this.forceRelogin,
+          onStarted: () => markProviderAsCurrent(this.configManager, launchProvider, selectedLaunchArgs)
         });
 
       } catch (error) {
@@ -218,13 +218,14 @@ class EnvSwitcher extends BaseCommand {
           const retryLoadingInterval = UIHelper.createLoadingAnimation('正在重新启动（无历史恢复）...');
 
           try {
-            const retryProvider = await markProviderAsCurrent(this.configManager, provider, retryArgs);
+            const retryProvider = await getLatestProvider(this.configManager, provider);
             UIHelper.clearLoadingAnimation(retryLoadingInterval);
 
             console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
             console.log();
             await launchProviderProcess(retryProvider, retryArgs, {
-              forceRelogin: false
+              forceRelogin: false,
+              onStarted: () => markProviderAsCurrent(this.configManager, retryProvider, retryArgs)
             });
             return;
           } catch (retryError) {
@@ -244,13 +245,14 @@ class EnvSwitcher extends BaseCommand {
           const retryLoadingInterval = UIHelper.createLoadingAnimation('正在重新启动（新会话）...');
 
           try {
-            const retryProvider = await markProviderAsCurrent(this.configManager, provider, retryArgs);
+            const retryProvider = await getLatestProvider(this.configManager, provider);
             UIHelper.clearLoadingAnimation(retryLoadingInterval);
 
             console.log(UIHelper.createCard('准备就绪', `环境配置完成，正在启动 🚀 ${ideDisplayName}（新会话）...`, UIHelper.icons.success));
             console.log();
             await launchProviderProcess(retryProvider, retryArgs, {
-              forceRelogin: false
+              forceRelogin: false,
+              onStarted: () => markProviderAsCurrent(this.configManager, retryProvider, retryArgs)
             });
             return;
           } catch (retryError) {
@@ -751,7 +753,7 @@ class EnvSwitcher extends BaseCommand {
       providers = [...providers].sort((a, b) => {
         const stateA = statusMap[a.name]?.state || 'pending';
         const stateB = statusMap[b.name]?.state || 'pending';
-        return (stateOrder[stateA] || 2) - (stateOrder[stateB] || 2);
+        return (stateOrder[stateA] ?? 2) - (stateOrder[stateB] ?? 2);
       });
 
       this._renderPage({
@@ -858,7 +860,7 @@ class EnvSwitcher extends BaseCommand {
         if (this.activeStatusRefresh !== refreshToken) {
           return;
         }
-        Logger.error(`供应商状态检测失败: ${error.message}`);
+        // 检测失败通过提示行展示，避免在活动菜单中插入日志打乱光标。
         const fallback = this._buildErrorStatusMap(providers, error);
         Object.assign(latestMap, fallback);
         this.latestStatusMap = latestMap;
@@ -887,6 +889,10 @@ class EnvSwitcher extends BaseCommand {
       return;
     }
 
+    if (this._refreshTimer) {
+      clearTimeout(this._refreshTimer);
+      this._refreshTimer = null;
+    }
     this._refreshPromptChoices(activePrompt, providers, statusMap, { hasError: Boolean(error) });
   }
 
@@ -904,14 +910,12 @@ class EnvSwitcher extends BaseCommand {
     }
 
     // 节流：80ms 内的多次回调合并为一次 render，避免高频刷新导致 ANSI 光标错位
-    if (this._refreshTimer) {
-      clearTimeout(this._refreshTimer);
-    }
+    if (this._refreshTimer) return;
     this._refreshTimer = setTimeout(() => {
       this._refreshTimer = null;
       if (this.activeStatusRefresh !== refreshToken) return;
       const activeP = this.activePrompt?.promise?.ui?.activePrompt;
-      if (!activeP || activeP.status === 'answered') return;
+      if (!activeP || activeP !== activePrompt || activeP.status === 'answered') return;
       const providers = this.filteredProviders || this.configManager.listProviders();
       const statusMap = this.latestStatusMap || {};
       this._refreshPromptChoices(activeP, providers, statusMap);
@@ -921,18 +925,8 @@ class EnvSwitcher extends BaseCommand {
   _refreshPromptChoices(activePrompt, providers, statusMap, options = {}) {
     const includeActions = this.currentPromptContext === 'manage';
 
-    let sortedProviders = providers;
-    if (includeActions) {
-      const stateOrder = { online: 0, degraded: 1, pending: 2, offline: 3 };
-      sortedProviders = [...providers].sort((a, b) => {
-        const stateA = statusMap[a.name]?.state || 'pending';
-        const stateB = statusMap[b.name]?.state || 'pending';
-        return (stateOrder[stateA] ?? 2) - (stateOrder[stateB] ?? 2);
-      });
-      this.filteredProviders = sortedProviders;
-    }
-
-    const updatedChoicesBase = this.createProviderChoices(sortedProviders, includeActions, statusMap);
+    // 只更新状态文字，不在用户操作过程中重排列表。
+    const updatedChoicesBase = this.createProviderChoices(providers, includeActions, statusMap);
     const updatedChoices = [...updatedChoicesBase];
 
     if (!includeActions) {
@@ -948,11 +942,18 @@ class EnvSwitcher extends BaseCommand {
     }
 
     const previousValue = this._getActivePromptPreviousValue(activePrompt);
+    const nextChoices = new Choices(updatedChoices, activePrompt.answers);
+    const message = this._buildStatusPromptMessage(providers.length, options.hasError);
+    const pageSize = this._getPageSize(updatedChoices.length);
+    const previousChoices = activePrompt.opt.choices.realChoices;
+    if (pageSize === activePrompt.opt.pageSize && message === activePrompt.opt.message && nextChoices.realChoices.length === previousChoices.length &&
+        nextChoices.realChoices.every((choice, index) => choice.name === previousChoices[index].name && choice.value === previousChoices[index].value)) return;
 
-    activePrompt.opt.choices = new Choices(updatedChoices, activePrompt.answers);
+    activePrompt.opt.choices = nextChoices;
+    activePrompt.opt.pageSize = pageSize;
 
     this._restorePromptSelection(activePrompt, previousValue);
-    activePrompt.opt.message = this._buildStatusPromptMessage(providers.length, options.hasError);
+    activePrompt.opt.message = message;
 
     activePrompt.render();
   }

@@ -52,8 +52,28 @@ function formatMessage(message, type = 'info') {
   return formatter(`${symbol} ${message}`);
 }
 
+function listPageSize(count) {
+  return Math.max(1, Math.min(count, 15, (process.stdout.rows || 24) - 8));
+}
+
+function compactTerminalText(value, columns = (process.stdout.columns || 80) - 4) {
+  const text = escapeTerminalText(value);
+  let width = 0;
+  let result = '';
+  // 非 ASCII 字符保守按两列计算，避免中文和 emoji 在窄终端换行。
+  for (const character of text) {
+    const size = character.codePointAt(0) > 127 ? 2 : 1;
+    if (width + size > Math.max(0, columns - 2)) return result + '..';
+    width += size;
+    result += character;
+  }
+  return result;
+}
+
 module.exports = {
   containsUnsafeTerminalCharacters,
   escapeTerminalText,
+  listPageSize,
+  compactTerminalText,
   formatMessage
 };

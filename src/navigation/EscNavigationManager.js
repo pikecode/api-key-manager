@@ -10,7 +10,6 @@ class EscNavigationManager {
     this.listenerBound = false;
     this.rawModeEnabled = false;
     this.previousRawMode = null;
-    this.postCallbackDelay = typeof options.postCallbackDelay === 'number' ? options.postCallbackDelay : 50;
 
     this.supported = Boolean(
       this.input &&
@@ -34,8 +33,7 @@ class EscNavigationManager {
     const handler = {
       id: Symbol('esc-handler'),
       onTrigger: typeof options.onTrigger === 'function' ? options.onTrigger : null,
-      once: options.once !== false,
-      postDelay: typeof options.postDelay === 'number' ? options.postDelay : this.postCallbackDelay
+      once: options.once !== false
     };
 
     this.handlers.push(handler);
@@ -131,14 +129,12 @@ class EscNavigationManager {
     }
 
     if (handler.onTrigger) {
-      setTimeout(() => {
-        try {
-          handler.onTrigger();
-        } catch {
-          // 在ESC回调中抛出的错误不应终止进程
-          // 交由调用方自行处理记录
-        }
-      }, handler.postDelay);
+      // ESC 已经过组合键等待期，立即取消旧提示，避免回调落入下一个菜单。
+      try {
+        handler.onTrigger();
+      } catch {
+        // 交由调用方处理回调错误。
+      }
     }
   }
 

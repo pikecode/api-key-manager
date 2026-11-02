@@ -78,7 +78,7 @@ describe('provider-launcher', () => {
 
       await launchProviderProcess(provider, args);
 
-      expect(executeWithEnv).toHaveBeenCalledWith(provider, args);
+      expect(executeWithEnv).toHaveBeenCalledWith(provider, args, {});
       expect(executeCodexWithEnv).not.toHaveBeenCalled();
     });
 

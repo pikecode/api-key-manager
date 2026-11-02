@@ -611,7 +611,7 @@ async function clearCodexAkmConfig(options = {}) {
       buildSessionCacheAuthPath(codexHome)
     ])];
     const originals = await Promise.all(changedPaths.map(readFileSnapshot));
-    await readExistingAuthJson(authJsonPath);
+    if (!forceRelogin) await readExistingAuthJson(authJsonPath);
     const existingToml = originals[1].exists ? originals[1].content.toString('utf8') : '';
     const cleanedToml = removeAkmModelProvider(removeTopLevelApiBaseUrl(existingToml));
     const cachedAuth = cachedAuthPath ? await fs.readFile(cachedAuthPath) : null;
@@ -628,7 +628,7 @@ async function clearCodexAkmConfig(options = {}) {
 
     // 指定账号时替换当前认证，未指定账号时保留现有官方认证。
     const shouldRemoveAuthJson = forceRelogin
-      ? await shouldRemoveAuthJsonForRelogin(authJsonPath)
+      ? originals[0].exists
       : sessionKey
         ? await shouldRemoveAuthJsonForRelogin(authJsonPath)
         : await shouldRemoveAuthJsonForChatGptLogin(authJsonPath);

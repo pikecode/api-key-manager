@@ -2,6 +2,7 @@ const spawn = require('cross-spawn');
 const { sanitizeEnvValue, clearTerminal } = require('./env-utils');
 const { assertSupportedLaunchArgs } = require('./launch-args');
 const { validator } = require('./validator');
+const { trackProcessStart } = require('./process-start');
 
 function buildEnvVariables(config) {
   const env = { ...process.env };
@@ -48,7 +49,7 @@ function buildEnvVariables(config) {
   }
 }
 
-async function executeWithEnv(config, launchArgs = []) {
+async function executeWithEnv(config, launchArgs = [], launchOptions = {}) {
   assertSupportedLaunchArgs('claude', launchArgs);
   const env = buildEnvVariables(config);
   const args = [...launchArgs];
@@ -63,6 +64,7 @@ async function executeWithEnv(config, launchArgs = []) {
       env,
       shell: false
     });
+    const waitForStart = trackProcessStart(child, launchOptions.onStarted);
 
     let stderrOutput = '';
 
@@ -73,7 +75,8 @@ async function executeWithEnv(config, launchArgs = []) {
       process.stderr.write(data);
     });
 
-    child.on('close', (code, signal) => {
+    child.on('close', async (code, signal) => {
+      await waitForStart();
       if (code === 0 || code === 130 || signal === 'SIGINT') {
         resolve();
       } else {

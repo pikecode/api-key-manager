@@ -80,9 +80,22 @@ describe('Codex 隔离启动', () => {
 
   test('取消历史选择不创建目录或进程', async () => {
     selectCodexHistory.mockResolvedValue(null);
-    await executeCodexWithEnv(config, ['resume']);
+    const onStarted = jest.fn();
+    await executeCodexWithEnv(config, ['resume'], { onStarted });
+    expect(onStarted).not.toHaveBeenCalled();
     expect(prepareCodexRuntime).not.toHaveBeenCalled();
     expect(spawn).not.toHaveBeenCalled();
+  });
+
+  test('子进程创建后才记录状态，关闭前等待记录完成', async () => {
+    const onStarted = jest.fn().mockResolvedValue();
+    const run = executeCodexWithEnv(config, [], { onStarted });
+    await tick();
+    expect(onStarted).not.toHaveBeenCalled();
+    child.emit('spawn');
+    child.emit('close', 0);
+    await run;
+    expect(onStarted).toHaveBeenCalledTimes(1);
   });
 
   test.each([null, { ideName: 'claude' }])('拒绝无效供应商 %j', async value => {

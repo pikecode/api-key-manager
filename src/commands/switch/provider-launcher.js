@@ -7,10 +7,18 @@ async function launchProviderProcess(provider, selectedLaunchArgs, options = {})
     return;
   }
 
-  await executeWithEnv(provider, selectedLaunchArgs);
+  await executeWithEnv(provider, selectedLaunchArgs, options);
 }
 
 async function markProviderAsCurrent(configManager, provider, lastUsedArgs = []) {
+  const latestProvider = await getLatestProvider(configManager, provider);
+  await configManager.activateProvider(latestProvider.name, lastUsedArgs);
+  return typeof configManager.getProvider === 'function'
+    ? configManager.getProvider(latestProvider.name)
+    : latestProvider;
+}
+
+async function getLatestProvider(configManager, provider) {
   if (typeof configManager.load === 'function') {
     await configManager.load(true);
   }
@@ -24,13 +32,11 @@ async function markProviderAsCurrent(configManager, provider, lastUsedArgs = [])
     throw new Error(`供应商 '${provider.name}' 不存在\n使用 'akm list' 查看所有已配置的供应商`);
   }
 
-  await configManager.activateProvider(latestProvider.name, lastUsedArgs);
-  return typeof configManager.getProvider === 'function'
-    ? configManager.getProvider(latestProvider.name)
-    : latestProvider;
+  return latestProvider;
 }
 
 module.exports = {
   launchProviderProcess,
-  markProviderAsCurrent
+  markProviderAsCurrent,
+  getLatestProvider
 };

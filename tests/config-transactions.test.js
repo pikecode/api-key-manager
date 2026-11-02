@@ -4,6 +4,7 @@ const path = require('path');
 const { ConfigManager } = require('../src/config');
 const { cacheCodexOfficialSession, clearCodexAkmConfig } = require('../src/utils/codex-files');
 const { prepareCodexRuntime } = require('../src/utils/codex-runtime');
+const { acquireFileLock } = require('../src/utils/file-lock');
 
 describe('配置保存和删除事务', () => {
   let directory;
@@ -37,6 +38,32 @@ describe('配置保存和删除事务', () => {
     const saved = await fs.readJson(manager.configPath);
     expect(Object.keys(saved.providers)).toHaveLength(1);
     expect(await fs.pathExists(`${manager.configPath}.lock`)).toBe(false);
+  });
+
+  test.each([
+    ['添加', manager => manager.addProvider('failed', keyProvider)],
+    ['激活', manager => manager.activateProvider('b', ['--continue'])],
+    ['切换', manager => manager.setCurrentProvider('b')],
+    ['参数记忆', manager => manager.updateLastUsedArgs('a', ['--continue'])],
+    ['统计', manager => manager.recordUsageSession('a', 1000)],
+    ['重置', manager => manager.reset()]
+  ])('%s 保存失败后内存不变，后续操作不带入失败修改', async (_name, action) => {
+    await manager.addProvider('a', keyProvider);
+    await manager.addProvider('b', keyProvider);
+    const before = JSON.parse(JSON.stringify(manager.config));
+    const release = await acquireFileLock(`${manager.configPath}.lock`, 'busy');
+    try {
+      await expect(action(manager)).rejects.toMatchObject({ code: 'LOCK_BUSY' });
+      expect(manager.config).toEqual(before);
+    } finally {
+      await release();
+    }
+    await manager.addProvider('next', keyProvider);
+    const saved = await fs.readJson(manager.configPath);
+    expect(saved.providers.a).toEqual(before.providers.a);
+    expect(saved.providers.b).toEqual(before.providers.b);
+    expect(saved.providers.failed).toBeUndefined();
+    expect(saved.currentProvider).toBe(before.currentProvider);
   });
 
   test('修改时间相同但文件内容已改变时拒绝覆盖', async () => {

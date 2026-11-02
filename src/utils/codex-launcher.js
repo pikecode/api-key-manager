@@ -4,6 +4,7 @@ const { prepareCodexRuntime } = require('./codex-runtime');
 const { selectCodexHistory } = require('./codex-history');
 const { assertSupportedLaunchArgs } = require('./launch-args');
 const { validator } = require('./validator');
+const { trackProcessStart } = require('./process-start');
 
 /**
  * 构建 Codex CLI 环境变量
@@ -104,6 +105,7 @@ async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) 
         env,
         shell: false
       });
+      const waitForStart = trackProcessStart(child, launchOptions.onStarted);
 
       let stderrOutput = '';
       let spawnFailed = false;
@@ -126,6 +128,7 @@ async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) 
       child.on('close', async (code, signal) => {
         cleanupSignals();
         if (spawnFailed) return;
+        await waitForStart();
         if (code === 0 || code === 130 || signal === 'SIGINT') {
           resolve();
         } else {

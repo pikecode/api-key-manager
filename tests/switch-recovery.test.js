@@ -5,7 +5,7 @@ jest.mock('../src/commands/switch/provider-launcher');
 jest.mock('../src/commands/switch/claude-settings-compatibility');
 
 const { EnvSwitcher } = require('../src/commands/switch');
-const { launchProviderProcess, markProviderAsCurrent } = require('../src/commands/switch/provider-launcher');
+const { launchProviderProcess, markProviderAsCurrent, getLatestProvider } = require('../src/commands/switch/provider-launcher');
 const { ensureClaudeSettingsCompatibility } = require('../src/commands/switch/claude-settings-compatibility');
 
 describe('实际启动流程的恢复行为', () => {
@@ -20,6 +20,7 @@ describe('实际启动流程的恢复行为', () => {
     switcher = new EnvSwitcher();
     jest.spyOn(switcher, 'clearScreen').mockImplementation(() => {});
     jest.spyOn(switcher, 'prompt').mockResolvedValue({ startNew: false });
+    getLatestProvider.mockImplementation(async (_manager, selected) => selected);
     markProviderAsCurrent.mockImplementation(async (_manager, selected) => selected);
     ensureClaudeSettingsCompatibility.mockResolvedValue(true);
     launchProviderProcess.mockResolvedValue();
@@ -40,9 +41,17 @@ describe('实际启动流程的恢复行为', () => {
     switcher.forceRelogin = true;
     launchProviderProcess.mockRejectedValueOnce(Object.assign(new Error('历史被锁定'), { code: 'SESSION_LOCKED' }));
     await switcher.launchProvider(provider, ['resume', '--search']);
-    expect(launchProviderProcess).toHaveBeenNthCalledWith(1, provider, ['resume', '--search'], { forceRelogin: true });
-    expect(launchProviderProcess).toHaveBeenNthCalledWith(2, provider, ['--search'], { forceRelogin: false });
+    expect(launchProviderProcess).toHaveBeenNthCalledWith(1, provider, ['resume', '--search'], { forceRelogin: true, onStarted: expect.any(Function) });
+    expect(launchProviderProcess).toHaveBeenNthCalledWith(2, provider, ['--search'], { forceRelogin: false, onStarted: expect.any(Function) });
     expect(switcher.prompt).not.toHaveBeenCalled();
+  });
+
+  test('取消或尚未启动时不更新当前供应商，启动回调才记录', async () => {
+    await switcher.launchProvider(provider, ['resume']);
+    expect(markProviderAsCurrent).not.toHaveBeenCalled();
+    const options = launchProviderProcess.mock.calls[0][2];
+    await options.onStarted();
+    expect(markProviderAsCurrent).toHaveBeenCalledWith(switcher.configManager, provider, ['resume']);
   });
 
   test.each(['codex', 'claude'])('未知的 %s 恢复错误默认不重试', async ideName => {
@@ -57,7 +66,7 @@ describe('实际启动流程的恢复行为', () => {
     switcher.prompt.mockResolvedValue({ startNew: true });
     launchProviderProcess.mockRejectedValueOnce(Object.assign(new Error('未知错误'), { code: 'RESUME_FAILED' }));
     await switcher.launchProvider(provider, ['resume']);
-    expect(launchProviderProcess).toHaveBeenNthCalledWith(2, provider, [], { forceRelogin: false });
+    expect(launchProviderProcess).toHaveBeenNthCalledWith(2, provider, [], { forceRelogin: false, onStarted: expect.any(Function) });
   });
 
   test('非交互环境保留原错误，不询问或重试', async () => {

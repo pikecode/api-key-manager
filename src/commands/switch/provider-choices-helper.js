@@ -1,3 +1,6 @@
+const { stripVTControlCharacters } = require('node:util');
+const { compactTerminalText } = require('../../utils/terminal-format');
+
 class ProviderChoicesHelper {
   static buildProviderChoices(providers, options = {}) {
     const {
@@ -54,8 +57,11 @@ class ProviderChoicesHelper {
       ? chalk.green(' 🌐 官方登录')
       : '';
 
+    const label = `${icon} ${ideTag} ${UIHelper.formatProvider(provider)}${authModeLabel}${lastUsedLabel} ${statusLabel}`;
+    const plain = stripVTControlCharacters(label);
+    const compact = compactTerminalText(plain);
     return {
-      name: `${icon} ${ideTag} ${UIHelper.formatProvider(provider)}${authModeLabel}${lastUsedLabel} ${statusLabel}`,
+      name: compact === plain ? label : compact,
       value: provider.name,
       short: provider.name
     };

@@ -92,6 +92,25 @@ describe('BaseCommand ESC 集成', () => {
     expect(Logger.error).not.toHaveBeenCalled();
   });
 
+  test('ESC 通知在返回下一菜单之前完成，不遗留延迟清屏', async () => {
+    const callback = jest.fn();
+    const first = baseCommand.promptWithESCAndDefault({ type: 'list', name: 'a', choices: ['a'] }, '返回', callback, null);
+    input.emit('data', '\u001b');
+    jest.advanceTimersByTime(100);
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(promptMockInstances[0].ui.close).toHaveBeenCalledTimes(1);
+    await expect(first).resolves.toBeNull();
+    const next = baseCommand.prompt({ type: 'list', name: 'b', choices: ['b'] });
+    logSpy.mockClear();
+    writeSpy.mockClear();
+    jest.advanceTimersByTime(200);
+    expect(promptMockInstances[1].ui.close).not.toHaveBeenCalled();
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(writeSpy).not.toHaveBeenCalled();
+    promptMockInstances[1].resolve({ b: 'b' });
+    await next;
+  });
+
   test('移除监听器后不触发回调', () => {
     const callback = jest.fn();
     const token = baseCommand.createESCListener(callback, '返回测试');

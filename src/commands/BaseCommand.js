@@ -152,7 +152,6 @@ class BaseCommand {
 
     const handler = this.escManager.register({
       once: options.once !== false,
-      postDelay: typeof options.postDelay === 'number' ? options.postDelay : undefined,
       onTrigger: () => {
         this.cancelActivePrompt();
         this.clearScreen();
@@ -162,23 +161,17 @@ class BaseCommand {
         }
 
         if (typeof callback === 'function') {
-          const delay = typeof options.callbackDelay === 'number' ? options.callbackDelay : 50;
-          setTimeout(() => {
-            try {
-              const result = callback();
-              if (result && typeof result.catch === 'function') {
-                result.catch((error) => {
-                  if (!this.isEscCancelled(error)) {
-                    Logger.error(`ESC回退回调执行失败: ${error.message}`);
-                  }
-                });
-              }
-            } catch (error) {
-              if (!this.isEscCancelled(error)) {
-                Logger.error(`ESC回退回调执行失败: ${error.message}`);
-              }
+          // 同步执行通知，避免新菜单渲染后旧通知才写入终端。
+          try {
+            const result = callback();
+            if (result && typeof result.catch === 'function') {
+              result.catch((error) => {
+                if (!this.isEscCancelled(error)) Logger.error(`ESC回退回调执行失败: ${error.message}`);
+              });
             }
-          }, delay);
+          } catch (error) {
+            if (!this.isEscCancelled(error)) Logger.error(`ESC回退回调执行失败: ${error.message}`);
+          }
         }
       }
     });

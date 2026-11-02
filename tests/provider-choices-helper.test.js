@@ -129,3 +129,19 @@ describe('ProviderChoicesHelper', () => {
     });
   });
 });
+
+
+test('长供应商文字只占一行且选择值保持完整', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(process.stdout, 'columns');
+  try {
+    Object.defineProperty(process.stdout, 'columns', { configurable: true, value: 40 });
+    const provider = { name: '供应商'.repeat(20), displayName: '显示名\n下一行' };
+    const choice = ProviderChoicesHelper.buildProviderChoice(provider, { UIHelper, StatusHelper, chalk });
+    expect(choice.value).toBe(provider.name);
+    expect(choice.name).not.toContain('\n');
+    expect([...choice.name].reduce((width, char) => width + (char.codePointAt(0) > 127 ? 2 : 1), 0)).toBeLessThanOrEqual(36);
+  } finally {
+    if (descriptor) Object.defineProperty(process.stdout, 'columns', descriptor);
+    else delete process.stdout.columns;
+  }
+});
