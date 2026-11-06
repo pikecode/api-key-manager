@@ -602,3 +602,5 @@ MIT License
 - [NPM](https://www.npmjs.com/package/@pikecode/api-key-manager)
 - [GitHub](https://github.com/pikecode/api-key-manager)
 - [Issues](https://github.com/pikecode/api-key-manager/issues)
+
+历史恢复的确认文案会区分来源：同一第三方配置只提示创建新分支；不同配置提示上下文将发送给当前供应商；无法确定来源时明确提示未知。新建第三方对话会记录独立的模型供应商标识，旧历史不会被改写。多个官方账号仍共享原生 `openai` 标识，因此无法仅凭历史元数据判断账号是否相同。供应商名称、端点或认证改变后视为不同配置。所有情况仍需确认创建分支，默认选择“否”：返回历史列表并保留分组、已加载批次和选中项；确认页按 ESC 取消启动。历史来源可匹配现有配置时显示供应商名称，旧第三方、官方账号及已变更或删除的配置显示相应的来源未确认说明，不直接展示内部摘要标识。

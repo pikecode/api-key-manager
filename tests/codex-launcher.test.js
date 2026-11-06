@@ -73,7 +73,13 @@ describe('Codex 隔离启动', () => {
     const run = executeCodexWithEnv(config, ['resume', '--search']);
     await tick();
     expect(spawn.mock.calls[0][1].slice(0, 3)).toEqual(['fork', 'selected-id', '--search']);
-    expect(spawn.mock.calls[0][1]).toContain('model_provider="akm"');
+    expect(spawn.mock.calls[0][1]).toContain(`model_provider="${require('../src/utils/codex-provider-identity').codexProviderIdentity(config)}"`);
+    const key = require('../src/utils/codex-provider-identity').codexProviderIdentity(config);
+    expect(spawn.mock.calls[0][1]).toEqual(expect.arrayContaining([
+      `model_providers.${key}.base_url=${JSON.stringify(config.baseUrl)}`,
+      `model_providers.${key}.wire_api="responses"`,
+      `model_providers.${key}.requires_openai_auth=true`
+    ]));
     child.emit('close', 0);
     await run;
   });

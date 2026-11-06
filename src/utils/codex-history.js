@@ -1,8 +1,10 @@
 const fs = require('fs-extra');
+const { codexProviderIdentity, historyConfirmation } = require('./codex-provider-identity');
 const path = require('path');
 const { BaseCommand } = require('../commands/BaseCommand');
 const { compactTerminalText, escapeTerminalText, listPageSize } = require('./terminal-format');
 const { resolveCodexHome } = require('./codex-files');
+const { configManager } = require('../config');
 
 async function listCodexHistory(root = resolveCodexHome()) {
   const history = [];
@@ -70,6 +72,15 @@ async function selectCodexHistory(config, args) {
     throw error;
   }
   if (!process.stdin.isTTY || !process.stdout.isTTY) throw new Error('恢复历史需要交互终端，请交互选择历史或使用 --no-args 新建会话');
+  await configManager.ensureLoaded();
+  const providerNames = new Map();
+  for (const provider of [...configManager.listProviders().filter(item => item.ideName === 'codex'), config]) {
+    const identity = codexProviderIdentity(provider);
+    // openai 标识无法区分账号，不能映射为某一个官方配置名称。
+    if (identity !== 'openai') providerNames.set(identity, provider.displayName || provider.name);
+  }
+  const providerLabel = identity => providerNames.get(identity) ||
+    (identity === 'openai' ? 'OpenAI（账号未确认）' : identity === 'akm' ? '第三方（来源未确认）' : '未知来源');
   const currentDirectory = await normalizeDirectory(process.cwd());
   const directories = new Map();
   const local = [];
@@ -89,7 +100,7 @@ async function selectCodexHistory(config, args) {
       const items = showOther ? other : local;
       const visible = items.slice(0, limits[group]);
       const choices = visible.map(item => ({
-        name: compactTerminalText(`${item.id.slice(0, 8)} | ${new Date(item.modifiedAt).toLocaleString()} | ${path.basename(item.cwd) || '未知项目'} | ${item.provider}`),
+        name: compactTerminalText(`${item.id.slice(0, 8)} | ${new Date(item.modifiedAt).toLocaleString()} | ${path.basename(item.cwd) || '未知项目'} | ${providerLabel(item.provider)}`),
         value: item.id
       }));
       if (items.length > visible.length) choices.push({ name: `加载更多（已显示 ${visible.length}/${items.length}）`, value: 'more' });
@@ -110,18 +121,21 @@ async function selectCodexHistory(config, args) {
       }
       if (sessionId === 'other') { showOther = true; continue; }
       if (sessionId === 'back') { showOther = false; continue; }
-      break;
+      if (sessionId === 'new') return args.filter(arg => arg !== 'resume');
+      if (!sessionId) return null;
+      const selected = history.find(item => item.id === sessionId);
+      const details = `ID: ${selected.id}\n目录: ${escapeTerminalText(selected.cwd)}\n原供应商: ${escapeTerminalText(providerLabel(selected.provider))}\n创建时间: ${escapeTerminalText(selected.timestamp)}\n最近使用: ${new Date(selected.modifiedAt).toLocaleString()}`;
+      const { confirmed } = await navigation.promptWithESCAndDefault({
+        type: 'confirm', name: 'confirmed', default: false,
+        message: `${details}\n当前供应商：「${escapeTerminalText(config.displayName || config.name)}」。${historyConfirmation(selected.provider, config)}（否：返回列表；ESC：取消启动）`
+      }, '', null, { confirmed: null });
+      if (confirmed === null) return null;
+      if (!confirmed) {
+        defaultId = sessionId;
+        continue;
+      }
+      return ['fork', sessionId, ...args.filter(arg => arg !== 'resume')];
     }
-    if (sessionId === 'new') return args.filter(arg => arg !== 'resume');
-    if (!sessionId) return null;
-    const selected = history.find(item => item.id === sessionId);
-    const details = `ID: ${selected.id}\n目录: ${escapeTerminalText(selected.cwd)}\n原供应商: ${escapeTerminalText(selected.provider)}\n创建时间: ${escapeTerminalText(selected.timestamp)}\n最近使用: ${new Date(selected.modifiedAt).toLocaleString()}`;
-    const { confirmed } = await navigation.promptWithESCAndDefault({
-      type: 'confirm', name: 'confirmed', default: false,
-      message: `${details}\n将以供应商「${escapeTerminalText(config.displayName || config.name)}」处理所选历史上下文并创建新对话；若原供应商不同，历史内容会发送给新供应商。是否继续？`
-    }, '', null, { confirmed: false });
-    if (!confirmed) return null;
-    return ['fork', sessionId, ...args.filter(arg => arg !== 'resume')];
   } finally {
     navigation.destroy();
   }

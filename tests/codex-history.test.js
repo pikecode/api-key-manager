@@ -3,6 +3,7 @@ const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
 const inquirer = require('inquirer');
+const { configManager } = require('../src/config');
 const { listCodexHistory, selectCodexHistory } = require('../src/utils/codex-history');
 
 describe('共享历史选择', () => {
@@ -13,6 +14,8 @@ describe('共享历史选择', () => {
   const id = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
   beforeEach(async () => {
     jest.resetAllMocks();
+    jest.spyOn(configManager, 'ensureLoaded').mockResolvedValue();
+    jest.spyOn(configManager, 'listProviders').mockReturnValue([]);
     jest.spyOn(process, 'cwd').mockReturnValue('/project');
     root = await fs.mkdtemp(path.join(os.tmpdir(), 'akm-history-'));
     process.env.CODEX_HOME = root;
@@ -70,6 +73,60 @@ describe('共享历史选择', () => {
     expect(inquirer.prompt.mock.calls[1][0]).toMatchObject({ default: false, message: expect.stringContaining('new-provider') });
     expect(inquirer.prompt.mock.calls[0][0].default).toBe(id);
     expect(await fs.readFile(path.join(root, 'sessions', '2026', 'rollout.jsonl'))).toEqual(before);
+  });
+
+  test.each(['same', 'different', 'unknown'])('确认页按实际来源显示：%s', async source => {
+    const { codexProviderIdentity } = require('../src/utils/codex-provider-identity');
+    const config = { name: 'target', baseUrl: 'https://example.com', authToken: 'test' };
+    const provider = source === 'unknown' ? 'akm' : codexProviderIdentity({ ...config, name: source === 'same' ? 'target' : 'another' });
+    await fs.outputFile(path.join(root, 'sessions', '2026', 'rollout.jsonl'), JSON.stringify({ type: 'session_meta', payload: { id, cwd: '/project', model_provider: provider } }) + '\n');
+    inquirer.prompt.mockResolvedValueOnce({ sessionId: id }).mockResolvedValueOnce({ confirmed: false }).mockResolvedValueOnce({ sessionId: null });
+    await expect(selectCodexHistory(config, ['resume'])).resolves.toBeNull();
+    const message = inquirer.prompt.mock.calls[1][0].message;
+    expect(message).toContain(source === 'same' ? '来自当前供应商配置' : source === 'different' ? '来自其他供应商配置' : '无法确认');
+    expect(message).not.toContain('若原供应商不同');
+  });
+
+  test('拒绝后返回原列表并保留选中项，再确认才启动', async () => {
+    inquirer.prompt.mockResolvedValueOnce({ sessionId: id }).mockResolvedValueOnce({ confirmed: false })
+      .mockResolvedValueOnce({ sessionId: id }).mockResolvedValueOnce({ confirmed: true });
+    await expect(selectCodexHistory({ name: 'a' }, ['resume'])).resolves.toEqual(['fork', id]);
+    expect(inquirer.prompt.mock.calls[2][0].default).toBe(id);
+  });
+
+  test('识别其他配置名称，旧记录和官方账号不猜测归属', async () => {
+    const { codexProviderIdentity } = require('../src/utils/codex-provider-identity');
+    const source = { name: 'source', displayName: '原供应商名称', ideName: 'codex', baseUrl: 'https://example.com', authToken: 'test' };
+    configManager.listProviders.mockReturnValue([source]);
+    const identity = codexProviderIdentity(source);
+    await fs.outputFile(path.join(root, 'sessions', '2026', 'rollout.jsonl'), JSON.stringify({ type: 'session_meta', payload: { id, cwd: '/project', model_provider: identity } }) + '\n');
+    inquirer.prompt.mockResolvedValueOnce({ sessionId: id }).mockResolvedValueOnce({ confirmed: true });
+    await selectCodexHistory({ name: 'target' }, ['resume']);
+    expect(inquirer.prompt.mock.calls[0][0].choices[0].name).toContain('原供应商名称');
+    expect(inquirer.prompt.mock.calls[1][0].message).toContain('原供应商: 原供应商名称');
+    expect(inquirer.prompt.mock.calls[1][0].message).not.toContain(identity);
+  });
+
+  test.each([['openai', 'OpenAI（账号未确认）'], ['akm', '第三方（来源未确认）'], ['akm_' + 'f'.repeat(64), '未知来源']])('未匹配来源 %s 显示可读说明', async (provider, label) => {
+    await fs.outputFile(path.join(root, 'sessions', '2026', 'rollout.jsonl'), JSON.stringify({ type: 'session_meta', payload: { id, cwd: '/project', model_provider: provider } }) + '\n');
+    inquirer.prompt.mockResolvedValueOnce({ sessionId: id }).mockResolvedValueOnce({ confirmed: true });
+    await selectCodexHistory({ name: 'a' }, ['resume']);
+    expect(inquirer.prompt.mock.calls[1][0].message).toContain(`原供应商: ${label}`);
+  });
+
+  test('其他项目加载更多后拒绝确认，保留分组、批次和选中项', async () => {
+    for (let index = 0; index < 21; index++) {
+      await addHistory(`${index.toString(16).padStart(8, '0')}-bbbb-cccc-dddd-eeeeeeeeeeee`, '/other', '2026-01-01');
+    }
+    const selected = '00000014-bbbb-cccc-dddd-eeeeeeeeeeee';
+    inquirer.prompt.mockResolvedValueOnce({ sessionId: 'other' }).mockResolvedValueOnce({ sessionId: 'more' })
+      .mockResolvedValueOnce({ sessionId: selected }).mockResolvedValueOnce({ confirmed: false })
+      .mockResolvedValueOnce({ sessionId: null });
+    await expect(selectCodexHistory({ name: 'a' }, ['resume'])).resolves.toBeNull();
+    const returned = inquirer.prompt.mock.calls[4][0];
+    expect(returned.default).toBe(selected);
+    expect(returned.message).toContain('其他项目');
+    expect(returned.choices).toEqual(inquirer.prompt.mock.calls[2][0].choices);
   });
 
   async function addHistory(sessionId, cwd, date) {
@@ -165,7 +222,7 @@ describe('共享历史选择', () => {
   test('取消选择或拒绝发送上下文时不启动', async () => {
     inquirer.prompt.mockResolvedValueOnce({ sessionId: null });
     await expect(selectCodexHistory({ name: 'a' }, ['resume'])).resolves.toBeNull();
-    inquirer.prompt.mockResolvedValueOnce({ sessionId: id }).mockResolvedValueOnce({ confirmed: false });
+    inquirer.prompt.mockResolvedValueOnce({ sessionId: id }).mockResolvedValueOnce({ confirmed: false }).mockResolvedValueOnce({ sessionId: null });
     await expect(selectCodexHistory({ name: 'a' }, ['resume'])).resolves.toBeNull();
   });
   test('无历史及非交互场景不偷偷选择历史', async () => {

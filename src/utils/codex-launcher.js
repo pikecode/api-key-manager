@@ -1,4 +1,5 @@
 const spawn = require('cross-spawn');
+const { codexProviderIdentity } = require('./codex-provider-identity');
 const { sanitizeEnvValue, clearTerminal } = require('./env-utils');
 const { prepareCodexRuntime } = require('./codex-runtime');
 const { selectCodexHistory } = require('./codex-history');
@@ -88,8 +89,16 @@ async function executeCodexWithEnv(config, launchArgs = [], launchOptions = {}) 
     const args = [...subcommands, ...options,
       '-c', 'cli_auth_credentials_store="file"',
       '-c', `sqlite_home=${JSON.stringify(runtime.home)}`,
-      '-c', `model_provider="${authMode === 'chatgpt_login' || !config.baseUrl ? 'openai' : 'akm'}"`
+      '-c', `model_provider="${codexProviderIdentity(config)}"`
     ];
+
+    const providerKey = codexProviderIdentity(config);
+    if (providerKey !== 'openai') {
+      // 独立标识写入原生会话元数据，多窗口无需猜测历史文件的归属。
+      for (const [field, value] of Object.entries({ name: providerKey, base_url: config.baseUrl, wire_api: 'responses', requires_openai_auth: true })) {
+        args.push('-c', `model_providers.${providerKey}.${field}=${JSON.stringify(value)}`);
+      }
+    }
 
     clearTerminal();
 
