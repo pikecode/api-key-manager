@@ -152,4 +152,14 @@ describe('ensureClaudeSettingsCompatibility', () => {
     expect(Logger.info).toHaveBeenCalledWith('已取消启动');
     expect(backupSettingsFile).not.toHaveBeenCalled();
   });
+  it('逐个处理全部来源，后续取消仍阻止启动', async () => {
+    const first = { filePath: '/tmp/project.json', settings: { env: { ANTHROPIC_API_KEY: 'old' } }, keys: ['ANTHROPIC_API_KEY'] };
+    const second = { ...first, filePath: '/tmp/global.json' };
+    findSettingsConflict.mockResolvedValue({ ...first, conflicts: [first, second] });
+    command.prompt.mockResolvedValueOnce({ action: 'ignore' }).mockResolvedValueOnce({ action: 'cancel' });
+    expect(await ensureClaudeSettingsCompatibility(command, provider)).toBe(false);
+    expect(command.prompt).toHaveBeenCalledTimes(2);
+    expect(saveSettingsFile).not.toHaveBeenCalled();
+  });
+
 });

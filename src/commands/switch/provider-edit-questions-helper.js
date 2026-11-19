@@ -1,3 +1,5 @@
+const { thinkingModeQuestion } = require('../../utils/claude-compatibility');
+
 class ProviderEditQuestionsHelper {
   static buildQuestions(provider, validator) {
     const isCodex = provider.ideName === 'codex';
@@ -7,7 +9,7 @@ class ProviderEditQuestionsHelper {
     ];
 
     if (!isCodex) {
-      questions.push(...this.buildClaudeQuestions(provider, validator));
+      questions.push(...this.buildClaudeQuestions(provider, validator), thinkingModeQuestion(provider));
     } else {
       questions.push(this.buildCodexAuthModeQuestion(provider));
     }

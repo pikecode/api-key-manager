@@ -56,6 +56,7 @@ const mockClaudeProvider = {
   baseUrl: null,
   authMode: 'api_key',
   launchArgs: [],
+  compatibility: { thinkingMode: 'disabled' },
   models: { primary: null, smallFast: null }
 };
 
@@ -117,6 +118,7 @@ describe('ProviderCloner', () => {
 
     await cloner.interactive('my-claude');
 
+    expect(configManager.addProvider.mock.calls[0][1].compatibility).toEqual({ thinkingMode: 'disabled' });
     expect(configManager.addProvider).toHaveBeenCalledWith(
       'my-claude-copy',
       expect.objectContaining({

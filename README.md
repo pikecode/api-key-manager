@@ -602,3 +602,18 @@ MIT License
 - [NPM](https://www.npmjs.com/package/@pikecode/api-key-manager)
 - [GitHub](https://github.com/pikecode/api-key-manager)
 - [Issues](https://github.com/pikecode/api-key-manager/issues)
+
+## Claude 第三方供应商兼容设置
+
+添加或编辑 Claude 供应商时，可选择 Thinking 兼容模式：
+
+- `default`：保持客户端行为，保留启动 AKM 时 shell 中显式设置的 `MAX_THINKING_TOKENS`。
+- `disabled`：仅为该供应商的 Claude 子进程设置 `MAX_THINKING_TOKENS=0`，用于拒绝显式 thinking 参数的兼容服务。此模式不代表支持 adaptive thinking。
+
+配置保存在供应商条目的 `compatibility.thinkingMode` 中，克隆、导入和导出都会保留；旧配置缺少此字段时按 `default` 运行。AKM 不修改父进程环境，切换其他账号不会继承由 AKM 注入的禁用设置。导入不支持任意环境变量。
+
+Claude 地址通常填写站点 origin，例如 `https://provider.example`；不要直接照搬 OpenAI-compatible 的 `/v1` 地址。代理自定义路径请遵循供应商说明，AKM 不自动删除路径。主模型与快速模型应分别填写供应商支持的精确 ID。
+
+启动前会检查项目、用户目录、`CLAUDE_CONFIG_DIR` 及 `CLAUDE_SETTINGS_PATH` 指定文件中的连接覆盖，逐文件提供备份清理、忽略或取消选项。备份保留原文件名并附唯一标识，Unix 权限为 `0600`；清理保留其他环境变量、Hooks 和插件。此检查不涵盖组织管理策略等所有 Claude 配置来源。
+
+源码中的修复不会自动替换全局 npm 安装。可在源码目录使用 `npm start -- edit <供应商名>` 设置模式，再用 `npm start -- <供应商名> -q` 启动；已运行的 Claude 需退出重启。

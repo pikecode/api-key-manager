@@ -132,6 +132,7 @@ class ProviderManager {
       };
 
       if (!isCodex) {
+        updatedProvider.compatibility = { thinkingMode: answers.thinkingMode || provider.compatibility?.thinkingMode || 'default' };
         updatedProvider.authMode = answers.authMode;
         updatedProvider.models = {
           ...(provider.models || {}),

@@ -43,6 +43,13 @@ function buildEnvVariables(config) {
       env.ANTHROPIC_SMALL_FAST_MODEL = sanitizeEnvValue(config.models.smallFast);
     }
 
+    const thinkingMode = config.compatibility?.thinkingMode || 'default';
+    if (!['default', 'disabled'].includes(thinkingMode)) {
+      throw new Error('不支持的 thinking 兼容模式');
+    }
+    // 仅修改子进程副本；default 保留用户显式设置的 shell 环境。
+    if (thinkingMode === 'disabled') env.MAX_THINKING_TOKENS = '0';
+
     return env;
   } catch (error) {
     throw new Error(`配置验证失败: ${error.message}\n请使用 'akm edit ${config.name}' 修复配置`);

@@ -9,11 +9,18 @@ const {
 } = require('../../utils/claude-settings');
 
 async function ensureClaudeSettingsCompatibility(command, provider) {
-  const conflict = await findSettingsConflict();
+  const conflict = await findSettingsConflict(provider);
   if (!conflict) {
     return true;
   }
 
+  for (const entry of conflict.conflicts || [conflict]) {
+    if (!await handleSettingsConflict(command, provider, entry)) return false;
+  }
+  return true;
+}
+
+async function handleSettingsConflict(command, provider, conflict) {
   const keyList = conflict.keys.map((key) => `• ${key}`).join('\n');
   const backupDir = path.dirname(conflict.filePath);
 
@@ -22,7 +29,7 @@ async function ensureClaudeSettingsCompatibility(command, provider) {
   console.log();
   console.log(UIHelper.createCard('冲突文件', conflict.filePath, UIHelper.icons.info));
   console.log();
-  console.log(UIHelper.createCard('备份目录', `${backupDir}\n备份文件将命名为 settings.backup-YYYYMMDD_HHmmss.json`, UIHelper.icons.info));
+  console.log(UIHelper.createCard('备份目录', `${backupDir}\n备份文件将命名为 <原文件名>.backup-时间戳-唯一标识.json`, UIHelper.icons.info));
   console.log();
   console.log(UIHelper.createCard('可能覆盖的变量', keyList, UIHelper.icons.warning));
   console.log();
@@ -72,7 +79,7 @@ async function fixSettingsConflict(command, conflict, backupDir) {
       {
         type: 'confirm',
         name: 'confirmed',
-        message: `将在 ${backupDir} 中创建备份文件 (settings.backup-YYYYMMDD_HHmmss.json)，并清空冲突变量。是否继续?`,
+        message: `将在 ${backupDir} 中创建备份文件 (<原文件名>.backup-时间戳-唯一标识.json)，并清空冲突变量。是否继续?`,
         default: true
       }
     ]);

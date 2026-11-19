@@ -10,6 +10,7 @@ const { UIHelper } = require('../../utils/ui-helper');
 const { UI_MESSAGES } = require('../../constants/ui');
 const { Logger } = require('../../utils/logger');
 const { registry } = require('../../CommandRegistry');
+const { thinkingModeQuestion } = require('../../utils/claude-compatibility');
 const { getCodexLaunchArgs } = require('../../utils/launch-args');
 
 /**
@@ -91,6 +92,10 @@ async function promptProviderInfo(adder) {
           const err = validator.validateToken(input);
           return err || true;
         },
+        when: answers => (answers.ideName || adder.presetIdeName) !== 'codex'
+      },
+      {
+        ...thinkingModeQuestion(),
         when: answers => (answers.ideName || adder.presetIdeName) !== 'codex'
       },
       // Codex‑specific prompts (manual entry)

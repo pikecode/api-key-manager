@@ -231,6 +231,7 @@ class ProviderCloner extends BaseCommand {
         authToken: overrides.authToken !== undefined ? overrides.authToken : source.authToken,
         baseUrl,
         authMode,
+        compatibility: source.compatibility,
         launchArgs: overrides.launchArgs !== undefined ? overrides.launchArgs : (source.launchArgs || []),
         primaryModel: source.models?.primary || null,
         smallFastModel: source.models?.smallFast || null,

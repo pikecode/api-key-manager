@@ -389,6 +389,9 @@ class ConfigManager {
           ? providerConfig.smallFastModel
           : (existing?.models?.smallFast ?? null);
 
+      newProvider.compatibility = providerConfig.compatibility !== undefined
+        ? providerConfig.compatibility
+        : (existing?.compatibility || { thinkingMode: 'default' });
       newProvider.authMode = authMode;
       newProvider.models = {
         primary: primaryModel,
