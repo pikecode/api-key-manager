@@ -32,6 +32,11 @@ const providerSchema = {
         smallFast: nullableString
       }
     },
+    compatibility: {
+      type: 'object',
+      additionalProperties: false,
+      properties: { thinkingMode: { enum: ['default', 'disabled'] } }
+    },
     launchArgs: launchArgsSchema,
     lastUsedArgs: {
       anyOf: [launchArgsSchema, { type: 'null' }]

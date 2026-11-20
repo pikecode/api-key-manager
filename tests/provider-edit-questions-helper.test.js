@@ -46,6 +46,7 @@ describe('ProviderEditQuestionsHelper', () => {
       'authMode',
       'primaryModel',
       'smallFastModel',
+      'thinkingMode',
       'baseUrl',
       'authToken'
     ]);

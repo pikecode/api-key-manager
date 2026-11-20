@@ -5,9 +5,7 @@
 
 jest.mock('../src/utils/claude-settings', () => ({
   findSettingsConflict: jest.fn(),
-  backupSettingsFile: jest.fn(),
-  clearConflictKeys: jest.fn(),
-  saveSettingsFile: jest.fn()
+  applySettingsCleanup: jest.fn()
 }));
 
 jest.mock('../src/utils/logger', () => ({
@@ -35,9 +33,7 @@ const {
 } = require('../src/commands/switch/claude-settings-compatibility');
 const {
   findSettingsConflict,
-  backupSettingsFile,
-  clearConflictKeys,
-  saveSettingsFile
+  applySettingsCleanup
 } = require('../src/utils/claude-settings');
 const { Logger } = require('../src/utils/logger');
 
@@ -80,7 +76,7 @@ describe('ensureClaudeSettingsCompatibility', () => {
 
     expect(result).toBe(true);
     expect(Logger.warning).toHaveBeenCalledWith(expect.stringContaining('已忽略'));
-    expect(backupSettingsFile).not.toHaveBeenCalled();
+    expect(applySettingsCleanup).not.toHaveBeenCalled();
   });
 
   it('用户选择取消时应该停止启动', async () => {
@@ -108,31 +104,16 @@ describe('ensureClaudeSettingsCompatibility', () => {
       },
       keys: ['ANTHROPIC_API_KEY']
     };
-    const updatedSettings = {
-      env: {
-        OTHER_ENV: 'keep'
-      }
-    };
-
     findSettingsConflict.mockResolvedValue(conflict);
     command.prompt
       .mockResolvedValueOnce({ action: 'fix' })
       .mockResolvedValueOnce({ confirmed: true });
-    backupSettingsFile.mockResolvedValue('/tmp/.claude/settings.backup.json');
-    clearConflictKeys.mockReturnValue(updatedSettings);
+    applySettingsCleanup.mockResolvedValue('/tmp/.claude/settings.backup.json');
 
     const result = await ensureClaudeSettingsCompatibility(command, provider);
 
     expect(result).toBe(true);
-    expect(backupSettingsFile).toHaveBeenCalledWith(conflict.filePath);
-    expect(clearConflictKeys).toHaveBeenCalledWith(
-      {
-        ...conflict.settings,
-        env: { ...conflict.settings.env }
-      },
-      conflict.keys
-    );
-    expect(saveSettingsFile).toHaveBeenCalledWith(conflict.filePath, updatedSettings);
+    expect(applySettingsCleanup).toHaveBeenCalledWith(conflict, provider);
     expect(Logger.success).toHaveBeenCalledWith(expect.stringContaining('已将'));
   });
 
@@ -150,6 +131,16 @@ describe('ensureClaudeSettingsCompatibility', () => {
 
     expect(result).toBe(false);
     expect(Logger.info).toHaveBeenCalledWith('已取消启动');
-    expect(backupSettingsFile).not.toHaveBeenCalled();
+    expect(applySettingsCleanup).not.toHaveBeenCalled();
   });
+  it('逐个处理全部来源，后续取消仍阻止启动', async () => {
+    const first = { filePath: '/tmp/project.json', settings: { env: { ANTHROPIC_API_KEY: 'old' } }, keys: ['ANTHROPIC_API_KEY'] };
+    const second = { ...first, filePath: '/tmp/global.json' };
+    findSettingsConflict.mockResolvedValue({ ...first, conflicts: [first, second] });
+    command.prompt.mockResolvedValueOnce({ action: 'fix' }).mockResolvedValueOnce({ confirmed: true }).mockResolvedValueOnce({ action: 'cancel' });
+    expect(await ensureClaudeSettingsCompatibility(command, provider)).toBe(false);
+    expect(command.prompt).toHaveBeenCalledTimes(3);
+    expect(applySettingsCleanup).not.toHaveBeenCalled();
+  });
+
 });

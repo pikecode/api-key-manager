@@ -40,6 +40,7 @@ describe('ProviderManager 编辑供应商', () => {
         authMode: 'api_key',
         baseUrl: 'https://new.example.com',
         authToken: 'new-valid-token',
+        thinkingMode: 'disabled',
         primaryModel: 'new-primary',
         smallFastModel: ''
       })
@@ -61,7 +62,8 @@ describe('ProviderManager 编辑供应商', () => {
           'new-name': expect.objectContaining({
             name: 'new-name',
             displayName: '新显示名称',
-            authToken: 'new-valid-token'
+            authToken: 'new-valid-token',
+            compatibility: { thinkingMode: 'disabled' }
           })
         })
       })

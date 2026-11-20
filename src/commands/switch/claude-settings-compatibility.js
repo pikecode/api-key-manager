@@ -3,17 +3,33 @@ const { Logger } = require('../../utils/logger');
 const { UIHelper } = require('../../utils/ui-helper');
 const {
   findSettingsConflict,
-  backupSettingsFile,
-  clearConflictKeys,
-  saveSettingsFile
+  applySettingsCleanup
 } = require('../../utils/claude-settings');
 
 async function ensureClaudeSettingsCompatibility(command, provider) {
-  const conflict = await findSettingsConflict();
+  const conflict = await findSettingsConflict(provider);
   if (!conflict) {
     return true;
   }
 
+  const cleanups = [];
+  for (const entry of conflict.conflicts || [conflict]) {
+    const action = await handleSettingsConflict(command, provider, entry);
+    if (!action) return false;
+    if (action === 'fix') cleanups.push(entry);
+  }
+  for (const entry of cleanups) {
+    try {
+      const backupPath = await applySettingsCleanup(entry, provider);
+      if (backupPath) Logger.success(`已将 ${entry.filePath} 备份至 '${backupPath}' 并清空冲突变量。`);
+    } catch (error) {
+      throw new Error(`清理 Claude 设置文件失败: ${error.message}`);
+    }
+  }
+  return true;
+}
+
+async function handleSettingsConflict(command, provider, conflict) {
   const keyList = conflict.keys.map((key) => `• ${key}`).join('\n');
   const backupDir = path.dirname(conflict.filePath);
 
@@ -22,7 +38,7 @@ async function ensureClaudeSettingsCompatibility(command, provider) {
   console.log();
   console.log(UIHelper.createCard('冲突文件', conflict.filePath, UIHelper.icons.info));
   console.log();
-  console.log(UIHelper.createCard('备份目录', `${backupDir}\n备份文件将命名为 settings.backup-YYYYMMDD_HHmmss.json`, UIHelper.icons.info));
+  console.log(UIHelper.createCard('备份目录', `${backupDir}\n备份文件将命名为 <原文件名>.backup-时间戳-唯一标识.json`, UIHelper.icons.info));
   console.log();
   console.log(UIHelper.createCard('可能覆盖的变量', keyList, UIHelper.icons.warning));
   console.log();
@@ -53,7 +69,7 @@ async function ensureClaudeSettingsCompatibility(command, provider) {
   }
 
   if (answer.action === 'fix') {
-    return await fixSettingsConflict(command, conflict, backupDir);
+    return await confirmSettingsCleanup(command, backupDir) ? 'fix' : false;
   }
 
   if (answer.action === 'ignore') {
@@ -65,14 +81,14 @@ async function ensureClaudeSettingsCompatibility(command, provider) {
   return false;
 }
 
-async function fixSettingsConflict(command, conflict, backupDir) {
+async function confirmSettingsCleanup(command, backupDir) {
   let confirmBackup;
   try {
     confirmBackup = await command.prompt([
       {
         type: 'confirm',
         name: 'confirmed',
-        message: `将在 ${backupDir} 中创建备份文件 (settings.backup-YYYYMMDD_HHmmss.json)，并清空冲突变量。是否继续?`,
+        message: `将在 ${backupDir} 中创建备份文件 (<原文件名>.backup-时间戳-唯一标识.json)，并清空冲突变量。是否继续?`,
         default: true
       }
     ]);
@@ -89,25 +105,9 @@ async function fixSettingsConflict(command, conflict, backupDir) {
     return false;
   }
 
-  try {
-    const backupPath = await backupSettingsFile(conflict.filePath);
-    const updatedSettings = clearConflictKeys(
-      {
-        ...conflict.settings,
-        env: conflict.settings.env ? { ...conflict.settings.env } : undefined
-      },
-      conflict.keys
-    );
-    await saveSettingsFile(conflict.filePath, updatedSettings);
-    Logger.success(`已将 ${conflict.filePath} 备份至 '${backupPath}' 并清空冲突变量。`);
-  } catch (error) {
-    throw new Error(`清理 Claude 设置文件失败: ${error.message}`);
-  }
-
   return true;
 }
 
 module.exports = {
-  ensureClaudeSettingsCompatibility,
-  fixSettingsConflict
+  ensureClaudeSettingsCompatibility
 };

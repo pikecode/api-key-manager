@@ -48,6 +48,7 @@ async function saveProvider(adder, answers) {
       baseUrl: answers.baseUrl,
       authToken: answers.authToken,
       authMode: answers.authMode,
+      compatibility: answers.ideName === 'codex' ? undefined : { thinkingMode: answers.thinkingMode || 'default' },
       codexFiles: answers.codexFiles || null,
       launchArgs,
       primaryModel: modelConfig.primaryModel,

@@ -22,6 +22,7 @@ async function writeFileAtomic(filePath, content, options = {}) {
     await handle.sync();
     await handle.close();
     handle = null;
+    if (options.beforeRename) await options.beforeRename();
     await nodeFs.promises.rename(tempPath, filePath);
     if (process.platform !== 'win32') {
       await nodeFs.promises.chmod(filePath, mode);

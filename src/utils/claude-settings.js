@@ -1,7 +1,8 @@
 const fs = require('fs-extra');
 const path = require('path');
 const os = require('os');
-const { writeJsonAtomic } = require('./atomic-file');
+const crypto = require('crypto');
+const { writeFileAtomic, writeJsonAtomic } = require('./atomic-file');
 
 const CONFLICT_ENV_KEYS = [
   'ANTHROPIC_API_KEY',
@@ -48,7 +49,7 @@ function resolveCandidatePaths() {
   const homeDir = os.homedir();
   if (homeDir) {
     for (const fileName of SETTINGS_FILE_NAMES) {
-      candidates.push(path.join(homeDir, '.claude', fileName));
+      candidates.push(path.join(process.env.CLAUDE_CONFIG_DIR || path.join(homeDir, '.claude'), fileName));
     }
   }
 
@@ -69,20 +70,21 @@ function resolveCandidatePaths() {
 
 async function loadSettingsFile() {
   const candidates = resolveCandidatePaths();
+  const files = [];
   for (const candidate of candidates) {
     try {
       if (await fs.pathExists(candidate)) {
         const data = await fs.readJson(candidate);
-        return { path: candidate, data };
+        files.push({ path: candidate, data });
       }
     } catch (error) {
       throw new Error(`读取 Claude 设置文件失败 (${candidate}): ${error.message}`);
     }
   }
-  return null;
+  return files;
 }
 
-function detectConflictKeys(settings) {
+function detectConflictKeys(settings, provider) {
   if (!settings || typeof settings !== 'object') {
     return [];
   }
@@ -91,14 +93,17 @@ function detectConflictKeys(settings) {
     return [];
   }
 
-  return CONFLICT_ENV_KEYS.filter(key => Object.prototype.hasOwnProperty.call(env, key));
+  const keys = provider?.compatibility?.thinkingMode === 'disabled'
+    ? [...CONFLICT_ENV_KEYS, 'MAX_THINKING_TOKENS']
+    : CONFLICT_ENV_KEYS;
+  return keys.filter(key => Object.prototype.hasOwnProperty.call(env, key));
 }
 
-async function backupSettingsFile(filePath) {
+async function backupSettingsFile(filePath, snapshot = null) {
   const dir = path.dirname(filePath);
-  const backupName = `settings.backup-${timestampSuffix()}.json`;
+  const backupName = `${path.basename(filePath, '.json')}.backup-${timestampSuffix()}-${crypto.randomUUID()}.json`;
   const backupPath = path.join(dir, backupName);
-  await fs.copy(filePath, backupPath, { overwrite: false, errorOnExist: false });
+  await writeFileAtomic(backupPath, snapshot ?? await fs.readFile(filePath), { mode: 0o600 });
   return backupPath;
 }
 
@@ -124,27 +129,43 @@ async function saveSettingsFile(filePath, data) {
   await writeJsonAtomic(filePath, data, { spaces: 2, mode: 0o600 });
 }
 
-async function findSettingsConflict() {
-  const fileInfo = await loadSettingsFile();
-  if (!fileInfo) {
-    return null;
+async function applySettingsCleanup(conflict, provider) {
+  const { filePath } = conflict;
+  const snapshot = await fs.readFile(filePath);
+  const settings = JSON.parse(snapshot.toString('utf8').replace(/^\uFEFF/, ''));
+  const keys = detectConflictKeys(settings, provider);
+  if (keys.some(key => !conflict.keys.includes(key))) {
+    throw new Error(`Claude 设置新增了未经确认的冲突变量，请重新启动后再处理：${filePath}`);
   }
+  if (!keys.length) return null;
 
-  const conflictKeys = detectConflictKeys(fileInfo.data);
-  if (!conflictKeys.length) {
-    return null;
-  }
+  const backupPath = await backupSettingsFile(filePath, snapshot);
+  const updated = clearConflictKeys(settings, keys);
+  await writeFileAtomic(filePath, JSON.stringify(updated, null, 2), {
+    mode: 0o600,
+    beforeRename: async () => {
+      if (!snapshot.equals(await fs.readFile(filePath))) {
+        throw new Error(`Claude 设置在写入前发生变化，请重试：${filePath}`);
+      }
+    }
+  });
+  return backupPath;
+}
 
-  return {
+async function findSettingsConflict(provider) {
+  const files = await loadSettingsFile();
+  const conflicts = files.map(fileInfo => ({
     filePath: fileInfo.path,
     settings: fileInfo.data,
-    keys: conflictKeys
-  };
+    keys: detectConflictKeys(fileInfo.data, provider)
+  })).filter(conflict => conflict.keys.length);
+  return conflicts.length ? { ...conflicts[0], conflicts } : null;
 }
 
 module.exports = {
   findSettingsConflict,
   backupSettingsFile,
   clearConflictKeys,
-  saveSettingsFile
+  saveSettingsFile,
+  applySettingsCleanup
 };

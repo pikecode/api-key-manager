@@ -604,3 +604,18 @@ MIT License
 - [Issues](https://github.com/pikecode/api-key-manager/issues)
 
 历史恢复的确认文案会区分来源：同一第三方配置只提示创建新分支；不同配置提示上下文将发送给当前供应商；无法确定来源时明确提示未知。新建第三方对话会记录独立的模型供应商标识，旧历史不会被改写。多个官方账号仍共享原生 `openai` 标识，因此无法仅凭历史元数据判断账号是否相同。供应商名称、端点或认证改变后视为不同配置。所有情况仍需确认创建分支，默认选择“否”：返回历史列表并保留分组、已加载批次和选中项；确认页按 ESC 取消启动。历史来源可匹配现有配置时显示供应商名称，旧第三方、官方账号及已变更或删除的配置显示相应的来源未确认说明，不直接展示内部摘要标识。
+
+## Claude 第三方供应商兼容设置
+
+添加或编辑 Claude 供应商时，可选择 Thinking 兼容模式：
+
+- `default`：保持客户端行为，保留启动 AKM 时 shell 中显式设置的 `MAX_THINKING_TOKENS`。
+- `disabled`：仅为该供应商的 Claude 子进程设置 `MAX_THINKING_TOKENS=0`，用于拒绝显式 thinking 参数的兼容服务。此模式不代表支持 adaptive thinking。
+
+配置保存在供应商条目的 `compatibility.thinkingMode` 中，克隆、导入和导出都会保留；旧配置缺少此字段时按 `default` 运行。AKM 不修改父进程环境，切换其他账号不会继承由 AKM 注入的禁用设置。导入不支持任意环境变量。
+
+Claude 地址通常填写站点 origin，例如 `https://provider.example`；不要直接照搬 OpenAI-compatible 的 `/v1` 地址。代理自定义路径请遵循供应商说明，AKM 不自动删除路径。主模型与快速模型应分别填写供应商支持的精确 ID。
+
+启动前会检查项目、用户目录、`CLAUDE_CONFIG_DIR` 及 `CLAUDE_SETTINGS_PATH` 指定文件中的连接覆盖，逐文件提供备份清理、忽略或取消选项。备份保留原文件名并附唯一标识，Unix 权限为 `0600`；清理保留其他环境变量、Hooks 和插件。所有文件确认后才写入，取消时保留设置。写入前会重新读取并检查文件变化。此检查不涵盖组织管理策略等所有 Claude 配置来源。
+
+源码中的修复不会自动替换全局 npm 安装。可在源码目录使用 `npm start -- edit <供应商名>` 设置模式，再用 `npm start -- <供应商名> -q` 启动；已运行的 Claude 需退出重启。
